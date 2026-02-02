@@ -335,3 +335,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 ---
 
 *श्रद्धावाँल्लभते ज्ञानम्* | *śraddhāvān labhate jñānam* | "The faithful one obtains knowledge"
+# sanskrit_analyser
