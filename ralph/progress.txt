@@ -5,3 +5,14 @@ Started: 2026-02-01
 
 ---
 
+## US-001: Initialize Python package structure
+**Status:** COMPLETED
+**Commit:** d6ea177
+
+- Created pyproject.toml with hatchling build system
+- Added sanskrit_analyzer package with config.py
+- Set up all module directories
+- Typecheck passes
+
+---
+
