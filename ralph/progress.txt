@@ -177,3 +177,17 @@ Started: 2026-02-01
 
 ---
 
+## US-015: Implement LLM disambiguation
+**Status:** COMPLETED
+**Commit:** 1527671
+
+- Created disambiguation/llm.py with LLMDisambiguator
+- Ollama and OpenAI provider support
+- Prompt building with candidate info and context
+- JSON response parsing for rankings
+- Graceful failure handling
+- 22 unit tests passing
+- Typecheck passes
+
+---
+
