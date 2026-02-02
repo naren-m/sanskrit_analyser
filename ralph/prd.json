@@ -1,0 +1,580 @@
+{
+  "project": "Sanskrit Analyzer",
+  "branchName": "ralph/sanskrit-analyzer-core",
+  "description": "Centralized Sanskrit sentence parser with 3-engine ensemble (Vidyut, Dharmamitra, Heritage), 4-level parse trees, hybrid disambiguation, and Vue+Cytoscape UI",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Initialize Python package structure",
+      "description": "As a developer, I need the basic package scaffolding so that I can build the analyzer incrementally.",
+      "acceptanceCriteria": [
+        "Create pyproject.toml with package metadata and dependencies (vidyut, indic-transliteration, pydantic)",
+        "Create sanskrit_analyzer/__init__.py with version and public exports",
+        "Create sanskrit_analyzer/config.py with Config dataclass",
+        "Create empty module directories: engines/, models/, cache/, disambiguation/, utils/",
+        "Package installs with 'pip install -e .'",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Define core data models for scripts and transliteration",
+      "description": "As a developer, I need script handling utilities so that I can normalize input across Devanagari/IAST/SLP1.",
+      "acceptanceCriteria": [
+        "Create models/scripts.py with ScriptVariants dataclass (devanagari, iast, slp1 fields)",
+        "Create utils/transliterate.py with transliterate(text, from_script, to_script) function",
+        "Create utils/normalize.py with normalize_slp1(text) function that detects script and converts to SLP1",
+        "Add unit tests in tests/test_utils/test_transliterate.py",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Define morphology and dhatu data models",
+      "description": "As a developer, I need morphological data structures to represent analysis results.",
+      "acceptanceCriteria": [
+        "Create models/morphology.py with MorphologicalTag, Pratyaya, Meaning dataclasses",
+        "Create models/dhatu.py with DhatuInfo dataclass (dhatu, gana, pada, meanings, prakriya fields)",
+        "Add SandhiType enum (SAVARNA_DIRGHA, GUNA, VRDDHI, YAN, VISARGA)",
+        "Add AnalysisMode enum (PRODUCTION, EDUCATIONAL, ACADEMIC)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Define parse tree data models",
+      "description": "As a developer, I need the 4-level tree structure to represent complete analyses.",
+      "acceptanceCriteria": [
+        "Create models/tree.py with BaseWord dataclass (lemma, surface_form, scripts, morphology, meanings, dhatu, pratyaya, upasarga)",
+        "Add SandhiGroup dataclass (surface_form, scripts, sandhi_type, sandhi_rule, is_compound, compound_type, base_words list)",
+        "Add ParseTree dataclass (parse_id, confidence, engine_votes dict, sandhi_groups list)",
+        "Add AnalysisTree dataclass (sentence_id, original_text, normalized_slp1, scripts, parse_forest list, selected_parse, confidence, mode)",
+        "Add ConfidenceMetrics dataclass (overall, engine_agreement, disambiguation_applied)",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Create abstract engine base class",
+      "description": "As a developer, I need a common interface for all analysis engines.",
+      "acceptanceCriteria": [
+        "Create engines/base.py with abstract EngineBase class",
+        "Define abstract async analyze(text: str) -> EngineResult method",
+        "Create EngineResult dataclass (engine name, segments list, confidence, error optional)",
+        "Create Segment dataclass (surface, lemma, morphology, sandhi_info, confidence)",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Implement Vidyut engine wrapper",
+      "description": "As a developer, I need to wrap Vidyut for Paninian grammar-based analysis.",
+      "acceptanceCriteria": [
+        "Create engines/vidyut_engine.py with VidyutEngine class extending EngineBase",
+        "Implement analyze() method using vidyut.cheda for segmentation",
+        "Extract prakriya (derivation steps) when available",
+        "Handle vidyut import errors gracefully with clear error message",
+        "Add unit test with sample Sanskrit text",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Implement Dharmamitra ByT5 engine wrapper",
+      "description": "As a developer, I need to wrap the ByT5 neural model for morphosyntactic analysis.",
+      "acceptanceCriteria": [
+        "Create engines/dharmamitra_engine.py with DharmamitraEngine class extending EngineBase",
+        "Implement analyze() using transformers pipeline with buddhist-nlp/byt5-sanskrit model",
+        "Support task prefixes: 'S' (segmentation), 'L' (lemma), 'M' (morphology)",
+        "Parse model output into Segment objects",
+        "Handle model loading errors gracefully",
+        "Add unit test with sample text",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Implement Heritage engine client",
+      "description": "As a developer, I need to integrate Sanskrit Heritage Engine via HTTP.",
+      "acceptanceCriteria": [
+        "Create engines/heritage_engine.py with HeritageEngine class extending EngineBase",
+        "Implement async HTTP client to query Heritage API (local or public URL)",
+        "Parse Heritage XML/JSON response into Segment objects",
+        "Add fallback to public URL if local unavailable",
+        "Handle connection errors gracefully",
+        "Add unit test with mocked response",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Implement ensemble voting logic",
+      "description": "As a developer, I need to combine results from multiple engines with confidence weighting.",
+      "acceptanceCriteria": [
+        "Create engines/ensemble.py with EnsembleAnalyzer class",
+        "Run all enabled engines in parallel using asyncio.gather",
+        "Implement weighted voting (vidyut: 0.35, dharmamitra: 0.40, heritage: 0.25)",
+        "Calculate agreement score: 0.95+ if all agree, 0.7-0.9 if 2/3 agree, <0.7 if all differ",
+        "Merge segment results preserving engine attribution",
+        "Handle partial engine failures (use remaining engines)",
+        "Add unit tests for voting scenarios",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Implement memory LRU cache",
+      "description": "As a developer, I need fast in-memory caching for repeated analyses.",
+      "acceptanceCriteria": [
+        "Create cache/memory.py with LRUCache class using functools.lru_cache or custom implementation",
+        "Support configurable max_size (default 1000)",
+        "Implement get(key) and set(key, value) methods",
+        "Add cache_key generation from normalized text + mode",
+        "Add hit/miss statistics tracking",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Implement SQLite corpus storage",
+      "description": "As a developer, I need persistent storage for analyses to build a corpus.",
+      "acceptanceCriteria": [
+        "Create cache/sqlite_corpus.py with SQLiteCorpus class",
+        "Create analyses table with schema: id, original_text, normalized_slp1, mode, result_json, created_at, accessed_at, access_count, disambiguated, selected_parse",
+        "Implement get(key), set(key, text, result), count() methods",
+        "Add FTS5 virtual table for full-text search",
+        "Handle database file creation if not exists",
+        "Add unit tests",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Implement Redis cache layer",
+      "description": "As a developer, I need Redis caching for shared access across services.",
+      "acceptanceCriteria": [
+        "Create cache/redis_cache.py with RedisCache class",
+        "Implement async get(key) and set(key, value, ttl) methods",
+        "Serialize AnalysisTree to JSON for storage",
+        "Default TTL: 7 days (604800 seconds)",
+        "Handle Redis connection failures gracefully (return None, don't crash)",
+        "Make Redis optional (disabled if redis_url not configured)",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Implement tiered cache coordinator",
+      "description": "As a developer, I need the tiered cache to check Memory -> Redis -> SQLite in order.",
+      "acceptanceCriteria": [
+        "Create cache/tiered.py with TieredCache class",
+        "Implement get() that checks memory, then Redis, then SQLite, with promotion on hit",
+        "Implement set() that stores in all enabled tiers",
+        "Support disabling individual tiers via config",
+        "Track cache hit rates per tier",
+        "Add integration test with all tiers",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Implement rule-based disambiguation",
+      "description": "As a developer, I need deterministic rules to filter impossible parses.",
+      "acceptanceCriteria": [
+        "Create disambiguation/rules.py with RuleBasedDisambiguator class",
+        "Implement grammatical agreement rules (adj-noun gender/number match)",
+        "Implement frequency-based preference (common forms over rare)",
+        "Each rule has a weight and returns filtered parse list",
+        "Rules are configurable and can be enabled/disabled",
+        "Add unit tests with ambiguous examples",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Implement LLM disambiguation",
+      "description": "As a developer, I need LLM-powered disambiguation for semantic understanding.",
+      "acceptanceCriteria": [
+        "Create disambiguation/llm.py with LLMDisambiguator class",
+        "Support Ollama provider with configurable model and URL",
+        "Build prompt with candidate parses and context",
+        "Parse LLM response to extract ranking",
+        "Handle LLM failures gracefully (return original candidates)",
+        "Add mock tests",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Implement disambiguation pipeline",
+      "description": "As a developer, I need the full pipeline: Rules -> LLM -> Human flag.",
+      "acceptanceCriteria": [
+        "Create disambiguation/pipeline.py with DisambiguationPipeline class",
+        "Run rules first, skip LLM if confidence > threshold (default 0.95)",
+        "Run LLM if still ambiguous",
+        "Flag for human review if still ambiguous and human.enabled",
+        "Track which stage resolved ambiguity",
+        "Configurable via Config object",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Implement parse tree builder",
+      "description": "As a developer, I need to build the 4-level tree from engine results.",
+      "acceptanceCriteria": [
+        "Create core module sanskrit_analyzer/tree_builder.py",
+        "Convert ensemble Segments into SandhiGroup -> BaseWord -> DhatuInfo hierarchy",
+        "Lookup dhatu information from segments with verb tags",
+        "Build ScriptVariants for each node",
+        "Generate unique parse_id and sentence_id",
+        "Add unit tests",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Implement main Analyzer class",
+      "description": "As a developer, I need the primary public interface for the library.",
+      "acceptanceCriteria": [
+        "Create sanskrit_analyzer/analyzer.py with Analyzer class",
+        "Constructor accepts Config or loads from file via from_config(path)",
+        "Implement analyze(text, mode, return_all_parses) method",
+        "Orchestrate: normalize -> cache check -> ensemble -> tree build -> disambiguate -> cache store -> return",
+        "Support per-request engine override",
+        "Add property for corpus_stats",
+        "Add integration test with real analysis",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Add YAML config file loading",
+      "description": "As a user, I want to configure the analyzer via a YAML file.",
+      "acceptanceCriteria": [
+        "Update config.py to load from ~/.sanskrit_analyzer/config.yaml",
+        "Support all config options: engines, cache, disambiguation, modes, scripts, logging",
+        "Environment variable overrides (SANSKRIT_REDIS_URL, etc.)",
+        "Create default config if file doesn't exist",
+        "Validate config and raise clear errors for invalid values",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Copy dhatu database from ramayanam",
+      "description": "As a developer, I need the existing dhatu database for root verb lookups.",
+      "acceptanceCriteria": [
+        "Copy comprehensive_dhatu_database.db from ramayanam/data to sanskrit_analyzer/data/",
+        "Create data/dhatu_db.py with DhatuDB class for lookups",
+        "Implement lookup_by_dhatu(dhatu), lookup_by_meaning(meaning), get_by_gana(gana) methods",
+        "Add dhatu lookup to tree builder when BaseWord is verb-derived",
+        "Add unit tests",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Create FastAPI application skeleton",
+      "description": "As a developer, I need the REST API server structure.",
+      "acceptanceCriteria": [
+        "Create api/__init__.py and api/app.py with FastAPI app",
+        "Add CORS middleware with configurable origins",
+        "Add health check endpoint GET /health",
+        "Add OpenAPI docs at /docs",
+        "Create api/routes/ directory structure",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Implement analyze API endpoint",
+      "description": "As an API consumer, I want to analyze Sanskrit text via REST.",
+      "acceptanceCriteria": [
+        "Create api/routes/analyze.py with analyze router",
+        "POST /api/v1/analyze accepts {text, mode, return_all_parses}",
+        "Returns AnalysisTree as JSON",
+        "GET /api/v1/analyze/{sentence_id} returns cached analysis",
+        "Add request validation with Pydantic models",
+        "Add API tests",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Implement dhatu API endpoint",
+      "description": "As an API consumer, I want to lookup dhatu information.",
+      "acceptanceCriteria": [
+        "Create api/routes/dhatu.py with dhatu router",
+        "GET /api/v1/dhatu/{dhatu} returns DhatuInfo with meanings and forms",
+        "GET /api/v1/dhatu/gana/{gana} returns all dhatus in that gana",
+        "POST /api/v1/dhatu/search accepts {query, search_type} for flexible search",
+        "Add API tests",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Implement disambiguate API endpoint",
+      "description": "As an API consumer, I want to save disambiguation choices.",
+      "acceptanceCriteria": [
+        "Add POST /api/v1/disambiguate endpoint in analyze.py",
+        "Accepts {sentence_id, selected_parse}",
+        "Updates SQLite corpus with disambiguation choice",
+        "Returns updated AnalysisTree",
+        "Add API test",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Initialize Vue + Vite project for UI",
+      "description": "As a developer, I need the frontend project structure.",
+      "acceptanceCriteria": [
+        "Create ui/ directory with Vite + Vue 3 + TypeScript setup",
+        "Add dependencies: vue, vue-router, pinia, cytoscape, axios",
+        "Create src/App.vue with basic layout",
+        "Create src/stores/analysis.ts with Pinia store stub",
+        "npm install succeeds",
+        "npm run build succeeds",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Create InputBar component",
+      "description": "As a user, I want to enter Sanskrit text for analysis.",
+      "acceptanceCriteria": [
+        "Create src/components/InputBar.vue",
+        "Text input field with placeholder in Devanagari",
+        "Analyze button that emits analyze event",
+        "Mode dropdown (Academic, Educational, Production)",
+        "Script toggle (Devanagari, IAST, SLP1)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Create ParseTree component with Cytoscape",
+      "description": "As a user, I want to see the parse tree visually.",
+      "acceptanceCriteria": [
+        "Create src/components/ParseTree.vue",
+        "Initialize Cytoscape with hierarchical layout (dagre or breadthfirst)",
+        "Render 4-level tree: Sentence -> SandhiGroups -> BaseWords -> Dhatus",
+        "Color nodes by confidence: green (>0.8), yellow (0.5-0.8), red (<0.5)",
+        "Support pan/zoom",
+        "Emit node-selected event on click",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Create NodeDetail component",
+      "description": "As a user, I want to see details when I click a tree node.",
+      "acceptanceCriteria": [
+        "Create src/components/NodeDetail.vue",
+        "Display based on node type: SandhiGroup shows sandhi_type and compound info, BaseWord shows morphology and meanings, DhatuInfo shows gana and prakriya",
+        "Show script variants (Devanagari, IAST, SLP1)",
+        "Show engine votes for transparency",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Create parse navigation controls",
+      "description": "As a user, I want to browse multiple parse candidates.",
+      "acceptanceCriteria": [
+        "Add parse navigation to App.vue or ParseTree.vue",
+        "Show 'Parse X of Y' indicator",
+        "Previous/Next buttons to cycle through parse_forest",
+        "'Select This Parse' button for disambiguation",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Connect UI to API",
+      "description": "As a user, I want the UI to fetch real analysis from the API.",
+      "acceptanceCriteria": [
+        "Create src/api/client.ts with axios instance",
+        "Implement analyzeText(text, mode) function",
+        "Implement saveDisambiguation(sentenceId, parseIndex) function",
+        "Update Pinia store to call API and store results",
+        "Handle loading and error states in UI",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "Add export functionality to UI",
+      "description": "As a user, I want to export analysis results.",
+      "acceptanceCriteria": [
+        "Add Export dropdown to UI (JSON, SVG)",
+        "JSON export downloads AnalysisTree as .json file",
+        "SVG export renders Cytoscape graph as downloadable .svg",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Create Docker Compose setup",
+      "description": "As a developer, I want to run the full stack with Docker.",
+      "acceptanceCriteria": [
+        "Create docker/docker-compose.yml with services: api, ui, redis",
+        "Create docker/Dockerfile.api for Python API",
+        "Create docker/Dockerfile.ui for Vue static build + nginx",
+        "Add docker/heritage/Dockerfile.heritage stub for Heritage Engine (optional)",
+        "docker-compose up starts all services",
+        "API accessible at localhost:8000, UI at localhost:3000"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "Add example scripts",
+      "description": "As a user, I want examples showing how to use the library.",
+      "acceptanceCriteria": [
+        "Create examples/basic_usage.py showing simple analyze() call",
+        "Create examples/batch_analysis.py showing batch processing of verses",
+        "Create examples/integrate_ramayanam.py showing integration pattern",
+        "All examples run successfully with python examples/<file>.py",
+        "Typecheck passes"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-034",
+      "title": "Write README with quickstart",
+      "description": "As a user, I want documentation to get started quickly.",
+      "acceptanceCriteria": [
+        "Update README.md with project overview",
+        "Add Installation section (pip install, Docker)",
+        "Add Quick Start code example",
+        "Add Configuration section pointing to config.yaml",
+        "Add API documentation section",
+        "Add Development section for contributors"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
