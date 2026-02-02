@@ -76,10 +76,11 @@ def create_app(
 
 def _register_routes(app: FastAPI) -> None:
     """Register all API routes."""
-    from sanskrit_analyzer.api.routes import analyze, health
+    from sanskrit_analyzer.api.routes import analyze, dhatu, health
 
     app.include_router(health.router, tags=["Health"])
     app.include_router(analyze.router)
+    app.include_router(dhatu.router)
 
 
 # Default app instance for uvicorn
