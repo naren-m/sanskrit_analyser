@@ -83,3 +83,27 @@ Started: 2026-02-01
 
 ---
 
+## US-008: Implement Heritage engine client
+**Status:** COMPLETED
+**Commit:** b3db2fa
+
+- Created engines/heritage_engine.py with HeritageEngine
+- HTTP client with local/public fallback
+- 12 unit tests with mocked responses
+- Typecheck passes
+
+---
+
+## US-009: Implement ensemble voting logic
+**Status:** COMPLETED
+**Commit:** d9d94af
+
+- Created engines/ensemble.py with EnsembleAnalyzer
+- Weighted voting (Vidyut: 0.35, Dharmamitra: 0.40, Heritage: 0.25)
+- Parallel engine execution with asyncio.gather
+- Agreement levels: high (0.95+), medium (0.70-0.95), low
+- 12 unit tests passing
+- Typecheck passes
+
+---
+
