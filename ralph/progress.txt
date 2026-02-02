@@ -149,3 +149,17 @@ Started: 2026-02-01
 
 ---
 
+## US-013: Implement tiered cache coordinator
+**Status:** COMPLETED
+**Commit:** b70fd4c
+
+- Created cache/tiered.py with TieredCache class
+- Memory -> Redis -> SQLite fallback order
+- Automatic promotion on cache hit
+- Per-tier statistics tracking
+- Configurable tier enable/disable
+- 24 unit tests passing
+- Typecheck passes
+
+---
+
