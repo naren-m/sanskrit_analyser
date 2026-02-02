@@ -15,6 +15,15 @@ from sanskrit_analyzer.models.morphology import (
     Voice,
 )
 from sanskrit_analyzer.models.scripts import Script, ScriptVariants
+from sanskrit_analyzer.models.tree import (
+    AnalysisTree,
+    BaseWord,
+    CacheTier,
+    CompoundType,
+    ConfidenceMetrics,
+    ParseTree,
+    SandhiGroup,
+)
 
 __all__ = [
     # Scripts
@@ -37,4 +46,12 @@ __all__ = [
     "Gana",
     "Pada",
     "COMMON_DHATUS",
+    # Tree
+    "CacheTier",
+    "CompoundType",
+    "ConfidenceMetrics",
+    "BaseWord",
+    "SandhiGroup",
+    "ParseTree",
+    "AnalysisTree",
 ]
