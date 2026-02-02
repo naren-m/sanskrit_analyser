@@ -64,6 +64,11 @@ class SQLiteCorpus:
             config_dir = Path.home() / ".sanskrit_analyzer"
             config_dir.mkdir(parents=True, exist_ok=True)
             db_path = str(config_dir / "corpus.db")
+        else:
+            # Expand ~ and resolve path
+            db_path = str(Path(db_path).expanduser().resolve())
+            # Ensure parent directory exists
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
         self._db_path = db_path
         self._local = threading.local()
