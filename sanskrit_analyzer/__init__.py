@@ -11,10 +11,12 @@ This package provides:
 __version__ = "0.1.0"
 __author__ = "Naren Mudivarthy"
 
+from sanskrit_analyzer.analyzer import Analyzer
 from sanskrit_analyzer.config import AnalysisMode, Config
 
 __all__ = [
     "__version__",
-    "Config",
+    "Analyzer",
     "AnalysisMode",
+    "Config",
 ]
