@@ -12,11 +12,12 @@ __version__ = "0.1.0"
 __author__ = "Naren Mudivarthy"
 
 from sanskrit_analyzer.analyzer import Analyzer
-from sanskrit_analyzer.config import AnalysisMode, Config
+from sanskrit_analyzer.config import AnalysisMode, Config, ConfigError
 
 __all__ = [
     "__version__",
     "Analyzer",
     "AnalysisMode",
     "Config",
+    "ConfigError",
 ]
