@@ -191,3 +191,61 @@ Started: 2026-02-01
 
 ---
 
+## US-016: Implement disambiguation pipeline
+**Status:** COMPLETED
+**Commit:** c21f8e4
+
+- Created disambiguation/pipeline.py with DisambiguationPipeline
+- Multi-stage processing: Rules -> LLM -> Human review
+- Configurable skip thresholds (0.95 default)
+- Tracks which stage resolved ambiguity
+- Human review flagging with auto-flag threshold
+- 19 unit tests passing
+- Typecheck passes
+
+---
+
+## US-017: Implement parse tree builder
+**Status:** COMPLETED
+**Commit:** 56bf15d
+
+- Created tree_builder.py with TreeBuilder class
+- Converts ensemble results to 4-level hierarchy
+- Parses morphology strings into MorphologicalTag objects
+- Dhatu lookup for verbs from COMMON_DHATUS
+- Generates unique sentence_id and parse_id
+- ScriptVariants for all text representations
+- 29 unit tests passing
+- Typecheck passes
+
+---
+
+## US-018: Implement main Analyzer class
+**Status:** COMPLETED
+**Commit:** f4702fc
+
+- Created analyzer.py with Analyzer class as public interface
+- Orchestrates full pipeline: normalize -> cache -> ensemble -> tree -> disambiguate -> cache
+- from_config() for YAML configuration loading
+- analyze_batch() for multi-text analysis
+- health_check() and get_corpus_stats() for monitoring
+- Exports Analyzer from package __init__.py
+- 19 unit tests passing
+- Typecheck passes
+
+---
+
+## US-019: Add YAML config file loading
+**Status:** COMPLETED
+**Commit:** c2e4429
+
+- Config.load() creates default config if missing
+- Environment variable overrides (SANSKRIT_REDIS_URL, SANSKRIT_LLM_PROVIDER, etc.)
+- Comprehensive validation for all config sections
+- ConfigError exception for validation failures
+- to_dict() and save() for serialization
+- 39 unit tests passing
+- Typecheck passes
+
+---
+
