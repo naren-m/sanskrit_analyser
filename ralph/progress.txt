@@ -107,3 +107,17 @@ Started: 2026-02-01
 
 ---
 
+## US-010: Implement memory LRU cache
+**Status:** COMPLETED
+**Commit:** 4862bc7
+
+- Created cache/memory.py with LRUCache class
+- Thread-safe with RLock
+- Configurable max_size (default 1000)
+- Cache key generation from text + mode
+- Hit/miss/eviction statistics tracking
+- 25 unit tests passing
+- Typecheck passes
+
+---
+
