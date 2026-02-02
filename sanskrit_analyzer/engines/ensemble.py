@@ -272,7 +272,7 @@ class EnsembleAnalyzer:
             # Choose most common lemma (or primary)
             best_lemma = seg.lemma
             if all_lemmas:
-                lemma_counts = {}
+                lemma_counts: dict[str, int] = {}
                 for lemma in all_lemmas:
                     lemma_counts[lemma] = lemma_counts.get(lemma, 0) + 1
                 best_lemma = max(lemma_counts.keys(), key=lambda x: lemma_counts[x])
@@ -317,12 +317,12 @@ class EnsembleAnalyzer:
             return 1.0
 
         # Partial agreement based on most common
-        counts = {}
+        counts: dict[str, int] = {}
         for lemma in lemmas:
             counts[lemma] = counts.get(lemma, 0) + 1
 
         max_count = max(counts.values())
-        return max_count / len(lemmas)
+        return float(max_count) / len(lemmas)
 
     def _calculate_agreement(
         self,
