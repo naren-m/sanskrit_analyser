@@ -28,3 +28,46 @@ Started: 2026-02-01
 
 ---
 
+## US-003: Define morphology and dhatu data models
+**Status:** COMPLETED
+**Commit:** 0cc4466
+
+- Created models/morphology.py with enums and dataclasses
+- Created models/dhatu.py with DhatuInfo and Gana/Pada classes
+- Typecheck passes
+
+---
+
+## US-004: Define parse tree data models
+**Status:** COMPLETED
+**Commit:** bb0906a
+
+- Created models/tree.py with 4-level hierarchical structure
+- AnalysisTree, ParseTree, SandhiGroup, BaseWord dataclasses
+- CacheTier, CompoundType, ConfidenceMetrics
+- Typecheck passes
+
+---
+
+## US-005: Create abstract engine base class
+**Status:** COMPLETED
+**Commit:** fd37b69
+
+- Created engines/base.py with EngineBase abstract class
+- EngineResult, Segment, SandhiInfo dataclasses
+- Typecheck passes
+
+---
+
+## US-006: Implement Vidyut engine wrapper
+**Status:** COMPLETED
+**Commit:** 288659d
+
+- Created engines/vidyut_engine.py with VidyutEngine
+- Uses vidyut.cheda.Chedaka for segmentation
+- Parses morphological data from Vidyut output
+- 8 unit tests passing
+- Typecheck passes
+
+---
+
