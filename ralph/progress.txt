@@ -163,3 +163,17 @@ Started: 2026-02-01
 
 ---
 
+## US-014: Implement rule-based disambiguation
+**Status:** COMPLETED
+**Commit:** 88ba71e
+
+- Created disambiguation/rules.py with RuleBasedDisambiguator
+- GenderNumberAgreementRule: adj-noun agreement filtering
+- FrequencyPreferenceRule: common word boosting
+- SandhiPreferenceRule: standard sandhi preference
+- Configurable rules with weights, enable/disable
+- 26 unit tests passing
+- Typecheck passes
+
+---
+
