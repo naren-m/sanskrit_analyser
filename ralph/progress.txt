@@ -135,3 +135,17 @@ Started: 2026-02-01
 
 ---
 
+## US-012: Implement Redis cache layer
+**Status:** COMPLETED
+**Commit:** 2997423
+
+- Created cache/redis_cache.py with RedisCache class
+- Async get/set/delete with default TTL 7 days
+- Key prefixing for namespace isolation
+- Graceful error handling (returns None on failure)
+- Optional: disabled when redis_url not configured
+- 30 unit tests passing
+- Typecheck passes
+
+---
+
