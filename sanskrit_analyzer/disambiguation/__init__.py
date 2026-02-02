@@ -6,6 +6,13 @@ from sanskrit_analyzer.disambiguation.llm import (
     LLMDisambiguator,
     LLMProvider,
 )
+from sanskrit_analyzer.disambiguation.pipeline import (
+    DisambiguationPipeline,
+    DisambiguationStage,
+    HumanReviewConfig,
+    PipelineConfig,
+    PipelineResult,
+)
 from sanskrit_analyzer.disambiguation.rules import (
     DisambiguationRule,
     FrequencyPreferenceRule,
@@ -20,14 +27,19 @@ from sanskrit_analyzer.disambiguation.rules import (
 )
 
 __all__ = [
+    "DisambiguationPipeline",
     "DisambiguationRule",
+    "DisambiguationStage",
     "FrequencyPreferenceRule",
     "GenderNumberAgreementRule",
+    "HumanReviewConfig",
     "LLMConfig",
     "LLMDisambiguationResult",
     "LLMDisambiguator",
     "LLMProvider",
     "ParseCandidate",
+    "PipelineConfig",
+    "PipelineResult",
     "RuleBasedDisambiguator",
     "RuleBasedDisambiguatorConfig",
     "RuleConfig",
