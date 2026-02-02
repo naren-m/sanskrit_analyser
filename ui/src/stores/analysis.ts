@@ -98,6 +98,7 @@ export interface AnalysisTree {
   confidence: ConfidenceMetrics
   mode: string
   cached_at?: string
+  cache_tier?: string
   needs_human_review: boolean
   engine_details?: Record<string, unknown>
 }

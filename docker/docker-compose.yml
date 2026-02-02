@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # Sanskrit Analyzer API
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: sanskrit-api
+    ports:
+      - "8000:8000"
+    environment:
+      - SANSKRIT_REDIS_URL=redis://redis:6379/0
+      - SANSKRIT_CORPUS_PATH=/app/data/corpus.db
+      - SANSKRIT_CONFIG_PATH=/app/config.yaml
+    volumes:
+      - corpus-data:/app/data
+      - ../config.yaml:/app/config.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - sanskrit-network
+
+  # Vue.js Frontend
+  ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ui
+    container_name: sanskrit-ui
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - sanskrit-network
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: sanskrit-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - sanskrit-network
+
+  # Optional: Heritage Engine (for local Sanskrit Heritage segmenter)
+  # Uncomment and configure if you have the Heritage engine locally
+  # heritage:
+  #   build:
+  #     context: docker/heritage
+  #     dockerfile: Dockerfile.heritage
+  #   container_name: sanskrit-heritage
+  #   ports:
+  #     - "8080:8080"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   restart: unless-stopped
+  #   networks:
+  #     - sanskrit-network
+
+volumes:
+  corpus-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  sanskrit-network:
+    driver: bridge
