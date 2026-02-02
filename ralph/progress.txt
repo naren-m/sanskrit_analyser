@@ -121,3 +121,17 @@ Started: 2026-02-01
 
 ---
 
+## US-011: Implement SQLite corpus storage
+**Status:** COMPLETED
+**Commit:** dba143a
+
+- Created cache/sqlite_corpus.py with SQLiteCorpus class
+- FTS5 virtual table for full-text search
+- Access tracking (created_at, accessed_at, access_count)
+- Disambiguation state tracking
+- Thread-safe with thread-local connections
+- 20 unit tests passing
+- Typecheck passes
+
+---
+
