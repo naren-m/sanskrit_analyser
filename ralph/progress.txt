@@ -16,3 +16,15 @@ Started: 2026-02-01
 
 ---
 
+## US-002: Define core data models for scripts and transliteration
+**Status:** COMPLETED
+**Commit:** 434f855
+
+- Created models/scripts.py with Script enum and ScriptVariants dataclass
+- Created utils/transliterate.py with transliterate functions
+- Created utils/normalize.py with detect_script and normalize_slp1
+- 28 unit tests passing
+- Typecheck passes
+
+---
+
