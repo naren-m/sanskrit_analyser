@@ -71,3 +71,15 @@ Started: 2026-02-01
 
 ---
 
+## US-007: Implement Dharmamitra ByT5 engine wrapper
+**Status:** COMPLETED
+**Commit:** 33a0e51
+
+- Created engines/dharmamitra_engine.py with DharmamitraEngine
+- Uses dharmamitra-sanskrit-grammar package
+- 3 processing modes, returns meanings
+- 12 unit tests passing
+- Typecheck passes
+
+---
+
