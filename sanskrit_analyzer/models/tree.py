@@ -234,9 +234,13 @@ class AnalysisTree:
         return {
             "sentence_id": self.sentence_id,
             "original_text": self.original_text,
-            "devanagari": self.scripts.devanagari,
-            "iast": self.scripts.iast,
-            "slp1": self.scripts.slp1,
+            "normalized_slp1": self.normalized_slp1,
+            "scripts": {
+                "devanagari": self.scripts.devanagari,
+                "iast": self.scripts.iast,
+                "slp1": self.scripts.slp1,
+            },
+            "parse_forest": [p.to_dict() for p in self.parse_forest],
             "parse_count": self.parse_count,
             "is_ambiguous": self.is_ambiguous,
             "selected_parse": self.selected_parse,
@@ -247,7 +251,6 @@ class AnalysisTree:
             },
             "mode": self.mode,
             "cached_at": self.cached_at.value,
-            "parses": [p.to_dict() for p in self.parse_forest],
         }
 
     def select_parse(self, index: int) -> None:

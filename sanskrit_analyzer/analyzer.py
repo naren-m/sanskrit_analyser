@@ -422,35 +422,133 @@ class Analyzer:
     def _result_to_tree(
         self,
         cached: dict[str, Any],
-        original_text: str,
-        normalized_slp1: str,
-        mode: str,
+        original_text: Optional[str] = None,
+        normalized_slp1: Optional[str] = None,
+        mode: Optional[str] = None,
     ) -> AnalysisTree:
         """Convert cached result back to AnalysisTree.
 
         Args:
             cached: Cached result dictionary.
-            original_text: Original input text.
-            normalized_slp1: Normalized SLP1 text.
-            mode: Analysis mode.
+            original_text: Original input text (uses cached if None).
+            normalized_slp1: Normalized SLP1 text (uses cached if None).
+            mode: Analysis mode (uses cached if None).
 
         Returns:
             Reconstructed AnalysisTree.
         """
-        # For now, rebuild the tree from cached data
-        # In a full implementation, we'd deserialize the complete tree
-        from sanskrit_analyzer.models.tree import ConfidenceMetrics
+        from sanskrit_analyzer.models.tree import (
+            ConfidenceMetrics,
+            ParseTree,
+            SandhiGroup,
+            BaseWord,
+        )
+        from sanskrit_analyzer.models.morphology import MorphologicalTag, Meaning
+        from sanskrit_analyzer.models.dhatu import DhatuInfo
 
+        # Use cached values if not provided
+        original_text = original_text or cached.get("original_text", "")
+        normalized_slp1 = normalized_slp1 or cached.get("normalized_slp1", "")
+        mode = mode or cached.get("mode", "production")
+
+        # Rebuild scripts
         scripts = ScriptVariants.from_text(normalized_slp1, Script.SLP1)
 
+        # Rebuild confidence
+        conf_dict = cached.get("confidence", {})
         confidence = ConfidenceMetrics(
-            overall=cached.get("confidence", {}).get("overall", 0.0),
-            engine_agreement=cached.get("confidence", {}).get("engine_agreement", 0.0),
-            disambiguation_applied=cached.get("confidence", {}).get("disambiguation_applied", False),
+            overall=conf_dict.get("overall", 0.0),
+            engine_agreement=conf_dict.get("engine_agreement", 0.0),
+            disambiguation_applied=conf_dict.get("disambiguation_applied", False),
         )
 
-        # Determine which cache tier this came from
-        # (In a real implementation, the cache would track this)
+        # Rebuild parse_forest
+        parse_forest: list[ParseTree] = []
+        for pt_dict in cached.get("parse_forest", []):
+            sandhi_groups: list[SandhiGroup] = []
+            for sg_dict in pt_dict.get("sandhi_groups", []):
+                base_words: list[BaseWord] = []
+                for bw_dict in sg_dict.get("base_words", []):
+                    # Rebuild morphology
+                    morph = None
+                    morph_dict = bw_dict.get("morphology")
+                    if morph_dict:
+                        morph = MorphologicalTag(
+                            pos=morph_dict.get("pos"),
+                            gender=morph_dict.get("gender"),
+                            number=morph_dict.get("number"),
+                            case=morph_dict.get("case"),
+                            person=morph_dict.get("person"),
+                            tense=morph_dict.get("tense"),
+                            voice=morph_dict.get("voice"),
+                            raw_tag=morph_dict.get("raw_tag"),
+                        )
+
+                    # Rebuild dhatu
+                    dhatu = None
+                    dhatu_dict = bw_dict.get("dhatu")
+                    if dhatu_dict:
+                        dhatu = DhatuInfo(
+                            dhatu=dhatu_dict.get("dhatu", ""),
+                            meaning=dhatu_dict.get("meaning"),
+                            gana=dhatu_dict.get("gana"),
+                            pada=dhatu_dict.get("pada"),
+                        )
+
+                    # Rebuild meanings
+                    meanings = [
+                        Meaning(text=m) if isinstance(m, str) else Meaning(text=str(m))
+                        for m in bw_dict.get("meanings", [])
+                    ]
+
+                    # Rebuild scripts for word
+                    bw_scripts = None
+                    scripts_dict = bw_dict.get("scripts")
+                    if scripts_dict:
+                        bw_scripts = ScriptVariants(
+                            devanagari=scripts_dict.get("devanagari", ""),
+                            iast=scripts_dict.get("iast", ""),
+                            slp1=scripts_dict.get("slp1", ""),
+                        )
+
+                    base_words.append(BaseWord(
+                        lemma=bw_dict.get("lemma", ""),
+                        surface_form=bw_dict.get("surface_form", ""),
+                        scripts=bw_scripts,
+                        morphology=morph,
+                        meanings=meanings,
+                        dhatu=dhatu,
+                        confidence=bw_dict.get("confidence", 0.0),
+                    ))
+
+                # Rebuild scripts for sandhi group
+                sg_scripts = None
+                sg_scripts_dict = sg_dict.get("scripts")
+                if sg_scripts_dict:
+                    sg_scripts = ScriptVariants(
+                        devanagari=sg_scripts_dict.get("devanagari", ""),
+                        iast=sg_scripts_dict.get("iast", ""),
+                        slp1=sg_scripts_dict.get("slp1", ""),
+                    )
+
+                sandhi_groups.append(SandhiGroup(
+                    surface_form=sg_dict.get("surface_form", ""),
+                    scripts=sg_scripts,
+                    sandhi_type=sg_dict.get("sandhi_type"),
+                    sandhi_rule=sg_dict.get("sandhi_rule"),
+                    is_compound=sg_dict.get("is_compound", False),
+                    compound_type=sg_dict.get("compound_type"),
+                    base_words=base_words,
+                ))
+
+            parse_forest.append(ParseTree(
+                parse_id=pt_dict.get("parse_id", ""),
+                confidence=pt_dict.get("confidence", 0.0),
+                engine_votes=pt_dict.get("engine_votes", {}),
+                sandhi_groups=sandhi_groups,
+            ))
+
+        # Determine cache tier
         cache_tier = CacheTier.MEMORY  # Default assumption
 
         return AnalysisTree(
@@ -458,7 +556,7 @@ class Analyzer:
             original_text=original_text,
             normalized_slp1=normalized_slp1,
             scripts=scripts,
-            parse_forest=[],  # Would need full deserialization
+            parse_forest=parse_forest,
             confidence=confidence,
             mode=mode,
             cached_at=cache_tier,

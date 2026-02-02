@@ -381,7 +381,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.12'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -1990,6 +1990,7 @@ cache = [
     { name = "redis" },
 ]
 dev = [
+    { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -2006,6 +2007,7 @@ ml = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.104.0" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.25.0" },
     { name = "indic-transliteration", specifier = ">=2.3.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "pydantic", specifier = ">=2.0" },
