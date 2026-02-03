@@ -12,6 +12,9 @@ Environment Variables:
     SANSKRIT_LOG_LEVEL: Override log level
     SANSKRIT_LOG_FILE: Override log file path
     SANSKRIT_OPENAI_API_KEY: OpenAI API key
+    MCP_HOST: Override MCP server host
+    MCP_PORT: Override MCP server port
+    MCP_LOG_LEVEL: Override MCP server log level
 """
 
 import os
@@ -158,6 +161,30 @@ class ModeConfig:
 
 
 @dataclass
+class MCPServerConfig:
+    """Configuration for MCP server."""
+
+    host: str = "0.0.0.0"
+    port: int = 8001
+    log_level: str = "INFO"
+
+    def validate(self) -> None:
+        """Validate MCP server configuration.
+
+        Raises:
+            ConfigError: If validation fails.
+        """
+        if self.port < 1 or self.port > 65535:
+            raise ConfigError(f"port must be between 1 and 65535, got {self.port}")
+
+        valid_log_levels = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+        if self.log_level.upper() not in valid_log_levels:
+            raise ConfigError(
+                f"log_level must be one of {valid_log_levels}, got {self.log_level}"
+            )
+
+
+@dataclass
 class Config:
     """Main configuration for Sanskrit Analyzer.
 
@@ -175,6 +202,7 @@ class Config:
     engines: EngineConfig = field(default_factory=EngineConfig)
     cache: CacheConfig = field(default_factory=CacheConfig)
     disambiguation: DisambiguationConfig = field(default_factory=DisambiguationConfig)
+    mcp: MCPServerConfig = field(default_factory=MCPServerConfig)
     default_mode: AnalysisMode = AnalysisMode.PRODUCTION
     default_output_script: str = "devanagari"  # devanagari | iast | slp1
     input_detection: str = "auto"
@@ -223,6 +251,7 @@ class Config:
         self.engines.validate()
         self.cache.validate()
         self.disambiguation.validate()
+        self.mcp.validate()
         self.production.validate()
         self.educational.validate()
         self.academic.validate()
@@ -305,6 +334,7 @@ class Config:
         engines_data = data.get("engines", {})
         cache_data = data.get("cache", {})
         disambiguation_data = data.get("disambiguation", {})
+        mcp_data = data.get("mcp", {})
 
         # Filter out unknown keys to prevent dataclass errors
         engines = EngineConfig(
@@ -315,6 +345,9 @@ class Config:
         )
         disambiguation = DisambiguationConfig(
             **{k: v for k, v in disambiguation_data.items() if hasattr(DisambiguationConfig, k)}
+        )
+        mcp = MCPServerConfig(
+            **{k: v for k, v in mcp_data.items() if hasattr(MCPServerConfig, k)}
         )
 
         # Parse mode-specific configs with defaults
@@ -355,6 +388,7 @@ class Config:
             engines=engines,
             cache=cache,
             disambiguation=disambiguation,
+            mcp=mcp,
             default_mode=default_mode,
             default_output_script=data.get("default_output_script", "devanagari"),
             input_detection=data.get("input_detection", "auto"),
@@ -401,6 +435,16 @@ class Config:
 
         if log_file := os.environ.get("SANSKRIT_LOG_FILE"):
             config.log_file = log_file
+
+        # MCP server overrides
+        if mcp_host := os.environ.get("MCP_HOST"):
+            config.mcp.host = mcp_host
+
+        if mcp_port := os.environ.get("MCP_PORT"):
+            config.mcp.port = int(mcp_port)
+
+        if mcp_log_level := os.environ.get("MCP_LOG_LEVEL"):
+            config.mcp.log_level = mcp_log_level.upper()
 
         return config
 
@@ -461,6 +505,12 @@ disambiguation:
   ollama_url: http://localhost:11434
   human_enabled: true
   human_auto_prompt: false
+
+# MCP server configuration
+mcp:
+  host: 0.0.0.0
+  port: 8001
+  log_level: INFO
 
 # Mode-specific settings
 production:
@@ -531,6 +581,11 @@ academic:
                 "llm_model": self.disambiguation.llm_model,
                 "ollama_url": self.disambiguation.ollama_url,
                 "human_enabled": self.disambiguation.human_enabled,
+            },
+            "mcp": {
+                "host": self.mcp.host,
+                "port": self.mcp.port,
+                "log_level": self.mcp.log_level,
             },
         }
 

@@ -1,37 +1,46 @@
 """MCP server implementation for Sanskrit Analyzer."""
 
 import argparse
-import os
 
 from mcp.server.fastmcp import FastMCP
 
-DEFAULT_HOST = "0.0.0.0"
-DEFAULT_PORT = 8001
+from sanskrit_analyzer.config import Config, MCPServerConfig
 
 
-def create_server(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> FastMCP:
-    """Create and configure the MCP server."""
+def create_server(config: MCPServerConfig | None = None) -> FastMCP:
+    """Create and configure the MCP server.
+
+    Args:
+        config: MCP server configuration. Uses defaults from Config if not provided.
+    """
+    if config is None:
+        config = Config().mcp
+
     return FastMCP(
         name="Sanskrit Analyzer",
         instructions="Sanskrit text analysis with morphology, dhatu lookup, and grammar tools",
-        host=host,
-        port=port,
+        host=config.host,
+        port=config.port,
     )
 
 
 def main() -> None:
     """Entry point for running the MCP server."""
+    # Load config (includes env var overrides)
+    app_config = Config.load(validate=False)
+    mcp_config = app_config.mcp
+
     parser = argparse.ArgumentParser(description="Sanskrit Analyzer MCP Server")
     parser.add_argument(
         "--host",
-        default=os.environ.get("MCP_HOST", DEFAULT_HOST),
-        help=f"Host to bind to (default: {DEFAULT_HOST})",
+        default=mcp_config.host,
+        help=f"Host to bind to (default: {mcp_config.host})",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.environ.get("MCP_PORT", DEFAULT_PORT)),
-        help=f"Port to listen on (default: {DEFAULT_PORT})",
+        default=mcp_config.port,
+        help=f"Port to listen on (default: {mcp_config.port})",
     )
     parser.add_argument(
         "--transport",
@@ -41,7 +50,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    server = create_server(host=args.host, port=args.port)
+    # Override config with CLI args
+    mcp_config.host = args.host
+    mcp_config.port = args.port
+
+    server = create_server(config=mcp_config)
     server.run(transport=args.transport)
 
 
