@@ -8,6 +8,26 @@ from sanskrit_analyzer.config import AnalysisMode, Config
 # Map mode strings to AnalysisMode enum values
 _MODE_MAP = {mode.value: mode for mode in AnalysisMode}
 
+# Shared analyzer instance
+_analyzer = Analyzer(Config())
+
+
+async def _run_analysis(text: str, mode: AnalysisMode) -> dict[str, Any] | Any:
+    """Run analysis and return result or error dict."""
+    try:
+        return await _analyzer.analyze(text, mode=mode)
+    except Exception as e:
+        return {"error": str(e), "success": False}
+
+
+def _scripts_dict(scripts: Any) -> dict[str, str]:
+    """Extract scripts as a dictionary."""
+    return {
+        "devanagari": scripts.devanagari,
+        "iast": scripts.iast,
+        "slp1": scripts.slp1,
+    }
+
 
 async def analyze_sentence(
     text: str,
@@ -36,12 +56,9 @@ async def analyze_sentence(
     analysis_mode = _MODE_MAP.get((mode or "").lower(), AnalysisMode.PRODUCTION)
     verbosity = (verbosity or "standard").lower()
 
-    analyzer = Analyzer(Config())
-
-    try:
-        result = await analyzer.analyze(text, mode=analysis_mode)
-    except Exception as e:
-        return {"error": str(e), "success": False}
+    result = await _run_analysis(text, analysis_mode)
+    if isinstance(result, dict):
+        return result
 
     return _format_analysis_response(result, verbosity)
 
@@ -52,11 +69,7 @@ def _format_analysis_response(tree: Any, verbosity: str) -> dict[str, Any]:
         "success": True,
         "sentence_id": tree.sentence_id,
         "original_text": tree.original_text,
-        "scripts": {
-            "devanagari": tree.scripts.devanagari,
-            "iast": tree.scripts.iast,
-            "slp1": tree.scripts.slp1,
-        },
+        "scripts": _scripts_dict(tree.scripts),
         "confidence": tree.confidence.overall,
         "parse_count": len(tree.parse_forest),
     }
@@ -138,11 +151,7 @@ def _format_word(word: Any, verbosity: str) -> dict[str, Any]:
                 "pada": word.dhatu.pada,
             }
         if word.scripts:
-            data["scripts"] = {
-                "devanagari": word.scripts.devanagari,
-                "iast": word.scripts.iast,
-                "slp1": word.scripts.slp1,
-            }
+            data["scripts"] = _scripts_dict(word.scripts)
 
     return data
 
@@ -188,13 +197,9 @@ async def split_sandhi(
     """
     verbosity = (verbosity or "standard").lower()
 
-    # Use production mode for faster processing
-    analyzer = Analyzer(Config())
-
-    try:
-        result = await analyzer.analyze(text, mode=AnalysisMode.PRODUCTION)
-    except Exception as e:
-        return {"error": str(e), "success": False}
+    result = await _run_analysis(text, AnalysisMode.PRODUCTION)
+    if isinstance(result, dict):
+        return result
 
     return _format_sandhi_response(result, verbosity)
 
@@ -204,11 +209,7 @@ def _format_sandhi_response(tree: Any, verbosity: str) -> dict[str, Any]:
     response: dict[str, Any] = {
         "success": True,
         "original_text": tree.original_text,
-        "scripts": {
-            "devanagari": tree.scripts.devanagari,
-            "iast": tree.scripts.iast,
-            "slp1": tree.scripts.slp1,
-        },
+        "scripts": _scripts_dict(tree.scripts),
     }
 
     best_parse = tree.best_parse
