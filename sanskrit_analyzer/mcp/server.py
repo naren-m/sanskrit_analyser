@@ -43,6 +43,12 @@ def _register_tools(server: FastMCP) -> None:
         split_sandhi as _split,
         transliterate as _translit,
     )
+    from sanskrit_analyzer.mcp.tools.dhatu import (
+        conjugate_verb as _conjugate,
+        list_gana as _list_gana,
+        lookup_dhatu as _lookup,
+        search_dhatu as _search,
+    )
 
     @server.tool()
     async def analyze_sentence(
@@ -118,6 +124,79 @@ def _register_tools(server: FastMCP) -> None:
             Converted text with original and result.
         """
         return _translit(text, from_script, to_script)
+
+    # Dhatu tools
+    @server.tool()
+    def lookup_dhatu(
+        dhatu: str,
+        include_conjugations: bool = False,
+        verbosity: str | None = None,
+    ) -> dict[str, Any]:
+        """Look up a dhatu (verbal root) by its form.
+
+        Args:
+            dhatu: The verbal root (Devanagari or IAST).
+            include_conjugations: Whether to include conjugation tables.
+            verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
+
+        Returns:
+            Dhatu information with meaning, gana, pada, and optional conjugations.
+        """
+        return _lookup(dhatu, include_conjugations, verbosity)
+
+    @server.tool()
+    def search_dhatu(
+        query: str,
+        limit: int = 10,
+        verbosity: str | None = None,
+    ) -> dict[str, Any]:
+        """Search dhatus by meaning or pattern.
+
+        Args:
+            query: Search query (matches dhatu, meaning, examples).
+            limit: Maximum number of results (default 10).
+            verbosity: Response detail level.
+
+        Returns:
+            List of matching dhatu entries.
+        """
+        return _search(query, limit, verbosity)
+
+    @server.tool()
+    def conjugate_verb(
+        dhatu: str,
+        lakara: str | None = None,
+        purusha: str | None = None,
+        vacana: str | None = None,
+    ) -> dict[str, Any]:
+        """Get conjugation forms for a dhatu.
+
+        Args:
+            dhatu: The verbal root (Devanagari or IAST).
+            lakara: Tense/mood (lat, lit, lut, lrt, let, lot, lan, etc.).
+            purusha: Person (prathama, madhyama, uttama).
+            vacana: Number (ekavacana, dvivacana, bahuvacana).
+
+        Returns:
+            Conjugation forms matching the specified filters.
+        """
+        return _conjugate(dhatu, lakara, purusha, vacana)
+
+    @server.tool()
+    def list_gana(
+        gana: int,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """List dhatus belonging to a verb class (gana).
+
+        Args:
+            gana: Verb class number (1-10).
+            limit: Maximum number of results (default 20).
+
+        Returns:
+            List of dhatus in the specified gana with their meanings.
+        """
+        return _list_gana(gana, limit)
 
 
 def main() -> None:
