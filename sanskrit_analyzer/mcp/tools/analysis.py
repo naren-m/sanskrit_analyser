@@ -289,6 +289,18 @@ async def get_morphology(
     return _format_morphology_response(result, word, verbosity)
 
 
+def _word_matches(word: Any, target: str) -> bool:
+    """Check if word matches target by surface form, lemma, or scripts."""
+    target_lower = target.lower()
+    if word.surface_form.lower() == target_lower or word.lemma.lower() == target_lower:
+        return True
+    if word.scripts:
+        iast_match = word.scripts.iast.lower() == target_lower
+        deva_match = word.scripts.devanagari == target
+        return bool(iast_match or deva_match)
+    return False
+
+
 def _format_morphology_response(
     tree: Any, target_word: str, verbosity: str
 ) -> dict[str, Any]:
@@ -303,29 +315,14 @@ def _format_morphology_response(
         response["error"] = "Could not analyze word"
         return response
 
-    # Find the target word in the analysis
-    # Look for a match by surface form or lemma
-    target_lower = target_word.lower()
-    matches = []
-
-    for sg in best_parse.sandhi_groups:
-        for bw in sg.base_words:
-            if (
-                bw.surface_form.lower() == target_lower
-                or bw.lemma.lower() == target_lower
-                or (bw.scripts and bw.scripts.iast.lower() == target_lower)
-                or (bw.scripts and bw.scripts.devanagari == target_word)
-            ):
-                matches.append(bw)
-
-    if not matches:
-        # If no exact match, return all words found (context analysis)
-        for sg in best_parse.sandhi_groups:
-            matches.extend(sg.base_words)
-
-    if not matches:
+    # Collect all words from parse
+    all_words = [bw for sg in best_parse.sandhi_groups for bw in sg.base_words]
+    if not all_words:
         response["error"] = "No morphological analysis found"
         return response
+
+    # Find matching words, fallback to all words if no match
+    matches = [bw for bw in all_words if _word_matches(bw, target_word)] or all_words
 
     # Primary result is the first match
     primary = matches[0]
