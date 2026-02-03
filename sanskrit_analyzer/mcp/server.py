@@ -39,6 +39,7 @@ def _register_tools(server: FastMCP) -> None:
     """Register all MCP tools with the server."""
     from sanskrit_analyzer.mcp.tools.analysis import (
         analyze_sentence as _analyze,
+        get_morphology as _morph,
         split_sandhi as _split,
     )
 
@@ -78,6 +79,26 @@ def _register_tools(server: FastMCP) -> None:
             Sandhi splits with surface forms, component words, and rules.
         """
         return await _split(text, verbosity)
+
+    @server.tool()
+    async def get_morphology(
+        word: str,
+        context: str | None = None,
+        verbosity: str | None = None,
+    ) -> dict[str, Any]:
+        """Get morphological tags for a Sanskrit word.
+
+        Returns case, gender, number, person, tense, mood, voice as applicable.
+
+        Args:
+            word: Sanskrit word to analyze (Devanagari, IAST, or SLP1).
+            context: Optional sentence context for disambiguation.
+            verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
+
+        Returns:
+            Morphological analysis with tags, meanings, and alternatives.
+        """
+        return await _morph(word, context, verbosity)
 
 
 def main() -> None:

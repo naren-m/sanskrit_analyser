@@ -255,3 +255,121 @@ def _format_sandhi_response(tree: Any, verbosity: str) -> dict[str, Any]:
     response["total_words"] = total_words
 
     return response
+
+
+async def get_morphology(
+    word: str,
+    context: str | None = None,
+    verbosity: str | None = None,
+) -> dict[str, Any]:
+    """Get morphological tags for a Sanskrit word.
+
+    Args:
+        word: Sanskrit word to analyze (Devanagari, IAST, or SLP1).
+        context: Optional sentence context for disambiguation.
+        verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
+                   Defaults to 'standard'.
+
+    Returns:
+        Dictionary with morphological analysis including:
+        - word: The input word
+        - lemma: Dictionary form of the word
+        - morphology: Tags (pos, gender, number, case, person, tense, mood, voice)
+        - meanings: List of meanings
+        - alternatives: Other possible analyses (if ambiguous)
+    """
+    verbosity = (verbosity or "standard").lower()
+
+    # Analyze the word (or word in context)
+    text = f"{context} {word}" if context else word
+    result = await _run_analysis(text, AnalysisMode.PRODUCTION)
+    if isinstance(result, dict):
+        return result
+
+    return _format_morphology_response(result, word, verbosity)
+
+
+def _format_morphology_response(
+    tree: Any, target_word: str, verbosity: str
+) -> dict[str, Any]:
+    """Format morphology-focused response for a single word."""
+    response: dict[str, Any] = {
+        "success": True,
+        "word": target_word,
+    }
+
+    best_parse = tree.best_parse
+    if not best_parse:
+        response["error"] = "Could not analyze word"
+        return response
+
+    # Find the target word in the analysis
+    # Look for a match by surface form or lemma
+    target_lower = target_word.lower()
+    matches = []
+
+    for sg in best_parse.sandhi_groups:
+        for bw in sg.base_words:
+            if (
+                bw.surface_form.lower() == target_lower
+                or bw.lemma.lower() == target_lower
+                or (bw.scripts and bw.scripts.iast.lower() == target_lower)
+                or (bw.scripts and bw.scripts.devanagari == target_word)
+            ):
+                matches.append(bw)
+
+    if not matches:
+        # If no exact match, return all words found (context analysis)
+        for sg in best_parse.sandhi_groups:
+            matches.extend(sg.base_words)
+
+    if not matches:
+        response["error"] = "No morphological analysis found"
+        return response
+
+    # Primary result is the first match
+    primary = matches[0]
+    response["lemma"] = primary.lemma
+    response["surface_form"] = primary.surface_form
+
+    if primary.morphology:
+        if verbosity == "minimal":
+            response["morph"] = _compact_morphology(primary.morphology)
+        else:
+            response["morphology"] = {
+                field: getattr(primary.morphology, field, None)
+                for field in _MORPH_FIELDS
+            }
+
+    if verbosity != "minimal":
+        response["meanings"] = (
+            [str(m) for m in primary.meanings] if primary.meanings else []
+        )
+        response["confidence"] = primary.confidence
+
+    if verbosity == "detailed":
+        if primary.scripts:
+            response["scripts"] = _scripts_dict(primary.scripts)
+        if primary.dhatu:
+            response["dhatu"] = {
+                "root": primary.dhatu.dhatu,
+                "meaning": primary.dhatu.meaning,
+                "gana": primary.dhatu.gana,
+            }
+
+    # Include alternatives if multiple matches
+    if len(matches) > 1 and verbosity != "minimal":
+        response["alternatives"] = [
+            {
+                "lemma": bw.lemma,
+                "morphology": {
+                    field: getattr(bw.morphology, field, None)
+                    for field in _MORPH_FIELDS
+                }
+                if bw.morphology
+                else None,
+            }
+            for bw in matches[1:4]  # Limit to 3 alternatives
+        ]
+
+    return response
