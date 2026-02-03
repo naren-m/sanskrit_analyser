@@ -372,17 +372,19 @@ def _format_morphology_response(
     return response
 
 
-# Script name mapping for transliteration
-_SCRIPT_MAP = {
-    "devanagari": "DEVANAGARI",
-    "deva": "DEVANAGARI",
-    "iast": "IAST",
-    "slp1": "SLP1",
-    "slp": "SLP1",
-    "itrans": "ITRANS",
-    "hk": "HK",
-    "velthuis": "VELTHUIS",
-}
+# Short aliases for script names
+_SCRIPT_ALIASES = {"deva": "devanagari", "slp": "slp1"}
+
+
+def _resolve_script(name: str) -> Any:
+    """Resolve script name to Script enum, returning None if invalid."""
+    from sanskrit_analyzer.models.scripts import Script
+
+    key = _SCRIPT_ALIASES.get(name, name)
+    for script in Script:
+        if script.value == key:
+            return script
+    return None
 
 
 def transliterate(
@@ -404,31 +406,27 @@ def transliterate(
         - from_script: Source script used
         - to_script: Target script used
     """
-    from sanskrit_analyzer.models.scripts import Script
     from sanskrit_analyzer.utils.transliterate import transliterate as do_transliterate
 
-    # Normalize script names
     from_key = from_script.lower().strip()
     to_key = to_script.lower().strip()
 
-    from_enum_name = _SCRIPT_MAP.get(from_key)
-    to_enum_name = _SCRIPT_MAP.get(to_key)
+    from_enum = _resolve_script(from_key)
+    to_enum = _resolve_script(to_key)
 
-    if not from_enum_name:
+    valid_scripts = "devanagari, iast, slp1, itrans, hk, velthuis"
+    if not from_enum:
         return {
             "success": False,
-            "error": f"Unknown source script: {from_script}. Valid: devanagari, iast, slp1, itrans, hk, velthuis",
+            "error": f"Unknown source script: {from_script}. Valid: {valid_scripts}",
         }
-
-    if not to_enum_name:
+    if not to_enum:
         return {
             "success": False,
-            "error": f"Unknown target script: {to_script}. Valid: devanagari, iast, slp1, itrans, hk, velthuis",
+            "error": f"Unknown target script: {to_script}. Valid: {valid_scripts}",
         }
 
     try:
-        from_enum = Script[from_enum_name]
-        to_enum = Script[to_enum_name]
         result = do_transliterate(text, from_enum, to_enum)
     except Exception as e:
         return {"success": False, "error": str(e)}
