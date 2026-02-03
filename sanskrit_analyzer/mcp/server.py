@@ -41,6 +41,7 @@ def _register_tools(server: FastMCP) -> None:
         analyze_sentence as _analyze,
         get_morphology as _morph,
         split_sandhi as _split,
+        transliterate as _translit,
     )
 
     @server.tool()
@@ -99,6 +100,24 @@ def _register_tools(server: FastMCP) -> None:
             Morphological analysis with tags, meanings, and alternatives.
         """
         return await _morph(word, context, verbosity)
+
+    @server.tool()
+    def transliterate(
+        text: str,
+        from_script: str,
+        to_script: str,
+    ) -> dict[str, Any]:
+        """Convert Sanskrit text between different scripts.
+
+        Args:
+            text: Sanskrit text to convert.
+            from_script: Source script (devanagari, iast, slp1, itrans).
+            to_script: Target script (devanagari, iast, slp1, itrans).
+
+        Returns:
+            Converted text with original and result.
+        """
+        return _translit(text, from_script, to_script)
 
 
 def main() -> None:

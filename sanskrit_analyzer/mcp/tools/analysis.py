@@ -370,3 +370,73 @@ def _format_morphology_response(
         ]
 
     return response
+
+
+# Script name mapping for transliteration
+_SCRIPT_MAP = {
+    "devanagari": "DEVANAGARI",
+    "deva": "DEVANAGARI",
+    "iast": "IAST",
+    "slp1": "SLP1",
+    "slp": "SLP1",
+    "itrans": "ITRANS",
+    "hk": "HK",
+    "velthuis": "VELTHUIS",
+}
+
+
+def transliterate(
+    text: str,
+    from_script: str,
+    to_script: str,
+) -> dict[str, Any]:
+    """Convert Sanskrit text between different scripts.
+
+    Args:
+        text: Sanskrit text to convert.
+        from_script: Source script (devanagari, iast, slp1, itrans, hk, velthuis).
+        to_script: Target script (devanagari, iast, slp1, itrans, hk, velthuis).
+
+    Returns:
+        Dictionary with:
+        - original: The input text
+        - result: The converted text
+        - from_script: Source script used
+        - to_script: Target script used
+    """
+    from sanskrit_analyzer.models.scripts import Script
+    from sanskrit_analyzer.utils.transliterate import transliterate as do_transliterate
+
+    # Normalize script names
+    from_key = from_script.lower().strip()
+    to_key = to_script.lower().strip()
+
+    from_enum_name = _SCRIPT_MAP.get(from_key)
+    to_enum_name = _SCRIPT_MAP.get(to_key)
+
+    if not from_enum_name:
+        return {
+            "success": False,
+            "error": f"Unknown source script: {from_script}. Valid: devanagari, iast, slp1, itrans, hk, velthuis",
+        }
+
+    if not to_enum_name:
+        return {
+            "success": False,
+            "error": f"Unknown target script: {to_script}. Valid: devanagari, iast, slp1, itrans, hk, velthuis",
+        }
+
+    try:
+        from_enum = Script[from_enum_name]
+        to_enum = Script[to_enum_name]
+        result = do_transliterate(text, from_enum, to_enum)
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+    return {
+        "success": True,
+        "original": text,
+        "result": result,
+        "from_script": from_script,
+        "to_script": to_script,
+    }
