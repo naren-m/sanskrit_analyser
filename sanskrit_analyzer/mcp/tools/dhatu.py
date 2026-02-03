@@ -7,6 +7,20 @@ from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry
 # Shared database instance
 _db = DhatuDB()
 
+# Traditional gana (verb class) names
+GANA_NAMES = {
+    1: "bhvādi",
+    2: "adādi",
+    3: "juhotyādi",
+    4: "divādi",
+    5: "svādi",
+    6: "tudādi",
+    7: "rudhādi",
+    8: "tanādi",
+    9: "kryādi",
+    10: "curādi",
+}
+
 
 def _format_dhatu_entry(entry: DhatuEntry, verbosity: str) -> dict[str, Any]:
     """Format a DhatuEntry for MCP response."""
@@ -30,21 +44,6 @@ def _format_dhatu_entry(entry: DhatuEntry, verbosity: str) -> dict[str, Any]:
         data["id"] = entry.id
 
     return data
-
-
-def _format_conjugations(entry: DhatuEntry) -> list[dict[str, Any]]:
-    """Format conjugation entries."""
-    return [
-        {
-            "lakara": c.lakara,
-            "purusha": c.purusha,
-            "vacana": c.vacana,
-            "pada": c.pada,
-            "form": c.form_devanagari,
-            "form_iast": c.form_iast,
-        }
-        for c in entry.conjugations
-    ]
 
 
 def lookup_dhatu(
@@ -84,7 +83,17 @@ def lookup_dhatu(
     result["success"] = True
 
     if include_conjugations and entry.conjugations:
-        result["conjugations"] = _format_conjugations(entry)
+        result["conjugations"] = [
+            {
+                "lakara": c.lakara,
+                "purusha": c.purusha,
+                "vacana": c.vacana,
+                "pada": c.pada,
+                "form": c.form_devanagari,
+                "form_iast": c.form_iast,
+            }
+            for c in entry.conjugations
+        ]
 
     return result
 
@@ -198,24 +207,7 @@ def list_gana(
         - dhatus: List of dhatu entries
     """
     if gana < 1 or gana > 10:
-        return {
-            "success": False,
-            "error": f"Invalid gana: {gana}. Must be 1-10.",
-        }
-
-    # Traditional gana names
-    gana_names = {
-        1: "bhvādi",
-        2: "adādi",
-        3: "juhotyādi",
-        4: "divādi",
-        5: "svādi",
-        6: "tudādi",
-        7: "rudhādi",
-        8: "tanādi",
-        9: "kryādi",
-        10: "curādi",
-    }
+        return {"success": False, "error": f"Invalid gana: {gana}. Must be 1-10."}
 
     limit = min(max(1, limit), 100)  # Clamp to 1-100
 
@@ -227,7 +219,7 @@ def list_gana(
     return {
         "success": True,
         "gana": gana,
-        "gana_name": gana_names.get(gana, ""),
+        "gana_name": GANA_NAMES.get(gana, ""),
         "count": len(entries),
         "dhatus": [
             {
