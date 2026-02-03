@@ -1,0 +1,473 @@
+# Ralph Progress Log - Sanskrit Analyzer
+
+Branch: ralph/sanskrit-analyzer-core
+Started: 2026-02-01
+
+---
+
+## US-001: Initialize Python package structure
+**Status:** COMPLETED
+**Commit:** d6ea177
+
+- Created pyproject.toml with hatchling build system
+- Added sanskrit_analyzer package with config.py
+- Set up all module directories
+- Typecheck passes
+
+---
+
+## US-002: Define core data models for scripts and transliteration
+**Status:** COMPLETED
+**Commit:** 434f855
+
+- Created models/scripts.py with Script enum and ScriptVariants dataclass
+- Created utils/transliterate.py with transliterate functions
+- Created utils/normalize.py with detect_script and normalize_slp1
+- 28 unit tests passing
+- Typecheck passes
+
+---
+
+## US-003: Define morphology and dhatu data models
+**Status:** COMPLETED
+**Commit:** 0cc4466
+
+- Created models/morphology.py with enums and dataclasses
+- Created models/dhatu.py with DhatuInfo and Gana/Pada classes
+- Typecheck passes
+
+---
+
+## US-004: Define parse tree data models
+**Status:** COMPLETED
+**Commit:** bb0906a
+
+- Created models/tree.py with 4-level hierarchical structure
+- AnalysisTree, ParseTree, SandhiGroup, BaseWord dataclasses
+- CacheTier, CompoundType, ConfidenceMetrics
+- Typecheck passes
+
+---
+
+## US-005: Create abstract engine base class
+**Status:** COMPLETED
+**Commit:** fd37b69
+
+- Created engines/base.py with EngineBase abstract class
+- EngineResult, Segment, SandhiInfo dataclasses
+- Typecheck passes
+
+---
+
+## US-006: Implement Vidyut engine wrapper
+**Status:** COMPLETED
+**Commit:** 288659d
+
+- Created engines/vidyut_engine.py with VidyutEngine
+- Uses vidyut.cheda.Chedaka for segmentation
+- Parses morphological data from Vidyut output
+- 8 unit tests passing
+- Typecheck passes
+
+---
+
+## US-007: Implement Dharmamitra ByT5 engine wrapper
+**Status:** COMPLETED
+**Commit:** 33a0e51
+
+- Created engines/dharmamitra_engine.py with DharmamitraEngine
+- Uses dharmamitra-sanskrit-grammar package
+- 3 processing modes, returns meanings
+- 12 unit tests passing
+- Typecheck passes
+
+---
+
+## US-008: Implement Heritage engine client
+**Status:** COMPLETED
+**Commit:** b3db2fa
+
+- Created engines/heritage_engine.py with HeritageEngine
+- HTTP client with local/public fallback
+- 12 unit tests with mocked responses
+- Typecheck passes
+
+---
+
+## US-009: Implement ensemble voting logic
+**Status:** COMPLETED
+**Commit:** d9d94af
+
+- Created engines/ensemble.py with EnsembleAnalyzer
+- Weighted voting (Vidyut: 0.35, Dharmamitra: 0.40, Heritage: 0.25)
+- Parallel engine execution with asyncio.gather
+- Agreement levels: high (0.95+), medium (0.70-0.95), low
+- 12 unit tests passing
+- Typecheck passes
+
+---
+
+## US-010: Implement memory LRU cache
+**Status:** COMPLETED
+**Commit:** 4862bc7
+
+- Created cache/memory.py with LRUCache class
+- Thread-safe with RLock
+- Configurable max_size (default 1000)
+- Cache key generation from text + mode
+- Hit/miss/eviction statistics tracking
+- 25 unit tests passing
+- Typecheck passes
+
+---
+
+## US-011: Implement SQLite corpus storage
+**Status:** COMPLETED
+**Commit:** dba143a
+
+- Created cache/sqlite_corpus.py with SQLiteCorpus class
+- FTS5 virtual table for full-text search
+- Access tracking (created_at, accessed_at, access_count)
+- Disambiguation state tracking
+- Thread-safe with thread-local connections
+- 20 unit tests passing
+- Typecheck passes
+
+---
+
+## US-012: Implement Redis cache layer
+**Status:** COMPLETED
+**Commit:** 2997423
+
+- Created cache/redis_cache.py with RedisCache class
+- Async get/set/delete with default TTL 7 days
+- Key prefixing for namespace isolation
+- Graceful error handling (returns None on failure)
+- Optional: disabled when redis_url not configured
+- 30 unit tests passing
+- Typecheck passes
+
+---
+
+## US-013: Implement tiered cache coordinator
+**Status:** COMPLETED
+**Commit:** b70fd4c
+
+- Created cache/tiered.py with TieredCache class
+- Memory -> Redis -> SQLite fallback order
+- Automatic promotion on cache hit
+- Per-tier statistics tracking
+- Configurable tier enable/disable
+- 24 unit tests passing
+- Typecheck passes
+
+---
+
+## US-014: Implement rule-based disambiguation
+**Status:** COMPLETED
+**Commit:** 88ba71e
+
+- Created disambiguation/rules.py with RuleBasedDisambiguator
+- GenderNumberAgreementRule: adj-noun agreement filtering
+- FrequencyPreferenceRule: common word boosting
+- SandhiPreferenceRule: standard sandhi preference
+- Configurable rules with weights, enable/disable
+- 26 unit tests passing
+- Typecheck passes
+
+---
+
+## US-015: Implement LLM disambiguation
+**Status:** COMPLETED
+**Commit:** 1527671
+
+- Created disambiguation/llm.py with LLMDisambiguator
+- Ollama and OpenAI provider support
+- Prompt building with candidate info and context
+- JSON response parsing for rankings
+- Graceful failure handling
+- 22 unit tests passing
+- Typecheck passes
+
+---
+
+## US-016: Implement disambiguation pipeline
+**Status:** COMPLETED
+**Commit:** c21f8e4
+
+- Created disambiguation/pipeline.py with DisambiguationPipeline
+- Multi-stage processing: Rules -> LLM -> Human review
+- Configurable skip thresholds (0.95 default)
+- Tracks which stage resolved ambiguity
+- Human review flagging with auto-flag threshold
+- 19 unit tests passing
+- Typecheck passes
+
+---
+
+## US-017: Implement parse tree builder
+**Status:** COMPLETED
+**Commit:** 56bf15d
+
+- Created tree_builder.py with TreeBuilder class
+- Converts ensemble results to 4-level hierarchy
+- Parses morphology strings into MorphologicalTag objects
+- Dhatu lookup for verbs from COMMON_DHATUS
+- Generates unique sentence_id and parse_id
+- ScriptVariants for all text representations
+- 29 unit tests passing
+- Typecheck passes
+
+---
+
+## US-018: Implement main Analyzer class
+**Status:** COMPLETED
+**Commit:** f4702fc
+
+- Created analyzer.py with Analyzer class as public interface
+- Orchestrates full pipeline: normalize -> cache -> ensemble -> tree -> disambiguate -> cache
+- from_config() for YAML configuration loading
+- analyze_batch() for multi-text analysis
+- health_check() and get_corpus_stats() for monitoring
+- Exports Analyzer from package __init__.py
+- 19 unit tests passing
+- Typecheck passes
+
+---
+
+## US-019: Add YAML config file loading
+**Status:** COMPLETED
+**Commit:** c2e4429
+
+- Config.load() creates default config if missing
+- Environment variable overrides (SANSKRIT_REDIS_URL, SANSKRIT_LLM_PROVIDER, etc.)
+- Comprehensive validation for all config sections
+- ConfigError exception for validation failures
+- to_dict() and save() for serialization
+- 39 unit tests passing
+- Typecheck passes
+
+---
+
+## US-020: Copy dhatu database from ramayanam
+**Status:** COMPLETED
+**Commit:** b838b62
+
+- Copied comprehensive_dhatu_database.db from ramayanam project
+- Created DhatuDB class with thread-safe SQLite access
+- lookup_by_dhatu() for Devanagari/IAST lookups
+- lookup_by_meaning() for English meaning search
+- get_by_gana() for verb class filtering
+- get_conjugation() for verb form lookups
+- 19 unit tests passing
+- Typecheck passes
+
+---
+
+## US-021: Create FastAPI application skeleton
+**Status:** COMPLETED
+**Commit:** 4cbb8a7
+
+- Created api/app.py with FastAPI factory function
+- CORS middleware with configurable origins
+- GET /health endpoint with basic status
+- GET /health/detailed with component status
+- OpenAPI docs at /docs, /redoc, /openapi.json
+- 10 unit tests passing
+- Typecheck passes
+
+---
+
+## US-022: Implement analyze API endpoint
+**Status:** COMPLETED
+**Commit:** ad114e0
+
+- POST /api/v1/analyze with text, mode, return_all_parses options
+- GET /api/v1/analyze/{sentence_id} for cached lookup
+- POST /api/v1/disambiguate for saving human choices (US-024)
+- Pydantic request/response models with full validation
+- 14 unit tests passing
+- Typecheck passes
+
+---
+
+## US-023: Implement dhatu API endpoint
+**Status:** COMPLETED
+**Commit:** f59e18a
+
+- GET /api/v1/dhatu/{dhatu} for dhatu lookup
+- GET /api/v1/dhatu/gana/{gana} for dhatus by verb class
+- POST /api/v1/dhatu/search for flexible search
+- GET /api/v1/dhatu/stats for database statistics
+- 12 unit tests passing
+- Typecheck passes
+
+---
+
+## US-024: Implement disambiguate API endpoint
+**Status:** COMPLETED (merged into US-022)
+**Commit:** ad114e0
+
+- POST /api/v1/disambiguate already implemented in analyze.py
+- Accepts {sentence_id, selected_parse}
+- Updates SQLite corpus with disambiguation choice
+- Tests included in US-022
+
+---
+
+## US-025: Initialize Vue + Vite project for UI
+**Status:** COMPLETED
+**Commit:** e23e11d
+
+- Created ui/ with Vite + Vue 3 + TypeScript
+- Added vue-router, pinia, axios, cytoscape dependencies
+- Created analysis store with AnalysisTree types
+- Basic App.vue with input, mode selector, results display
+- Parse navigation and confidence display
+- Dark theme styling
+- npm build succeeds
+
+---
+
+## US-026: Create InputBar component
+**Status:** COMPLETED
+**Commit:** (pending)
+
+- Created ui/src/components/InputBar.vue
+- Text input with Devanagari placeholder
+- Analyze button emitting analyze event
+- Mode dropdown (Production, Educational, Academic)
+- Script toggle (Devanagari, IAST, SLP1)
+- Example text buttons for quick testing
+- Responsive layout with mobile support
+- npm build succeeds
+
+---
+
+## US-027: Create ParseTree component with Cytoscape
+**Status:** COMPLETED
+**Commit:** (pending)
+
+- Created ui/src/components/ParseTree.vue
+- Cytoscape with breadthfirst hierarchical layout
+- 4-level tree: Sentence → SandhiGroups → BaseWords → Dhatus
+- Confidence-based colors: green (>0.8), yellow (0.5-0.8), red (<0.5)
+- Pan/zoom support with controls
+- Node selection emits node-selected event
+- Legend showing node types
+- npm build succeeds
+
+---
+
+## US-028: Create NodeDetail component
+**Status:** COMPLETED
+**Commit:** (pending)
+
+- Created ui/src/components/NodeDetail.vue
+- SandhiGroup displays surface form and word count
+- BaseWord shows lemma, morphology, meanings, dhatu reference
+- DhatuInfo shows root, meaning, gana, pada
+- Script variants section (Devanagari, IAST, SLP1)
+- Confidence badges with color coding
+- npm build succeeds
+
+---
+
+## US-029: Create parse navigation controls
+**Status:** COMPLETED
+**Commit:** (pending)
+
+- Parse navigation integrated in App.vue
+- "Parse X of Y" indicator with confidence
+- Previous/Next buttons for cycling parse_forest
+- Buttons disabled at boundaries
+- npm build succeeds
+
+---
+
+## US-030: Connect UI to API
+**Status:** COMPLETED
+**Commit:** (pending)
+
+- Created ui/src/api/client.ts with axios instance
+- analyzeText() with mode and options support
+- saveDisambiguation() for marking chosen parse
+- getDhatu() and searchDhatus() for dhatu lookups
+- healthCheck() for API status
+- ApiError class with status and detail
+- App.vue calls real API on analyze
+- Loading and error states in UI
+- npm build succeeds
+
+---
+
+## US-031: Add export functionality to UI
+**Status:** COMPLETED
+**Commit:** (pending)
+
+- Created ui/src/components/ExportMenu.vue
+- Export dropdown with JSON and SVG options
+- JSON export downloads AnalysisTree as .json file
+- SVG export creates tree visualization from parse data
+- Integrated into App.vue result header
+- npm build succeeds
+
+---
+
+## US-032: Create Docker Compose setup
+**Status:** COMPLETED
+**Commit:** (pending)
+
+- Created docker/docker-compose.yml with api, ui, redis services
+- Created docker/Dockerfile.api (multi-stage Python build)
+- Created docker/Dockerfile.ui (Vite build + nginx)
+- Created docker/nginx.conf with SPA routing and API proxy
+- Health checks for all services
+- Named volumes for persistence
+- Heritage engine stub (commented out for optional use)
+
+---
+
+## US-033: Add example scripts
+**Status:** COMPLETED
+**Commit:** (pending)
+
+- Created examples/basic_usage.py with simple analyze() call
+- Created examples/batch_analysis.py with corpus processing
+- Created examples/integrate_ramayanam.py for knowledge graph integration
+- All examples include comprehensive comments
+- Statistics calculation and JSON export
+
+---
+
+## US-034: Write README with quickstart
+**Status:** COMPLETED
+**Commit:** (pending)
+
+- Updated README.md with project overview and badges
+- Installation section with pip and Docker options
+- Quick Start code example with async usage
+- Configuration section with YAML example
+- API documentation table
+- Data models documentation
+- Development section for contributors
+- Architecture diagram
+- Acknowledgments and Sanskrit quote
+
+---
+
+# PRD IMPLEMENTATION COMPLETE
+
+All 34 user stories have been implemented:
+- US-001 through US-019: Python library core (models, engines, cache, disambiguation)
+- US-020 through US-024: API layer (FastAPI, routes, endpoints)
+- US-025 through US-031: Vue.js UI (components, store, API client, export)
+- US-032: Docker Compose deployment
+- US-033: Example scripts
+- US-034: README documentation
+
+Test Summary:
+- 380 Python tests passing
+- npm build succeeds for Vue application
+- mypy typecheck passes
+
