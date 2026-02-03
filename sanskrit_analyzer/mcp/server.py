@@ -1,10 +1,14 @@
 """MCP server implementation for Sanskrit Analyzer."""
 
 import argparse
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 from sanskrit_analyzer.config import Config, MCPServerConfig
+
+# Global server instance for tool registration
+_server: FastMCP | None = None
 
 
 def create_server(config: MCPServerConfig | None = None) -> FastMCP:
@@ -13,15 +17,45 @@ def create_server(config: MCPServerConfig | None = None) -> FastMCP:
     Args:
         config: MCP server configuration. Uses defaults from Config if not provided.
     """
+    global _server
+
     if config is None:
         config = Config().mcp
 
-    return FastMCP(
+    _server = FastMCP(
         name="Sanskrit Analyzer",
         instructions="Sanskrit text analysis with morphology, dhatu lookup, and grammar tools",
         host=config.host,
         port=config.port,
     )
+
+    # Register tools
+    _register_tools(_server)
+
+    return _server
+
+
+def _register_tools(server: FastMCP) -> None:
+    """Register all MCP tools with the server."""
+    from sanskrit_analyzer.mcp.tools.analysis import analyze_sentence as _analyze
+
+    @server.tool()
+    async def analyze_sentence(
+        text: str,
+        mode: str | None = None,
+        verbosity: str | None = None,
+    ) -> dict[str, Any]:
+        """Analyze a Sanskrit sentence and return full morphological breakdown.
+
+        Args:
+            text: Sanskrit text to analyze (Devanagari, IAST, or SLP1).
+            mode: Analysis mode - 'educational', 'production', or 'academic'.
+            verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
+
+        Returns:
+            Analysis result with sandhi_groups, words, morphology, and confidence.
+        """
+        return await _analyze(text, mode, verbosity)
 
 
 def main() -> None:
