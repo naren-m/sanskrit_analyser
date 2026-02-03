@@ -1,7 +1,7 @@
 """Dhatu (verbal root) API endpoints."""
 
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -39,7 +39,7 @@ class ConjugationResponse(BaseModel):
     vacana: str
     pada: str
     form_devanagari: str
-    form_iast: Optional[str] = None
+    form_iast: str | None = None
 
 
 class DhatuResponse(BaseModel):
@@ -47,16 +47,16 @@ class DhatuResponse(BaseModel):
 
     id: int
     dhatu_devanagari: str
-    dhatu_iast: Optional[str] = None
-    meaning_english: Optional[str] = None
-    meaning_hindi: Optional[str] = None
-    gana: Optional[int] = None
-    pada: Optional[str] = None
-    it_category: Optional[str] = None
-    panini_reference: Optional[str] = None
-    examples: Optional[str] = None
-    synonyms: Optional[str] = None
-    related_words: Optional[str] = None
+    dhatu_iast: str | None = None
+    meaning_english: str | None = None
+    meaning_hindi: str | None = None
+    gana: int | None = None
+    pada: str | None = None
+    it_category: str | None = None
+    panini_reference: str | None = None
+    examples: str | None = None
+    synonyms: str | None = None
+    related_words: str | None = None
     conjugations: list[ConjugationResponse] = []
 
 

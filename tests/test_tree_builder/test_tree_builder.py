@@ -418,10 +418,10 @@ class TestTreeBuilder:
 
         assert "sentence_id" in tree_dict
         assert "original_text" in tree_dict
-        assert "parses" in tree_dict
-        assert len(tree_dict["parses"]) == 1
+        assert "parse_forest" in tree_dict
+        assert len(tree_dict["parse_forest"]) == 1
 
-        parse_dict = tree_dict["parses"][0]
+        parse_dict = tree_dict["parse_forest"][0]
         assert "parse_id" in parse_dict
         assert "sandhi_groups" in parse_dict
 

@@ -1,7 +1,6 @@
 """Sanskrit Heritage Engine client for lexicon-based analysis."""
 
 import asyncio
-from typing import Optional
 from urllib.parse import quote
 
 import aiohttp
@@ -28,7 +27,7 @@ class HeritageEngine(EngineBase):
 
     def __init__(
         self,
-        local_url: Optional[str] = None,
+        local_url: str | None = None,
         use_local: bool = True,
         timeout: float = 10.0,
     ) -> None:
@@ -141,7 +140,7 @@ class HeritageEngine(EngineBase):
 
         return segments
 
-    async def _query_heritage(self, url: str, text: str) -> Optional[str]:
+    async def _query_heritage(self, url: str, text: str) -> str | None:
         """Query Heritage Engine and return HTML response.
 
         Args:
@@ -187,7 +186,7 @@ class HeritageEngine(EngineBase):
             # Normalize to SLP1
             slp1_text = self._normalize_to_slp1(text)
 
-            html_response: Optional[str] = None
+            html_response: str | None = None
 
             # Try local instance first if configured
             if self._use_local:

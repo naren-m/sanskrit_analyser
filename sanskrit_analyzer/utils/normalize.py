@@ -1,7 +1,6 @@
 """Text normalization utilities for Sanskrit processing."""
 
 import re
-from typing import Optional
 
 from sanskrit_analyzer.models.scripts import Script
 
@@ -50,7 +49,7 @@ def detect_script(text: str) -> Script:
     return Script.IAST
 
 
-def normalize_slp1(text: str, source_script: Optional[Script] = None) -> str:
+def normalize_slp1(text: str, source_script: Script | None = None) -> str:
     """Normalize Sanskrit text to SLP1 script.
 
     This is the standard normalization for internal processing.

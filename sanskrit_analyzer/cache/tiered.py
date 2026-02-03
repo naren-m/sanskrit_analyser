@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from sanskrit_analyzer.cache.memory import LRUCache
 from sanskrit_analyzer.cache.redis_cache import RedisCache
@@ -21,13 +21,13 @@ class TieredCacheConfig:
 
     # Redis tier
     redis_enabled: bool = False
-    redis_url: Optional[str] = None
+    redis_url: str | None = None
     redis_ttl: int = 604800  # 7 days
     redis_key_prefix: str = "sanskrit:"
 
     # SQLite tier
     sqlite_enabled: bool = True
-    sqlite_path: Optional[str] = None
+    sqlite_path: str | None = None
 
 
 @dataclass
@@ -86,7 +86,7 @@ class TieredCache:
         result = await cache.get("key")
     """
 
-    def __init__(self, config: Optional[TieredCacheConfig] = None) -> None:
+    def __init__(self, config: TieredCacheConfig | None = None) -> None:
         """Initialize the tiered cache.
 
         Args:
@@ -96,12 +96,12 @@ class TieredCache:
         self._stats = TieredCacheStats()
 
         # Initialize memory tier
-        self._memory: Optional[LRUCache] = None
+        self._memory: LRUCache | None = None
         if self._config.memory_enabled:
             self._memory = LRUCache(max_size=self._config.memory_max_size)
 
         # Initialize Redis tier
-        self._redis: Optional[RedisCache] = None
+        self._redis: RedisCache | None = None
         if self._config.redis_enabled and self._config.redis_url:
             self._redis = RedisCache(
                 redis_url=self._config.redis_url,
@@ -110,7 +110,7 @@ class TieredCache:
             )
 
         # Initialize SQLite tier
-        self._sqlite: Optional[SQLiteCorpus] = None
+        self._sqlite: SQLiteCorpus | None = None
         if self._config.sqlite_enabled:
             self._sqlite = SQLiteCorpus(db_path=self._config.sqlite_path)
 
@@ -134,7 +134,7 @@ class TieredCache:
         if self._sqlite is not None:
             self._sqlite.close()
 
-    async def get(self, key: str) -> Optional[dict[str, Any]]:
+    async def get(self, key: str) -> dict[str, Any] | None:
         """Get a value from the cache.
 
         Checks tiers in order: Memory -> Redis -> SQLite.

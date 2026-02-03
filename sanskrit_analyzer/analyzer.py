@@ -8,7 +8,7 @@ analysis pipeline: normalization -> caching -> ensemble analysis -> tree buildin
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from sanskrit_analyzer.cache.memory import LRUCache
 from sanskrit_analyzer.cache.tiered import TieredCache, TieredCacheConfig
@@ -76,7 +76,7 @@ class Analyzer:
         )
     """
 
-    def __init__(self, config: Optional[Config] = None) -> None:
+    def __init__(self, config: Config | None = None) -> None:
         """Initialize the analyzer with configuration.
 
         Args:
@@ -85,11 +85,11 @@ class Analyzer:
         self._config = config or Config()
         self._setup_logging()
 
-        # Initialize components
-        self._ensemble: Optional[EnsembleAnalyzer] = None
-        self._cache: Optional[TieredCache] = None
-        self._disambiguation: Optional[DisambiguationPipeline] = None
-        self._tree_builder: Optional[TreeBuilder] = None
+        # Initialize components (lazy)
+        self._ensemble: EnsembleAnalyzer | None = None
+        self._cache: TieredCache | None = None
+        self._disambiguation: DisambiguationPipeline | None = None
+        self._tree_builder: TreeBuilder | None = None
 
         # Lazy initialization flags
         self._initialized = False
@@ -241,10 +241,10 @@ class Analyzer:
     async def analyze(
         self,
         text: str,
-        mode: Optional[AnalysisMode] = None,
-        return_all_parses: Optional[bool] = None,
-        context: Optional[dict[str, Any]] = None,
-        engines: Optional[list[str]] = None,
+        mode: AnalysisMode | None = None,
+        return_all_parses: bool | None = None,
+        context: dict[str, Any] | None = None,
+        engines: list[str] | None = None,
         bypass_cache: bool = False,
     ) -> AnalysisTree:
         """Analyze Sanskrit text and return a parse tree.
@@ -359,7 +359,7 @@ class Analyzer:
     async def _disambiguate_tree(
         self,
         tree: AnalysisTree,
-        context: Optional[dict[str, Any]],
+        context: dict[str, Any] | None,
     ) -> AnalysisTree:
         """Run disambiguation on parse tree.
 
@@ -422,9 +422,9 @@ class Analyzer:
     def _result_to_tree(
         self,
         cached: dict[str, Any],
-        original_text: Optional[str] = None,
-        normalized_slp1: Optional[str] = None,
-        mode: Optional[str] = None,
+        original_text: str | None = None,
+        normalized_slp1: str | None = None,
+        mode: str | None = None,
     ) -> AnalysisTree:
         """Convert cached result back to AnalysisTree.
 
@@ -565,8 +565,8 @@ class Analyzer:
     async def analyze_batch(
         self,
         texts: list[str],
-        mode: Optional[AnalysisMode] = None,
-        context: Optional[dict[str, Any]] = None,
+        mode: AnalysisMode | None = None,
+        context: dict[str, Any] | None = None,
     ) -> list[AnalysisTree]:
         """Analyze multiple texts.
 
@@ -653,7 +653,7 @@ class Analyzer:
             return []
         return self._ensemble.available_engines
 
-    async def clear_cache(self, tier: Optional[str] = None) -> None:
+    async def clear_cache(self, tier: str | None = None) -> None:
         """Clear the analysis cache.
 
         Args:

@@ -46,8 +46,11 @@ api = [
     "fastapi>=0.104.0",
     "uvicorn>=0.24.0",
 ]
+mcp = [
+    "mcp>=1.0.0",
+]
 all = [
-    "sanskrit-analyzer[ml,cache,api]",
+    "sanskrit-analyzer[ml,cache,api,mcp]",
 ]
 dev = [
     "pytest>=7.0",

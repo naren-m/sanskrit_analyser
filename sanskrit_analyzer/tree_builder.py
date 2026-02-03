@@ -7,12 +7,11 @@ parse tree structure: AnalysisTree -> ParseTree -> SandhiGroup -> BaseWord.
 import hashlib
 import logging
 import uuid
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
-from sanskrit_analyzer.engines.base import EngineResult, Segment, SandhiInfo
+from sanskrit_analyzer.engines.base import EngineResult, Segment
 from sanskrit_analyzer.engines.ensemble import EnsembleResult, MergedSegment
-from sanskrit_analyzer.models.dhatu import COMMON_DHATUS, DhatuInfo, Pada
+from sanskrit_analyzer.models.dhatu import COMMON_DHATUS, DhatuInfo
 from sanskrit_analyzer.models.morphology import (
     Case,
     Gender,
@@ -21,7 +20,6 @@ from sanskrit_analyzer.models.morphology import (
     Number,
     PartOfSpeech,
     Person,
-    SandhiType,
     Tense,
     Voice,
 )
@@ -60,7 +58,7 @@ class TreeBuilder:
         tree = builder.build(result, "rāmo vanam gacchati", "rAmo vanam gacCati")
     """
 
-    def __init__(self, config: Optional[TreeBuilderConfig] = None) -> None:
+    def __init__(self, config: TreeBuilderConfig | None = None) -> None:
         """Initialize the tree builder.
 
         Args:
@@ -299,9 +297,9 @@ class TreeBuilder:
 
     def _parse_morphology(
         self,
-        morphology_str: Optional[str],
-        pos: Optional[str],
-    ) -> Optional[MorphologicalTag]:
+        morphology_str: str | None,
+        pos: str | None,
+    ) -> MorphologicalTag | None:
         """Parse a morphology string into a MorphologicalTag.
 
         Args:
@@ -369,7 +367,7 @@ class TreeBuilder:
             raw_tag=morphology_str,
         )
 
-    def _parse_pos(self, pos_str: str) -> Optional[PartOfSpeech]:
+    def _parse_pos(self, pos_str: str) -> PartOfSpeech | None:
         """Parse part of speech from string."""
         pos_map = {
             "noun": PartOfSpeech.NOUN,
@@ -395,7 +393,7 @@ class TreeBuilder:
         }
         return pos_map.get(pos_str)
 
-    def _parse_case(self, morph_str: str) -> Optional[Case]:
+    def _parse_case(self, morph_str: str) -> Case | None:
         """Parse case from morphology string."""
         case_map = {
             "nominative": Case.NOMINATIVE,
@@ -420,17 +418,17 @@ class TreeBuilder:
                 return value
         return None
 
-    def _parse_person(self, morph_str: str) -> Optional[Person]:
+    def _parse_person(self, morph_str: str) -> Person | None:
         """Parse person from morphology string."""
         if "1" in morph_str or "first" in morph_str:
             return Person.FIRST
-        elif "2" in morph_str or "second" in morph_str:
+        if "2" in morph_str or "second" in morph_str:
             return Person.SECOND
-        elif "3" in morph_str or "third" in morph_str:
+        if "3" in morph_str or "third" in morph_str:
             return Person.THIRD
         return None
 
-    def _parse_tense(self, morph_str: str) -> Optional[Tense]:
+    def _parse_tense(self, morph_str: str) -> Tense | None:
         """Parse tense from morphology string."""
         tense_map = {
             "present": Tense.PRESENT,
@@ -461,20 +459,20 @@ class TreeBuilder:
                 return value
         return None
 
-    def _parse_voice(self, morph_str: str) -> Optional[Voice]:
+    def _parse_voice(self, morph_str: str) -> Voice | None:
         """Parse voice from morphology string."""
         if "active" in morph_str or "parasmaipada" in morph_str or "para" in morph_str:
             return Voice.ACTIVE
-        elif "middle" in morph_str or "ātmanepada" in morph_str or "atma" in morph_str:
+        if "middle" in morph_str or "ātmanepada" in morph_str or "atma" in morph_str:
             return Voice.MIDDLE
-        elif "passive" in morph_str:
+        if "passive" in morph_str:
             return Voice.PASSIVE
         return None
 
     def _is_verb(
         self,
-        pos: Optional[str],
-        morphology: Optional[MorphologicalTag],
+        pos: str | None,
+        morphology: MorphologicalTag | None,
     ) -> bool:
         """Check if this segment represents a verb."""
         if morphology and morphology.pos == PartOfSpeech.VERB:
@@ -483,7 +481,7 @@ class TreeBuilder:
             return True
         return False
 
-    def _lookup_dhatu(self, lemma: str) -> Optional[DhatuInfo]:
+    def _lookup_dhatu(self, lemma: str) -> DhatuInfo | None:
         """Look up dhatu information for a verb.
 
         Args:
@@ -500,7 +498,7 @@ class TreeBuilder:
         # For now, return None if not in common list
         return None
 
-    def _infer_compound_type(self, base_words: list[BaseWord]) -> Optional[CompoundType]:
+    def _infer_compound_type(self, base_words: list[BaseWord]) -> CompoundType | None:
         """Infer the compound type from component words.
 
         This is a simplified heuristic. Real compound analysis

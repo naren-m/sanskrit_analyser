@@ -1,7 +1,5 @@
 """Dharmamitra ByT5 engine wrapper for neural Sanskrit analysis."""
 
-from typing import Optional
-
 from sanskrit_analyzer.engines.base import EngineBase, EngineResult, Segment
 from sanskrit_analyzer.models.scripts import Script
 from sanskrit_analyzer.utils.normalize import detect_script
@@ -36,9 +34,9 @@ class DharmamitraEngine(EngineBase):
         """
         self._mode = mode
         self._device = device
-        self._processor: Optional[object] = None
+        self._processor: object | None = None
         self._available = False
-        self._init_error: Optional[str] = None
+        self._init_error: str | None = None
 
         self._initialize()
 
@@ -118,7 +116,7 @@ class DharmamitraEngine(EngineBase):
 
         return result
 
-    def _determine_pos(self, tag: dict) -> Optional[str]:
+    def _determine_pos(self, tag: dict) -> str | None:
         """Determine part of speech from tag dictionary."""
         if "tense" in tag or "mood" in tag or "person" in tag:
             return "verb"

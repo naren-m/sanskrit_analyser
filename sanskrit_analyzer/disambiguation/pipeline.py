@@ -3,7 +3,7 @@
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from sanskrit_analyzer.disambiguation.llm import LLMConfig, LLMDisambiguator
 from sanskrit_analyzer.disambiguation.rules import (
@@ -64,9 +64,9 @@ class PipelineResult:
     resolved_at: DisambiguationStage
     confidence: float
     needs_human_review: bool = False
-    human_review_reason: Optional[str] = None
+    human_review_reason: str | None = None
     rule_results: list[Any] = field(default_factory=list)
-    llm_result: Optional[Any] = None
+    llm_result: Any | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -75,7 +75,7 @@ class PipelineResult:
         return len(self.candidates) > 1 and self.confidence < 0.9
 
     @property
-    def best_candidate(self) -> Optional[ParseCandidate]:
+    def best_candidate(self) -> ParseCandidate | None:
         """Get the best candidate (highest confidence)."""
         if not self.candidates:
             return None
@@ -98,7 +98,7 @@ class DisambiguationPipeline:
         result = await pipeline.disambiguate(candidates)
     """
 
-    def __init__(self, config: Optional[PipelineConfig] = None) -> None:
+    def __init__(self, config: PipelineConfig | None = None) -> None:
         """Initialize the disambiguation pipeline.
 
         Args:
@@ -107,12 +107,12 @@ class DisambiguationPipeline:
         self._config = config or PipelineConfig()
 
         # Initialize rule-based disambiguator
-        self._rules: Optional[RuleBasedDisambiguator] = None
+        self._rules: RuleBasedDisambiguator | None = None
         if self._config.rules_enabled:
             self._rules = RuleBasedDisambiguator(self._config.rules_config)
 
         # Initialize LLM disambiguator
-        self._llm: Optional[LLMDisambiguator] = None
+        self._llm: LLMDisambiguator | None = None
         if self._config.llm_enabled:
             self._llm = LLMDisambiguator(self._config.llm_config)
 
@@ -139,7 +139,7 @@ class DisambiguationPipeline:
 
     def _should_flag_human(
         self, candidates: list[ParseCandidate], resolved_at: DisambiguationStage
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Check if result should be flagged for human review."""
         if not self._config.human_review.enabled:
             return False, None
@@ -160,7 +160,7 @@ class DisambiguationPipeline:
     async def disambiguate(
         self,
         candidates: list[ParseCandidate],
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> PipelineResult:
         """Run the full disambiguation pipeline.
 
@@ -230,8 +230,8 @@ class DisambiguationPipeline:
     async def disambiguate_single(
         self,
         candidates: list[ParseCandidate],
-        context: Optional[dict[str, Any]] = None,
-    ) -> Optional[ParseCandidate]:
+        context: dict[str, Any] | None = None,
+    ) -> ParseCandidate | None:
         """Disambiguate and return the single best candidate.
 
         Args:

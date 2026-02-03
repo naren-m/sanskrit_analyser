@@ -256,6 +256,9 @@ class TestSQLiteCorpus:
         # Create corpus with default path
         corpus = SQLiteCorpus()
 
+        # Clear any existing data first for test isolation
+        corpus.clear()
+
         # Should be able to perform operations
         corpus.set("test", "test", "test", "PRODUCTION", {})
         assert corpus.count() == 1

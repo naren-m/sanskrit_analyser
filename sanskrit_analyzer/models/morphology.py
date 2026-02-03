@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class PartOfSpeech(Enum):
@@ -102,13 +101,13 @@ class MorphologicalTag:
     """
 
     pos: PartOfSpeech
-    gender: Optional[Gender] = None
-    number: Optional[Number] = None
-    case: Optional[Case] = None
-    person: Optional[Person] = None
-    tense: Optional[Tense] = None
-    voice: Optional[Voice] = None
-    raw_tag: Optional[str] = None  # Original tag string from analyzer
+    gender: Gender | None = None
+    number: Number | None = None
+    case: Case | None = None
+    person: Person | None = None
+    tense: Tense | None = None
+    voice: Voice | None = None
+    raw_tag: str | None = None  # Original tag string from analyzer
 
     def to_string(self) -> str:
         """Convert to human-readable string representation."""
@@ -146,7 +145,7 @@ class MorphologicalTag:
         gender: Gender,
         number: Number,
         case: Case,
-        raw_tag: Optional[str] = None,
+        raw_tag: str | None = None,
     ) -> "MorphologicalTag":
         """Create a noun morphological tag."""
         return cls(
@@ -164,7 +163,7 @@ class MorphologicalTag:
         number: Number,
         tense: Tense,
         voice: Voice = Voice.ACTIVE,
-        raw_tag: Optional[str] = None,
+        raw_tag: str | None = None,
     ) -> "MorphologicalTag":
         """Create a verb morphological tag."""
         return cls(
@@ -186,8 +185,8 @@ class Pratyaya:
 
     name: str  # The pratyaya name (e.g., "kvip", "kyap", "ṇic")
     type: str  # Category: "kṛt", "taddhita", "tiṅ", "sup"
-    meaning: Optional[str] = None  # What this pratyaya contributes
-    sutra: Optional[str] = None  # Ashtadhyayi sutra reference
+    meaning: str | None = None  # What this pratyaya contributes
+    sutra: str | None = None  # Ashtadhyayi sutra reference
 
 
 @dataclass(frozen=True)
@@ -196,7 +195,7 @@ class Meaning:
 
     text: str  # The meaning/definition
     language: str = "en"  # Language code (en, sa, etc.)
-    source: Optional[str] = None  # Dictionary source (MW, Apte, etc.)
+    source: str | None = None  # Dictionary source (MW, Apte, etc.)
     confidence: float = 1.0  # Confidence in this meaning (0.0-1.0)
 
     def __str__(self) -> str:

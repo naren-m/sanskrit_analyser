@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -10,9 +9,9 @@ class SandhiInfo:
     """Information about sandhi applied at a segment boundary."""
 
     type: str  # Type of sandhi (e.g., "vowel", "visarga", "consonant")
-    rule: Optional[str] = None  # Ashtadhyayi sutra if known
-    original_ending: Optional[str] = None  # What was before sandhi
-    original_beginning: Optional[str] = None  # What followed before sandhi
+    rule: str | None = None  # Ashtadhyayi sutra if known
+    original_ending: str | None = None  # What was before sandhi
+    original_beginning: str | None = None  # What followed before sandhi
 
 
 @dataclass
@@ -24,12 +23,12 @@ class Segment:
 
     surface: str  # The form as it appears in the input
     lemma: str  # Dictionary/root form
-    morphology: Optional[str] = None  # Morphological tag string
-    sandhi_info: Optional[SandhiInfo] = None  # Sandhi details if applicable
+    morphology: str | None = None  # Morphological tag string
+    sandhi_info: SandhiInfo | None = None  # Sandhi details if applicable
     confidence: float = 1.0  # Engine's confidence (0.0-1.0)
-    pos: Optional[str] = None  # Part of speech
+    pos: str | None = None  # Part of speech
     meanings: list[str] = field(default_factory=list)  # Meanings if available
-    prakriya: Optional[list[str]] = None  # Derivation steps if available
+    prakriya: list[str] | None = None  # Derivation steps if available
 
     def __post_init__(self) -> None:
         """Validate confidence."""
@@ -46,8 +45,8 @@ class EngineResult:
     engine: str  # Name of the engine that produced this result
     segments: list[Segment] = field(default_factory=list)  # Analyzed segments
     confidence: float = 1.0  # Overall confidence in the result
-    error: Optional[str] = None  # Error message if analysis failed
-    raw_output: Optional[str] = None  # Raw output from engine for debugging
+    error: str | None = None  # Error message if analysis failed
+    raw_output: str | None = None  # Raw output from engine for debugging
 
     @property
     def success(self) -> bool:

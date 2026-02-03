@@ -4,7 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class RuleResult:
     rule_name: str
     applied: bool
     confidence_adjustment: float = 0.0
-    reason: Optional[str] = None
+    reason: str | None = None
     eliminated_parses: list[int] = field(default_factory=list)
 
 
@@ -44,7 +44,7 @@ class ParseCandidate:
         """Get all lemmas from segments."""
         return [s.get("lemma", "") for s in self.segments if s.get("lemma")]
 
-    def get_morphology(self, index: int) -> Optional[dict[str, Any]]:
+    def get_morphology(self, index: int) -> dict[str, Any] | None:
         """Get morphology for a segment."""
         if 0 <= index < len(self.segments):
             return self.segments[index].get("morphology")
@@ -81,7 +81,7 @@ class DisambiguationRule(ABC):
     def apply(
         self,
         candidates: list[ParseCandidate],
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> tuple[list[ParseCandidate], RuleResult]:
         """Apply the rule to filter or rerank candidates.
 
@@ -112,7 +112,7 @@ class GenderNumberAgreementRule(DisambiguationRule):
     def apply(
         self,
         candidates: list[ParseCandidate],
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> tuple[list[ParseCandidate], RuleResult]:
         if not self.enabled or len(candidates) <= 1:
             return candidates, RuleResult(
@@ -265,7 +265,7 @@ class FrequencyPreferenceRule(DisambiguationRule):
         self,
         weight: float = 0.5,
         enabled: bool = True,
-        frequency_data: Optional[dict[str, float]] = None,
+        frequency_data: dict[str, float] | None = None,
     ) -> None:
         super().__init__("frequency_preference", weight, enabled)
         self._frequency_data = frequency_data or {}
@@ -277,7 +277,7 @@ class FrequencyPreferenceRule(DisambiguationRule):
     def apply(
         self,
         candidates: list[ParseCandidate],
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> tuple[list[ParseCandidate], RuleResult]:
         if not self.enabled or len(candidates) <= 1:
             return candidates, RuleResult(
@@ -358,7 +358,7 @@ class SandhiPreferenceRule(DisambiguationRule):
     def apply(
         self,
         candidates: list[ParseCandidate],
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> tuple[list[ParseCandidate], RuleResult]:
         if not self.enabled or len(candidates) <= 1:
             return candidates, RuleResult(
@@ -437,8 +437,8 @@ class RuleBasedDisambiguator:
 
     def __init__(
         self,
-        config: Optional[RuleBasedDisambiguatorConfig] = None,
-        custom_rules: Optional[list[DisambiguationRule]] = None,
+        config: RuleBasedDisambiguatorConfig | None = None,
+        custom_rules: list[DisambiguationRule] | None = None,
     ) -> None:
         """Initialize the disambiguator.
 
@@ -538,7 +538,7 @@ class RuleBasedDisambiguator:
     def disambiguate(
         self,
         candidates: list[ParseCandidate],
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> list[ParseCandidate]:
         """Apply all rules to disambiguate parse candidates.
 

@@ -3,8 +3,8 @@
 import hashlib
 import threading
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -95,7 +95,7 @@ class LRUCache:
         content = f"{mode}:{text}"
         return hashlib.sha256(content.encode("utf-8")).hexdigest()[:32]
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get a value from the cache.
 
         If found, the entry is moved to the end (most recently used).

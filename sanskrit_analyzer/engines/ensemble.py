@@ -2,7 +2,6 @@
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Optional
 
 from sanskrit_analyzer.engines.base import EngineBase, EngineResult, Segment
 
@@ -24,9 +23,9 @@ class MergedSegment:
 
     surface: str
     lemma: str
-    morphology: Optional[str] = None
+    morphology: str | None = None
     confidence: float = 0.0
-    pos: Optional[str] = None
+    pos: str | None = None
     meanings: list[str] = field(default_factory=list)
     engine_votes: dict[str, float] = field(default_factory=dict)
     agreement_score: float = 0.0
@@ -81,8 +80,8 @@ class EnsembleAnalyzer:
 
     def __init__(
         self,
-        engines: Optional[list[EngineBase]] = None,
-        config: Optional[EnsembleConfig] = None,
+        engines: list[EngineBase] | None = None,
+        config: EnsembleConfig | None = None,
     ) -> None:
         """Initialize the ensemble analyzer.
 

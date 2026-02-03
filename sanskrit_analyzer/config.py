@@ -18,13 +18,11 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 class ConfigError(Exception):
     """Error in configuration."""
-
-    pass
 
 
 class AnalysisMode(Enum):
@@ -49,7 +47,7 @@ class EngineConfig:
     heritage_weight: float = 0.25
     heritage_mode: str = "local"  # local | remote | fallback
     heritage_local_url: str = "http://localhost:8080"
-    heritage_lexicon_path: Optional[str] = None
+    heritage_lexicon_path: str | None = None
 
     def validate(self) -> None:
         """Validate engine configuration.
@@ -88,7 +86,7 @@ class CacheConfig:
     memory_enabled: bool = True
     memory_max_size: int = 1000
     redis_enabled: bool = True
-    redis_url: Optional[str] = "redis://localhost:6379/0"
+    redis_url: str | None = "redis://localhost:6379/0"
     redis_ttl_days: int = 7
     sqlite_enabled: bool = True
     sqlite_path: str = "~/.sanskrit_analyzer/corpus.db"
@@ -116,7 +114,7 @@ class DisambiguationConfig:
     llm_provider: str = "ollama"  # ollama | openai
     llm_model: str = "llama3.2"
     ollama_url: str = "http://localhost:11434"
-    openai_api_key: Optional[str] = None
+    openai_api_key: str | None = None
     human_enabled: bool = True
     human_auto_prompt: bool = False
 
@@ -181,7 +179,7 @@ class Config:
     default_output_script: str = "devanagari"  # devanagari | iast | slp1
     input_detection: str = "auto"
     log_level: str = "INFO"
-    log_file: Optional[str] = None
+    log_file: str | None = None
 
     # Mode-specific configurations
     production: ModeConfig = field(
@@ -209,12 +207,12 @@ class Config:
 
     def get_mode_config(self, mode: AnalysisMode) -> ModeConfig:
         """Get configuration for a specific analysis mode."""
-        if mode == AnalysisMode.PRODUCTION:
-            return self.production
-        elif mode == AnalysisMode.EDUCATIONAL:
-            return self.educational
-        else:
-            return self.academic
+        mode_map = {
+            AnalysisMode.PRODUCTION: self.production,
+            AnalysisMode.EDUCATIONAL: self.educational,
+            AnalysisMode.ACADEMIC: self.academic,
+        }
+        return mode_map[mode]
 
     def validate(self) -> None:
         """Validate entire configuration.
@@ -319,24 +317,29 @@ class Config:
             **{k: v for k, v in disambiguation_data.items() if hasattr(DisambiguationConfig, k)}
         )
 
-        # Parse mode-specific configs
-        production = ModeConfig(
-            **{k: v for k, v in data.get("production", {}).items() if hasattr(ModeConfig, k)}
-        ) if "production" in data else ModeConfig(
-            return_all_parses=False, include_prakriya=False, max_candidates=1
-        )
+        # Parse mode-specific configs with defaults
+        mode_defaults = {
+            "production": ModeConfig(
+                return_all_parses=False, include_prakriya=False, max_candidates=1
+            ),
+            "educational": ModeConfig(
+                return_all_parses=True, include_prakriya=True, max_candidates=5
+            ),
+            "academic": ModeConfig(
+                return_all_parses=True, include_prakriya=True,
+                include_engine_details=True, max_candidates=-1
+            ),
+        }
 
-        educational = ModeConfig(
-            **{k: v for k, v in data.get("educational", {}).items() if hasattr(ModeConfig, k)}
-        ) if "educational" in data else ModeConfig(
-            return_all_parses=True, include_prakriya=True, max_candidates=5
-        )
+        def parse_mode_config(key: str) -> ModeConfig:
+            if key in data:
+                filtered = {k: v for k, v in data[key].items() if hasattr(ModeConfig, k)}
+                return ModeConfig(**filtered)
+            return mode_defaults[key]
 
-        academic = ModeConfig(
-            **{k: v for k, v in data.get("academic", {}).items() if hasattr(ModeConfig, k)}
-        ) if "academic" in data else ModeConfig(
-            return_all_parses=True, include_prakriya=True, include_engine_details=True, max_candidates=-1
-        )
+        production = parse_mode_config("production")
+        educational = parse_mode_config("educational")
+        academic = parse_mode_config("academic")
 
         # Parse default mode
         default_mode_str = data.get("default_mode", "production")
@@ -531,7 +534,7 @@ academic:
             },
         }
 
-    def save(self, path: Optional[str | Path] = None) -> None:
+    def save(self, path: str | Path | None = None) -> None:
         """Save configuration to a YAML file.
 
         Args:

@@ -1,7 +1,6 @@
 """Vidyut engine wrapper for Paninian grammar-based analysis."""
 
 import os
-from typing import Optional
 
 from sanskrit_analyzer.engines.base import EngineBase, EngineResult, Segment
 from sanskrit_analyzer.models.scripts import Script
@@ -20,16 +19,16 @@ class VidyutEngine(EngineBase):
     and prakriya (derivation) generation.
     """
 
-    def __init__(self, data_path: Optional[str] = None) -> None:
+    def __init__(self, data_path: str | None = None) -> None:
         """Initialize the Vidyut engine.
 
         Args:
             data_path: Path to vidyut data directory. Defaults to ~/.vidyut-data.
         """
         self._data_path = data_path or DEFAULT_VIDYUT_DATA_PATH
-        self._chedaka: Optional[object] = None
+        self._chedaka: object | None = None
         self._available = False
-        self._init_error: Optional[str] = None
+        self._init_error: str | None = None
 
         self._initialize()
 

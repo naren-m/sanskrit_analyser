@@ -9,7 +9,6 @@ This module defines the 4-level hierarchical structure:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 from sanskrit_analyzer.models.dhatu import DhatuInfo
 from sanskrit_analyzer.models.morphology import (
@@ -49,7 +48,7 @@ class ConfidenceMetrics:
     overall: float  # Overall confidence (0.0-1.0)
     engine_agreement: float  # How much engines agreed (0.0-1.0)
     disambiguation_applied: bool = False  # Whether disambiguation was needed
-    disambiguation_stage: Optional[str] = None  # "rules", "llm", or "human"
+    disambiguation_stage: str | None = None  # "rules", "llm", or "human"
 
     def __post_init__(self) -> None:
         """Validate confidence values."""
@@ -67,15 +66,15 @@ class BaseWord:
     lemma: str  # Dictionary form (in SLP1)
     surface_form: str  # Form as it appears in context
     scripts: ScriptVariants  # All script representations
-    morphology: Optional[MorphologicalTag] = None  # Grammatical analysis
+    morphology: MorphologicalTag | None = None  # Grammatical analysis
     meanings: list[Meaning] = field(default_factory=list)  # Dictionary meanings
-    dhatu: Optional[DhatuInfo] = None  # Verbal root (if verb-derived)
+    dhatu: DhatuInfo | None = None  # Verbal root (if verb-derived)
     pratyaya: list[Pratyaya] = field(default_factory=list)  # Suffixes applied
     upasarga: list[str] = field(default_factory=list)  # Prefixes (preverbs)
     confidence: float = 1.0  # Analysis confidence
 
     @property
-    def primary_meaning(self) -> Optional[str]:
+    def primary_meaning(self) -> str | None:
         """Get the primary meaning."""
         return str(self.meanings[0]) if self.meanings else None
 
@@ -112,10 +111,10 @@ class SandhiGroup:
 
     surface_form: str  # As it appears in the text
     scripts: ScriptVariants  # All script representations
-    sandhi_type: Optional[SandhiType] = None  # Type of sandhi applied
-    sandhi_rule: Optional[str] = None  # Ashtadhyayi sutra reference
+    sandhi_type: SandhiType | None = None  # Type of sandhi applied
+    sandhi_rule: str | None = None  # Ashtadhyayi sutra reference
     is_compound: bool = False  # Whether this is a compound word
-    compound_type: Optional[CompoundType] = None  # Type of compound
+    compound_type: CompoundType | None = None  # Type of compound
     base_words: list[BaseWord] = field(default_factory=list)  # Component words
 
     @property
@@ -200,7 +199,7 @@ class AnalysisTree:
     normalized_slp1: str  # Normalized to SLP1
     scripts: ScriptVariants  # All script representations
     parse_forest: list[ParseTree] = field(default_factory=list)  # All valid parses
-    selected_parse: Optional[int] = None  # Index of user-selected parse
+    selected_parse: int | None = None  # Index of user-selected parse
     confidence: ConfidenceMetrics = field(
         default_factory=lambda: ConfidenceMetrics(overall=0.0, engine_agreement=0.0)
     )
@@ -208,7 +207,7 @@ class AnalysisTree:
     cached_at: CacheTier = CacheTier.NONE  # Where this was cached
 
     @property
-    def best_parse(self) -> Optional[ParseTree]:
+    def best_parse(self) -> ParseTree | None:
         """Get the best (or selected) parse interpretation."""
         if not self.parse_forest:
             return None

@@ -8,7 +8,6 @@ import sqlite3
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -20,7 +19,7 @@ class ConjugationEntry:
     vacana: str  # Number (ekavacana, dvivacana, bahuvacana)
     pada: str  # Voice (parasmaipada, atmanepada)
     form_devanagari: str
-    form_iast: Optional[str] = None
+    form_iast: str | None = None
 
 
 @dataclass
@@ -29,16 +28,16 @@ class DhatuEntry:
 
     id: int
     dhatu_devanagari: str
-    dhatu_iast: Optional[str]
-    meaning_english: Optional[str]
-    meaning_hindi: Optional[str]
-    gana: Optional[int]  # 1-10 verb class
-    pada: Optional[str]  # parasmaipada, atmanepada, ubhayapada
-    it_category: Optional[str]
-    panini_reference: Optional[str]
-    examples: Optional[str]
-    synonyms: Optional[str]
-    related_words: Optional[str]
+    dhatu_iast: str | None
+    meaning_english: str | None
+    meaning_hindi: str | None
+    gana: int | None  # 1-10 verb class
+    pada: str | None  # parasmaipada, atmanepada, ubhayapada
+    it_category: str | None
+    panini_reference: str | None
+    examples: str | None
+    synonyms: str | None
+    related_words: str | None
     conjugations: list[ConjugationEntry] = field(default_factory=list)
 
 
@@ -57,7 +56,7 @@ class DhatuDB:
     # Default database path relative to this module
     DEFAULT_DB_PATH = Path(__file__).parent / "comprehensive_dhatu_database.db"
 
-    def __init__(self, db_path: Optional[Path] = None) -> None:
+    def __init__(self, db_path: Path | None = None) -> None:
         """Initialize the dhatu database.
 
         Args:
@@ -90,7 +89,7 @@ class DhatuDB:
         self,
         dhatu: str,
         include_conjugations: bool = False,
-    ) -> Optional[DhatuEntry]:
+    ) -> DhatuEntry | None:
         """Look up a dhatu by its Devanagari or IAST form.
 
         Args:
@@ -191,8 +190,8 @@ class DhatuDB:
         self,
         dhatu_id: int,
         lakara: str,
-        purusha: Optional[str] = None,
-        vacana: Optional[str] = None,
+        purusha: str | None = None,
+        vacana: str | None = None,
     ) -> list[ConjugationEntry]:
         """Get specific conjugation forms for a dhatu.
 

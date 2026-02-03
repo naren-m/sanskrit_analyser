@@ -6,7 +6,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -22,7 +22,7 @@ class CorpusEntry:
     accessed_at: datetime
     access_count: int
     disambiguated: bool
-    selected_parse: Optional[int]
+    selected_parse: int | None
 
     def get_result(self) -> dict[str, Any]:
         """Parse and return the result as a dictionary."""
@@ -54,7 +54,7 @@ class SQLiteCorpus:
         entry = corpus.get("key123")
     """
 
-    def __init__(self, db_path: Optional[str] = None) -> None:
+    def __init__(self, db_path: str | None = None) -> None:
         """Initialize the SQLite corpus.
 
         Args:
@@ -156,7 +156,7 @@ class SQLiteCorpus:
 
         conn.commit()
 
-    def get(self, key: str) -> Optional[CorpusEntry]:
+    def get(self, key: str) -> CorpusEntry | None:
         """Get an entry by its key.
 
         Updates accessed_at and access_count.

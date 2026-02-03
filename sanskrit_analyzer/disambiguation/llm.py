@@ -5,7 +5,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 
@@ -28,7 +28,7 @@ class LLMConfig:
     provider: LLMProvider = LLMProvider.OLLAMA
     model: str = "llama3.2"
     ollama_url: str = "http://localhost:11434"
-    openai_api_key: Optional[str] = None
+    openai_api_key: str | None = None
     timeout: float = 30.0
     max_tokens: int = 500
     temperature: float = 0.1
@@ -40,9 +40,9 @@ class LLMDisambiguationResult:
 
     success: bool
     ranked_indices: list[int] = field(default_factory=list)
-    explanation: Optional[str] = None
-    error: Optional[str] = None
-    raw_response: Optional[str] = None
+    explanation: str | None = None
+    error: str | None = None
+    raw_response: str | None = None
 
 
 class LLMDisambiguator:
@@ -73,7 +73,7 @@ Respond with ONLY a JSON object in this format:
 
 The ranking should list candidate indices from most likely to least likely."""
 
-    def __init__(self, config: Optional[LLMConfig] = None) -> None:
+    def __init__(self, config: LLMConfig | None = None) -> None:
         """Initialize the LLM disambiguator.
 
         Args:
@@ -95,7 +95,7 @@ The ranking should list candidate indices from most likely to least likely."""
     def _build_prompt(
         self,
         candidates: list[ParseCandidate],
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> str:
         """Build the prompt for the LLM.
 
@@ -150,7 +150,7 @@ The ranking should list candidate indices from most likely to least likely."""
 
         return "\n".join(lines)
 
-    async def _query_ollama(self, prompt: str) -> Optional[str]:
+    async def _query_ollama(self, prompt: str) -> str | None:
         """Query Ollama API.
 
         Args:
@@ -188,7 +188,7 @@ The ranking should list candidate indices from most likely to least likely."""
             logger.warning("Ollama query failed: %s", e)
             return None
 
-    async def _query_openai(self, prompt: str) -> Optional[str]:
+    async def _query_openai(self, prompt: str) -> str | None:
         """Query OpenAI API.
 
         Args:
@@ -308,7 +308,7 @@ The ranking should list candidate indices from most likely to least likely."""
     async def disambiguate(
         self,
         candidates: list[ParseCandidate],
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> tuple[list[ParseCandidate], LLMDisambiguationResult]:
         """Use LLM to disambiguate parse candidates.
 

@@ -3,7 +3,7 @@
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class RedisCache:
 
     def __init__(
         self,
-        redis_url: Optional[str] = None,
+        redis_url: str | None = None,
         default_ttl: int = DEFAULT_TTL,
         key_prefix: str = "sanskrit:",
     ) -> None:
@@ -59,7 +59,7 @@ class RedisCache:
         self._redis_url = redis_url
         self._default_ttl = default_ttl
         self._key_prefix = key_prefix
-        self._client: Optional[Any] = None
+        self._client: Any | None = None
         self._stats = RedisCacheStats()
         self._enabled = redis_url is not None
 
@@ -126,7 +126,7 @@ class RedisCache:
         """
         return f"{self._key_prefix}{key}"
 
-    async def get(self, key: str) -> Optional[dict[str, Any]]:
+    async def get(self, key: str) -> dict[str, Any] | None:
         """Get a value from the cache.
 
         Args:
@@ -160,7 +160,7 @@ class RedisCache:
         self,
         key: str,
         value: dict[str, Any],
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> bool:
         """Store a value in the cache.
 
@@ -268,7 +268,7 @@ class RedisCache:
         except Exception:
             return False
 
-    async def get_ttl(self, key: str) -> Optional[int]:
+    async def get_ttl(self, key: str) -> int | None:
         """Get the TTL of a key.
 
         Args:

@@ -1,7 +1,6 @@
 """Dhatu (verbal root) data models for Sanskrit analysis."""
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 from sanskrit_analyzer.models.scripts import ScriptVariants
 
@@ -61,9 +60,9 @@ class DhatuInfo:
     gana: int  # Verb class (1-10)
     pada: str  # parasmaipada, ātmanepada, or ubhayapada
     meanings: list[str] = field(default_factory=list)  # Primary meanings
-    prakriya: Optional[list[str]] = None  # Derivation steps (if available)
-    sutra: Optional[str] = None  # Dhātupāṭha reference
-    index: Optional[int] = None  # Index in Dhātupāṭha
+    prakriya: list[str] | None = None  # Derivation steps (if available)
+    sutra: str | None = None  # Dhātupāṭha reference
+    index: int | None = None  # Index in Dhātupāṭha
 
     @property
     def gana_name(self) -> str:
@@ -71,7 +70,7 @@ class DhatuInfo:
         return Gana.name(self.gana)
 
     @property
-    def primary_meaning(self) -> Optional[str]:
+    def primary_meaning(self) -> str | None:
         """Get the primary meaning of this dhatu."""
         return self.meanings[0] if self.meanings else None
 
@@ -97,7 +96,7 @@ class DhatuInfo:
         gana: int,
         pada: str,
         meanings: list[str],
-        prakriya: Optional[list[str]] = None,
+        prakriya: list[str] | None = None,
     ) -> "DhatuInfo":
         """Create a DhatuInfo from SLP1 dhatu string.
 

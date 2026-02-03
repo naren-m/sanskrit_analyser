@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class Script(Enum):
@@ -29,7 +28,7 @@ class ScriptVariants:
     slp1: str
 
     @classmethod
-    def from_text(cls, text: str, source_script: Optional[Script] = None) -> "ScriptVariants":
+    def from_text(cls, text: str, source_script: Script | None = None) -> "ScriptVariants":
         """Create ScriptVariants from text, auto-detecting script if not specified.
 
         Args:
