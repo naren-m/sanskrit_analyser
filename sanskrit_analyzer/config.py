@@ -28,6 +28,9 @@ class ConfigError(Exception):
     """Error in configuration."""
 
 
+_VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+
+
 class AnalysisMode(Enum):
     """Analysis mode determining output verbosity and features."""
 
@@ -174,13 +177,12 @@ class MCPServerConfig:
         Raises:
             ConfigError: If validation fails.
         """
-        if self.port < 1 or self.port > 65535:
+        if not 1 <= self.port <= 65535:
             raise ConfigError(f"port must be between 1 and 65535, got {self.port}")
 
-        valid_log_levels = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
-        if self.log_level.upper() not in valid_log_levels:
+        if self.log_level.upper() not in _VALID_LOG_LEVELS:
             raise ConfigError(
-                f"log_level must be one of {valid_log_levels}, got {self.log_level}"
+                f"log_level must be one of {_VALID_LOG_LEVELS}, got {self.log_level}"
             )
 
 
@@ -263,10 +265,9 @@ class Config:
                 f"got {self.default_output_script}"
             )
 
-        valid_log_levels = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
-        if self.log_level.upper() not in valid_log_levels:
+        if self.log_level.upper() not in _VALID_LOG_LEVELS:
             raise ConfigError(
-                f"log_level must be one of {valid_log_levels}, got {self.log_level}"
+                f"log_level must be one of {_VALID_LOG_LEVELS}, got {self.log_level}"
             )
 
     @classmethod
