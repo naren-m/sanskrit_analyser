@@ -37,7 +37,10 @@ def create_server(config: MCPServerConfig | None = None) -> FastMCP:
 
 def _register_tools(server: FastMCP) -> None:
     """Register all MCP tools with the server."""
-    from sanskrit_analyzer.mcp.tools.analysis import analyze_sentence as _analyze
+    from sanskrit_analyzer.mcp.tools.analysis import (
+        analyze_sentence as _analyze,
+        split_sandhi as _split,
+    )
 
     @server.tool()
     async def analyze_sentence(
@@ -56,6 +59,25 @@ def _register_tools(server: FastMCP) -> None:
             Analysis result with sandhi_groups, words, morphology, and confidence.
         """
         return await _analyze(text, mode, verbosity)
+
+    @server.tool()
+    async def split_sandhi(
+        text: str,
+        verbosity: str | None = None,
+    ) -> dict[str, Any]:
+        """Split Sanskrit text at sandhi boundaries.
+
+        Lighter weight than full analysis - returns sandhi groups with split words
+        and optionally the sandhi rules applied.
+
+        Args:
+            text: Sanskrit text to split (Devanagari, IAST, or SLP1).
+            verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
+
+        Returns:
+            Sandhi splits with surface forms, component words, and rules.
+        """
+        return await _split(text, verbosity)
 
 
 def main() -> None:

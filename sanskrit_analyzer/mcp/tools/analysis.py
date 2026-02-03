@@ -163,3 +163,94 @@ def _compact_morphology(morph: Any) -> str:
     if tense := getattr(morph, "tense", None):
         parts.append(tense[:3].lower())
     return ".".join(parts) if parts else ""
+
+
+async def split_sandhi(
+    text: str,
+    verbosity: str | None = None,
+) -> dict[str, Any]:
+    """Split Sanskrit text at sandhi boundaries.
+
+    Lighter weight than full analysis - focuses on identifying sandhi splits
+    without complete disambiguation.
+
+    Args:
+        text: Sanskrit text to split (Devanagari, IAST, or SLP1).
+        verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
+                   Defaults to 'standard'.
+
+    Returns:
+        Dictionary with sandhi splits including:
+        - original_text: The input text
+        - scripts: Text in multiple scripts
+        - sandhi_groups: List of sandhi-joined units with split words
+        - total_words: Total number of base words found
+    """
+    verbosity = (verbosity or "standard").lower()
+
+    # Use production mode for faster processing
+    analyzer = Analyzer(Config())
+
+    try:
+        result = await analyzer.analyze(text, mode=AnalysisMode.PRODUCTION)
+    except Exception as e:
+        return {"error": str(e), "success": False}
+
+    return _format_sandhi_response(result, verbosity)
+
+
+def _format_sandhi_response(tree: Any, verbosity: str) -> dict[str, Any]:
+    """Format AnalysisTree as sandhi-focused response."""
+    response: dict[str, Any] = {
+        "success": True,
+        "original_text": tree.original_text,
+        "scripts": {
+            "devanagari": tree.scripts.devanagari,
+            "iast": tree.scripts.iast,
+            "slp1": tree.scripts.slp1,
+        },
+    }
+
+    best_parse = tree.best_parse
+    if not best_parse:
+        response["sandhi_groups"] = []
+        response["total_words"] = 0
+        return response
+
+    sandhi_groups = []
+    total_words = 0
+
+    for sg in best_parse.sandhi_groups:
+        sg_data: dict[str, Any] = {
+            "surface_form": sg.surface_form,
+            "words": [bw.lemma for bw in sg.base_words],
+        }
+        total_words += len(sg.base_words)
+
+        if verbosity != "minimal":
+            # Include sandhi rule if available
+            if sg.sandhi_type:
+                sg_data["sandhi_type"] = sg.sandhi_type.value
+            if sg.sandhi_rule:
+                sg_data["sandhi_rule"] = sg.sandhi_rule
+
+        if verbosity == "detailed":
+            # Include word scripts in detailed mode
+            sg_data["word_details"] = [
+                {
+                    "lemma": bw.lemma,
+                    "surface_form": bw.surface_form,
+                    "scripts": {
+                        "devanagari": bw.scripts.devanagari if bw.scripts else None,
+                        "iast": bw.scripts.iast if bw.scripts else None,
+                    },
+                }
+                for bw in sg.base_words
+            ]
+
+        sandhi_groups.append(sg_data)
+
+    response["sandhi_groups"] = sandhi_groups
+    response["total_words"] = total_words
+
+    return response
