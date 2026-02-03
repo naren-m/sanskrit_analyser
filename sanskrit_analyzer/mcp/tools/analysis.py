@@ -1,16 +1,12 @@
-"""Analysis tools for MCP server.
-
-Provides tools for Sanskrit text analysis including:
-- analyze_sentence: Full morphological analysis
-- split_sandhi: Sandhi splitting without full analysis
-- get_morphology: Morphological tags for a word
-- transliterate: Script conversion
-"""
+"""Analysis tools for MCP server."""
 
 from typing import Any
 
 from sanskrit_analyzer.analyzer import Analyzer
 from sanskrit_analyzer.config import AnalysisMode, Config
+
+# Map mode strings to AnalysisMode enum values
+_MODE_MAP = {mode.value: mode for mode in AnalysisMode}
 
 
 async def analyze_sentence(
@@ -37,26 +33,15 @@ async def analyze_sentence(
         - confidence: Overall confidence score
         - parse_count: Number of possible interpretations
     """
-    # Parse mode
-    analysis_mode = AnalysisMode.PRODUCTION
-    if mode:
-        mode_lower = mode.lower()
-        if mode_lower == "educational":
-            analysis_mode = AnalysisMode.EDUCATIONAL
-        elif mode_lower == "academic":
-            analysis_mode = AnalysisMode.ACADEMIC
+    analysis_mode = _MODE_MAP.get((mode or "").lower(), AnalysisMode.PRODUCTION)
+    verbosity = (verbosity or "standard").lower()
 
-    # Create analyzer and run analysis
-    config = Config()
-    analyzer = Analyzer(config)
+    analyzer = Analyzer(Config())
 
     try:
         result = await analyzer.analyze(text, mode=analysis_mode)
     except Exception as e:
         return {"error": str(e), "success": False}
-
-    # Format response based on verbosity
-    verbosity = (verbosity or "standard").lower()
 
     return _format_analysis_response(result, verbosity)
 
@@ -120,6 +105,9 @@ def _format_analysis_response(tree: Any, verbosity: str) -> dict[str, Any]:
     return response
 
 
+_MORPH_FIELDS = ("pos", "gender", "number", "case", "person", "tense", "mood", "voice")
+
+
 def _format_word(word: Any, verbosity: str) -> dict[str, Any]:
     """Format a BaseWord for the response."""
     data: dict[str, Any] = {
@@ -128,7 +116,6 @@ def _format_word(word: Any, verbosity: str) -> dict[str, Any]:
     }
 
     if verbosity == "minimal":
-        # Just essential morphology codes
         if word.morphology:
             data["morph"] = _compact_morphology(word.morphology)
         return data
@@ -139,18 +126,10 @@ def _format_word(word: Any, verbosity: str) -> dict[str, Any]:
 
     if word.morphology:
         data["morphology"] = {
-            "pos": getattr(word.morphology, "pos", None),
-            "gender": getattr(word.morphology, "gender", None),
-            "number": getattr(word.morphology, "number", None),
-            "case": getattr(word.morphology, "case", None),
-            "person": getattr(word.morphology, "person", None),
-            "tense": getattr(word.morphology, "tense", None),
-            "mood": getattr(word.morphology, "mood", None),
-            "voice": getattr(word.morphology, "voice", None),
+            field: getattr(word.morphology, field, None) for field in _MORPH_FIELDS
         }
 
     if verbosity == "detailed":
-        # Add dhatu info and scripts
         if word.dhatu:
             data["dhatu"] = {
                 "root": word.dhatu.dhatu,
