@@ -89,11 +89,14 @@ class BaseWord:
         return {
             "lemma": self.lemma,
             "surface_form": self.surface_form,
-            "devanagari": self.scripts.devanagari,
-            "iast": self.scripts.iast,
-            "morphology": self.morphology.to_string() if self.morphology else None,
+            "scripts": {
+                "devanagari": self.scripts.devanagari,
+                "iast": self.scripts.iast,
+                "slp1": self.scripts.slp1,
+            } if self.scripts else None,
+            "morphology": self.morphology.to_dict() if self.morphology else None,
             "meanings": [str(m) for m in self.meanings],
-            "dhatu": str(self.dhatu) if self.dhatu else None,
+            "dhatu": self.dhatu.to_dict() if self.dhatu else None,
             "upasarga": self.upasarga,
             "confidence": self.confidence,
         }
@@ -129,8 +132,11 @@ class SandhiGroup:
         """Convert to dictionary for serialization."""
         return {
             "surface_form": self.surface_form,
-            "devanagari": self.scripts.devanagari,
-            "iast": self.scripts.iast,
+            "scripts": {
+                "devanagari": self.scripts.devanagari,
+                "iast": self.scripts.iast,
+                "slp1": self.scripts.slp1,
+            } if self.scripts else None,
             "sandhi_type": self.sandhi_type.value if self.sandhi_type else None,
             "sandhi_rule": self.sandhi_rule,
             "is_compound": self.is_compound,

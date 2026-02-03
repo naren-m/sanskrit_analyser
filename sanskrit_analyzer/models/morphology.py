@@ -127,6 +127,19 @@ class MorphologicalTag:
             parts.append(self.voice.value[:3])
         return ".".join(parts)
 
+    def to_dict(self) -> dict:
+        """Convert to dictionary for serialization."""
+        return {
+            "pos": self.pos.value if self.pos else None,
+            "gender": self.gender.value if self.gender else None,
+            "number": self.number.value if self.number else None,
+            "case": self.case.value if self.case else None,
+            "person": self.person.value if self.person else None,
+            "tense": self.tense.value if self.tense else None,
+            "voice": self.voice.value if self.voice else None,
+            "raw_tag": self.raw_tag,
+        }
+
     @classmethod
     def noun(
         cls,

@@ -80,6 +80,16 @@ class DhatuInfo:
         meaning = self.primary_meaning or "?"
         return f"√{self.scripts.iast} ({self.gana_name}): {meaning}"
 
+    def to_dict(self) -> dict:
+        """Convert to dictionary for serialization."""
+        return {
+            "dhatu": self.dhatu,
+            "meaning": self.primary_meaning,
+            "gana": self.gana,
+            "pada": self.pada,
+            "meanings": self.meanings,
+        }
+
     @classmethod
     def create(
         cls,

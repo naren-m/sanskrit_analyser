@@ -31,6 +31,7 @@ dependencies = [
     "vidyut>=0.4.0",
     "aiohttp>=3.9.0",
     "pyyaml>=6.0",
+    "streamlit>=1.53.1",
 ]
 
 [project.optional-dependencies]
