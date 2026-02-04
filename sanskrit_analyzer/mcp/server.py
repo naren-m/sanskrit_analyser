@@ -49,6 +49,12 @@ def _register_tools(server: FastMCP) -> None:
         lookup_dhatu as _lookup,
         search_dhatu as _search,
     )
+    from sanskrit_analyzer.mcp.tools.grammar import (
+        explain_parse as _explain,
+        get_pratyaya as _pratyaya,
+        identify_compound as _compound,
+        resolve_ambiguity as _resolve,
+    )
 
     @server.tool()
     async def analyze_sentence(
@@ -197,6 +203,73 @@ def _register_tools(server: FastMCP) -> None:
             List of dhatus in the specified gana with their meanings.
         """
         return _list_gana(gana, limit)
+
+    # Grammar tools
+    @server.tool()
+    async def explain_parse(
+        text: str,
+        parse_indices: list[int] | None = None,
+        verbosity: str | None = None,
+    ) -> dict[str, Any]:
+        """Compare multiple parse interpretations of Sanskrit text.
+
+        Args:
+            text: Sanskrit text to analyze.
+            parse_indices: Optional list of parse indices to include (0-based).
+            verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
+
+        Returns:
+            Parse comparisons with confidence scores and word breakdowns.
+        """
+        return await _explain(text, parse_indices, verbosity)
+
+    @server.tool()
+    async def identify_compound(
+        word: str,
+        verbosity: str | None = None,
+    ) -> dict[str, Any]:
+        """Identify compound type (samasa) in a Sanskrit word.
+
+        Args:
+            word: Sanskrit word to analyze (Devanagari or IAST).
+            verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
+
+        Returns:
+            Compound analysis with type and components.
+        """
+        return await _compound(word, verbosity)
+
+    @server.tool()
+    async def get_pratyaya(
+        word: str,
+        verbosity: str | None = None,
+    ) -> dict[str, Any]:
+        """Identify suffixes (pratyayas) applied to a Sanskrit word.
+
+        Args:
+            word: Sanskrit word to analyze (Devanagari or IAST).
+            verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
+
+        Returns:
+            List of identified suffixes with type and function.
+        """
+        return await _pratyaya(word, verbosity)
+
+    @server.tool()
+    async def resolve_ambiguity(
+        text: str,
+        context: str | None = None,
+    ) -> dict[str, Any]:
+        """Resolve ambiguous parses and return the most likely interpretation.
+
+        Args:
+            text: Sanskrit text to analyze.
+            context: Optional sentence context for better disambiguation.
+
+        Returns:
+            Selected parse with confidence and reasoning.
+        """
+        return await _resolve(text, context)
 
 
 def main() -> None:
