@@ -3,6 +3,7 @@
 from typing import Any
 
 from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry
+from sanskrit_analyzer.mcp.verbosity import Verbosity, error_response, parse_verbosity
 
 # Shared database instance
 _db = DhatuDB()
@@ -22,7 +23,7 @@ GANA_NAMES = {
 }
 
 
-def _format_dhatu_entry(entry: DhatuEntry, verbosity: str) -> dict[str, Any]:
+def _format_dhatu_entry(entry: DhatuEntry, level: Verbosity) -> dict[str, Any]:
     """Format a DhatuEntry for MCP response."""
     data: dict[str, Any] = {
         "dhatu": entry.dhatu_devanagari,
@@ -32,12 +33,12 @@ def _format_dhatu_entry(entry: DhatuEntry, verbosity: str) -> dict[str, Any]:
         "pada": entry.pada,
     }
 
-    if verbosity != "minimal":
+    if level != Verbosity.MINIMAL:
         data["meaning_hindi"] = entry.meaning_hindi
         data["examples"] = entry.examples
         data["panini_reference"] = entry.panini_reference
 
-    if verbosity == "detailed":
+    if level == Verbosity.DETAILED:
         data["it_category"] = entry.it_category
         data["synonyms"] = entry.synonyms
         data["related_words"] = entry.related_words
@@ -66,20 +67,17 @@ def lookup_dhatu(
         - pada: Voice type
         - conjugations: Optional conjugation forms
     """
-    verbosity = (verbosity or "standard").lower()
+    level = parse_verbosity(verbosity)
 
     try:
         entry = _db.lookup_by_dhatu(dhatu, include_conjugations=include_conjugations)
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return error_response(e)
 
     if not entry:
-        return {
-            "success": False,
-            "error": f"Dhatu not found: {dhatu}",
-        }
+        return error_response(f"Dhatu not found: {dhatu}")
 
-    result = _format_dhatu_entry(entry, verbosity)
+    result = _format_dhatu_entry(entry, level)
     result["success"] = True
 
     if include_conjugations and entry.conjugations:
@@ -115,19 +113,19 @@ def search_dhatu(
         - results: List of matching dhatu entries
         - count: Number of results
     """
-    verbosity = (verbosity or "standard").lower()
+    level = parse_verbosity(verbosity)
     limit = min(max(1, limit), 50)  # Clamp to 1-50
 
     try:
         entries = _db.search(query, limit=limit)
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return error_response(e)
 
     return {
         "success": True,
         "query": query,
         "count": len(entries),
-        "results": [_format_dhatu_entry(e, verbosity) for e in entries],
+        "results": [_format_dhatu_entry(e, level) for e in entries],
     }
 
 
@@ -153,10 +151,10 @@ def conjugate_verb(
     try:
         entry = _db.lookup_by_dhatu(dhatu, include_conjugations=False)
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return error_response(e)
 
     if not entry:
-        return {"success": False, "error": f"Dhatu not found: {dhatu}"}
+        return error_response(f"Dhatu not found: {dhatu}")
 
     try:
         forms = _db.get_conjugation(
@@ -166,7 +164,7 @@ def conjugate_verb(
             vacana=vacana,
         )
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return error_response(e)
 
     return {
         "success": True,
@@ -207,14 +205,14 @@ def list_gana(
         - dhatus: List of dhatu entries
     """
     if gana < 1 or gana > 10:
-        return {"success": False, "error": f"Invalid gana: {gana}. Must be 1-10."}
+        return error_response(f"Invalid gana: {gana}. Must be 1-10.")
 
     limit = min(max(1, limit), 100)  # Clamp to 1-100
 
     try:
         entries = _db.get_by_gana(gana, limit=limit)
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return error_response(e)
 
     return {
         "success": True,

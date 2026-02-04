@@ -4,6 +4,7 @@ from typing import Any
 
 from sanskrit_analyzer.analyzer import Analyzer
 from sanskrit_analyzer.config import AnalysisMode, Config
+from sanskrit_analyzer.mcp.verbosity import Verbosity, error_response, parse_verbosity
 
 # Map mode strings to AnalysisMode enum values
 _MODE_MAP = {mode.value: mode for mode in AnalysisMode}
@@ -17,7 +18,7 @@ async def _run_analysis(text: str, mode: AnalysisMode) -> dict[str, Any] | Any:
     try:
         return await _analyzer.analyze(text, mode=mode)
     except Exception as e:
-        return {"error": str(e), "success": False}
+        return error_response(e)
 
 
 def _scripts_dict(scripts: Any) -> dict[str, str]:
@@ -54,16 +55,16 @@ async def analyze_sentence(
         - parse_count: Number of possible interpretations
     """
     analysis_mode = _MODE_MAP.get((mode or "").lower(), AnalysisMode.PRODUCTION)
-    verbosity = (verbosity or "standard").lower()
+    level = parse_verbosity(verbosity)
 
     result = await _run_analysis(text, analysis_mode)
     if isinstance(result, dict):
         return result
 
-    return _format_analysis_response(result, verbosity)
+    return _format_analysis_response(result, level)
 
 
-def _format_analysis_response(tree: Any, verbosity: str) -> dict[str, Any]:
+def _format_analysis_response(tree: Any, level: Verbosity) -> dict[str, Any]:
     """Format AnalysisTree as MCP response."""
     response: dict[str, Any] = {
         "success": True,
@@ -88,16 +89,16 @@ def _format_analysis_response(tree: Any, verbosity: str) -> dict[str, Any]:
     for sg in best_parse.sandhi_groups:
         sg_data: dict[str, Any] = {"surface_form": sg.surface_form}
 
-        if verbosity != "minimal":
+        if level != Verbosity.MINIMAL:
             sg_data["word_count"] = len(sg.base_words)
 
         words_in_group = []
         for bw in sg.base_words:
-            word_data = _format_word(bw, verbosity)
+            word_data = _format_word(bw, level)
             words_in_group.append(word_data)
             all_words.append(word_data)
 
-        if verbosity == "detailed":
+        if level == Verbosity.DETAILED:
             sg_data["words"] = words_in_group
 
         sandhi_groups.append(sg_data)
@@ -106,11 +107,11 @@ def _format_analysis_response(tree: Any, verbosity: str) -> dict[str, Any]:
     response["words"] = all_words
 
     # Add extra details for non-minimal verbosity
-    if verbosity != "minimal":
+    if level != Verbosity.MINIMAL:
         response["mode"] = tree.mode
         response["needs_human_review"] = getattr(tree, "needs_human_review", False)
 
-    if verbosity == "detailed":
+    if level == Verbosity.DETAILED:
         response["engine_agreement"] = tree.confidence.engine_agreement
         if tree.confidence.disambiguation_score is not None:
             response["disambiguation_score"] = tree.confidence.disambiguation_score
@@ -121,14 +122,14 @@ def _format_analysis_response(tree: Any, verbosity: str) -> dict[str, Any]:
 _MORPH_FIELDS = ("pos", "gender", "number", "case", "person", "tense", "mood", "voice")
 
 
-def _format_word(word: Any, verbosity: str) -> dict[str, Any]:
+def _format_word(word: Any, level: Verbosity) -> dict[str, Any]:
     """Format a BaseWord for the response."""
     data: dict[str, Any] = {
         "lemma": word.lemma,
         "surface_form": word.surface_form,
     }
 
-    if verbosity == "minimal":
+    if level == Verbosity.MINIMAL:
         if word.morphology:
             data["morph"] = _compact_morphology(word.morphology)
         return data
@@ -142,7 +143,7 @@ def _format_word(word: Any, verbosity: str) -> dict[str, Any]:
             field: getattr(word.morphology, field, None) for field in _MORPH_FIELDS
         }
 
-    if verbosity == "detailed":
+    if level == Verbosity.DETAILED:
         if word.dhatu:
             data["dhatu"] = {
                 "root": word.dhatu.dhatu,
@@ -195,16 +196,16 @@ async def split_sandhi(
         - sandhi_groups: List of sandhi-joined units with split words
         - total_words: Total number of base words found
     """
-    verbosity = (verbosity or "standard").lower()
+    level = parse_verbosity(verbosity)
 
     result = await _run_analysis(text, AnalysisMode.PRODUCTION)
     if isinstance(result, dict):
         return result
 
-    return _format_sandhi_response(result, verbosity)
+    return _format_sandhi_response(result, level)
 
 
-def _format_sandhi_response(tree: Any, verbosity: str) -> dict[str, Any]:
+def _format_sandhi_response(tree: Any, level: Verbosity) -> dict[str, Any]:
     """Format AnalysisTree as sandhi-focused response."""
     response: dict[str, Any] = {
         "success": True,
@@ -228,14 +229,14 @@ def _format_sandhi_response(tree: Any, verbosity: str) -> dict[str, Any]:
         }
         total_words += len(sg.base_words)
 
-        if verbosity != "minimal":
+        if level != Verbosity.MINIMAL:
             # Include sandhi rule if available
             if sg.sandhi_type:
                 sg_data["sandhi_type"] = sg.sandhi_type.value
             if sg.sandhi_rule:
                 sg_data["sandhi_rule"] = sg.sandhi_rule
 
-        if verbosity == "detailed":
+        if level == Verbosity.DETAILED:
             # Include word scripts in detailed mode
             sg_data["word_details"] = [
                 {
@@ -278,7 +279,7 @@ async def get_morphology(
         - meanings: List of meanings
         - alternatives: Other possible analyses (if ambiguous)
     """
-    verbosity = (verbosity or "standard").lower()
+    level = parse_verbosity(verbosity)
 
     # Analyze the word (or word in context)
     text = f"{context} {word}" if context else word
@@ -286,7 +287,7 @@ async def get_morphology(
     if isinstance(result, dict):
         return result
 
-    return _format_morphology_response(result, word, verbosity)
+    return _format_morphology_response(result, word, level)
 
 
 def _word_matches(word: Any, target: str) -> bool:
@@ -302,7 +303,7 @@ def _word_matches(word: Any, target: str) -> bool:
 
 
 def _format_morphology_response(
-    tree: Any, target_word: str, verbosity: str
+    tree: Any, target_word: str, level: Verbosity
 ) -> dict[str, Any]:
     """Format morphology-focused response for a single word."""
     response: dict[str, Any] = {
@@ -330,7 +331,7 @@ def _format_morphology_response(
     response["surface_form"] = primary.surface_form
 
     if primary.morphology:
-        if verbosity == "minimal":
+        if level == Verbosity.MINIMAL:
             response["morph"] = _compact_morphology(primary.morphology)
         else:
             response["morphology"] = {
@@ -338,13 +339,13 @@ def _format_morphology_response(
                 for field in _MORPH_FIELDS
             }
 
-    if verbosity != "minimal":
+    if level != Verbosity.MINIMAL:
         response["meanings"] = (
             [str(m) for m in primary.meanings] if primary.meanings else []
         )
         response["confidence"] = primary.confidence
 
-    if verbosity == "detailed":
+    if level == Verbosity.DETAILED:
         if primary.scripts:
             response["scripts"] = _scripts_dict(primary.scripts)
         if primary.dhatu:
@@ -355,7 +356,7 @@ def _format_morphology_response(
             }
 
     # Include alternatives if multiple matches
-    if len(matches) > 1 and verbosity != "minimal":
+    if len(matches) > 1 and level != Verbosity.MINIMAL:
         response["alternatives"] = [
             {
                 "lemma": bw.lemma,
@@ -429,7 +430,7 @@ def transliterate(
     try:
         result = do_transliterate(text, from_enum, to_enum)
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return error_response(e)
 
     return {
         "success": True,

@@ -4,24 +4,10 @@ from typing import Any
 
 from sanskrit_analyzer.analyzer import Analyzer
 from sanskrit_analyzer.config import AnalysisMode, Config
+from sanskrit_analyzer.mcp.verbosity import Verbosity, error_response, parse_verbosity
 
 # Shared analyzer instance
 _analyzer = Analyzer(Config())
-
-# Verbosity levels
-DEFAULT_VERBOSITY = "standard"
-VERBOSITY_MINIMAL = "minimal"
-VERBOSITY_DETAILED = "detailed"
-
-
-def _normalize_verbosity(verbosity: str | None) -> str:
-    """Normalize verbosity parameter to lowercase with default."""
-    return (verbosity or DEFAULT_VERBOSITY).lower()
-
-
-def _error_response(error: Exception) -> dict[str, Any]:
-    """Create a standardized error response."""
-    return {"success": False, "error": str(error)}
 
 
 def _build_confidence_reasoning(overall: float, engine_agreement: float) -> str:
@@ -57,12 +43,12 @@ async def explain_parse(
         - parse_count: Total number of parses found
         - parses: List of parse interpretations with confidence and words
     """
-    verbosity = _normalize_verbosity(verbosity)
+    level = parse_verbosity(verbosity)
 
     try:
         result = await _analyzer.analyze(text, mode=AnalysisMode.ACADEMIC)
     except Exception as e:
-        return _error_response(e)
+        return error_response(e)
 
     parses = result.parse_forest
     if not parses:
@@ -85,7 +71,7 @@ async def explain_parse(
             "is_selected": getattr(parse, "is_selected", False),
         }
 
-        if verbosity != VERBOSITY_MINIMAL:
+        if level != Verbosity.MINIMAL:
             words = []
             for sg in parse.sandhi_groups:
                 for bw in sg.base_words:
@@ -98,7 +84,7 @@ async def explain_parse(
                     words.append(word_info)
             parse_data["words"] = words
 
-        if verbosity == VERBOSITY_DETAILED:
+        if level == Verbosity.DETAILED:
             # Include engine votes if available
             if hasattr(parse, "engine_votes"):
                 parse_data["engine_votes"] = parse.engine_votes
@@ -140,12 +126,12 @@ async def identify_compound(
         - compound_type: Type of compound (tatpurusha, dvandva, etc.)
         - components: List of component words
     """
-    verbosity = _normalize_verbosity(verbosity)
+    level = parse_verbosity(verbosity)
 
     try:
         result = await _analyzer.analyze(word, mode=AnalysisMode.PRODUCTION)
     except Exception as e:
-        return _error_response(e)
+        return error_response(e)
 
     best_parse = result.best_parse
     if not best_parse or not best_parse.sandhi_groups:
@@ -168,7 +154,7 @@ async def identify_compound(
         "components": [bw.lemma for bw in sg.base_words],
     }
 
-    if verbosity != VERBOSITY_MINIMAL and sg.base_words:
+    if level != Verbosity.MINIMAL and sg.base_words:
         response["component_details"] = [
             {
                 "lemma": bw.lemma,
@@ -177,7 +163,7 @@ async def identify_compound(
             for bw in sg.base_words
         ]
 
-    if verbosity == VERBOSITY_DETAILED:
+    if level == Verbosity.DETAILED:
         response["scripts"] = {
             "devanagari": result.scripts.devanagari,
             "iast": result.scripts.iast,
@@ -201,12 +187,12 @@ async def get_pratyaya(
         - word: The input word
         - pratyayas: List of identified suffixes with type and function
     """
-    verbosity = _normalize_verbosity(verbosity)
+    level = parse_verbosity(verbosity)
 
     try:
         result = await _analyzer.analyze(word, mode=AnalysisMode.EDUCATIONAL)
     except Exception as e:
-        return _error_response(e)
+        return error_response(e)
 
     best_parse = result.best_parse
     if not best_parse:
@@ -224,10 +210,10 @@ async def get_pratyaya(
                     pratyaya_data: dict[str, Any] = {
                         "name": p.name if hasattr(p, "name") else str(p),
                     }
-                    if verbosity != VERBOSITY_MINIMAL:
+                    if level != Verbosity.MINIMAL:
                         pratyaya_data["type"] = getattr(p, "type", None)
                         pratyaya_data["function"] = getattr(p, "function", None)
-                    if verbosity == VERBOSITY_DETAILED:
+                    if level == Verbosity.DETAILED:
                         pratyaya_data["sutra"] = getattr(p, "sutra", None)
                     pratyayas.append(pratyaya_data)
 
@@ -286,7 +272,7 @@ async def resolve_ambiguity(
         full_text = f"{context} {text}" if context else text
         result = await _analyzer.analyze(full_text, mode=AnalysisMode.ACADEMIC)
     except Exception as e:
-        return _error_response(e)
+        return error_response(e)
 
     if not result.parse_forest:
         return {
