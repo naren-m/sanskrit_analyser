@@ -8,6 +8,35 @@ from sanskrit_analyzer.config import AnalysisMode, Config
 # Shared analyzer instance
 _analyzer = Analyzer(Config())
 
+# Verbosity levels
+DEFAULT_VERBOSITY = "standard"
+VERBOSITY_MINIMAL = "minimal"
+VERBOSITY_DETAILED = "detailed"
+
+
+def _normalize_verbosity(verbosity: str | None) -> str:
+    """Normalize verbosity parameter to lowercase with default."""
+    return (verbosity or DEFAULT_VERBOSITY).lower()
+
+
+def _error_response(error: Exception) -> dict[str, Any]:
+    """Create a standardized error response."""
+    return {"success": False, "error": str(error)}
+
+
+def _build_confidence_reasoning(overall: float, engine_agreement: float) -> str:
+    """Build human-readable reasoning from confidence scores."""
+    if overall > 0.9:
+        base = "High confidence from ensemble agreement"
+    elif overall > 0.7:
+        base = "Moderate confidence"
+    else:
+        base = "Low confidence - multiple interpretations possible"
+
+    if engine_agreement > 0.8:
+        return f"{base}. Engines largely agree"
+    return base
+
 
 async def explain_parse(
     text: str,
@@ -28,13 +57,12 @@ async def explain_parse(
         - parse_count: Total number of parses found
         - parses: List of parse interpretations with confidence and words
     """
-    verbosity = (verbosity or "standard").lower()
+    verbosity = _normalize_verbosity(verbosity)
 
     try:
-        # Use academic mode to get all parses
         result = await _analyzer.analyze(text, mode=AnalysisMode.ACADEMIC)
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return _error_response(e)
 
     parses = result.parse_forest
     if not parses:
@@ -57,8 +85,7 @@ async def explain_parse(
             "is_selected": getattr(parse, "is_selected", False),
         }
 
-        if verbosity != "minimal":
-            # Include word summary
+        if verbosity != VERBOSITY_MINIMAL:
             words = []
             for sg in parse.sandhi_groups:
                 for bw in sg.base_words:
@@ -71,7 +98,7 @@ async def explain_parse(
                     words.append(word_info)
             parse_data["words"] = words
 
-        if verbosity == "detailed":
+        if verbosity == VERBOSITY_DETAILED:
             # Include engine votes if available
             if hasattr(parse, "engine_votes"):
                 parse_data["engine_votes"] = parse.engine_votes
@@ -113,12 +140,12 @@ async def identify_compound(
         - compound_type: Type of compound (tatpurusha, dvandva, etc.)
         - components: List of component words
     """
-    verbosity = (verbosity or "standard").lower()
+    verbosity = _normalize_verbosity(verbosity)
 
     try:
         result = await _analyzer.analyze(word, mode=AnalysisMode.PRODUCTION)
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return _error_response(e)
 
     best_parse = result.best_parse
     if not best_parse or not best_parse.sandhi_groups:
@@ -141,7 +168,7 @@ async def identify_compound(
         "components": [bw.lemma for bw in sg.base_words],
     }
 
-    if verbosity != "minimal" and sg.base_words:
+    if verbosity != VERBOSITY_MINIMAL and sg.base_words:
         response["component_details"] = [
             {
                 "lemma": bw.lemma,
@@ -150,7 +177,7 @@ async def identify_compound(
             for bw in sg.base_words
         ]
 
-    if verbosity == "detailed":
+    if verbosity == VERBOSITY_DETAILED:
         response["scripts"] = {
             "devanagari": result.scripts.devanagari,
             "iast": result.scripts.iast,
@@ -174,12 +201,12 @@ async def get_pratyaya(
         - word: The input word
         - pratyayas: List of identified suffixes with type and function
     """
-    verbosity = (verbosity or "standard").lower()
+    verbosity = _normalize_verbosity(verbosity)
 
     try:
         result = await _analyzer.analyze(word, mode=AnalysisMode.EDUCATIONAL)
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return _error_response(e)
 
     best_parse = result.best_parse
     if not best_parse:
@@ -197,10 +224,10 @@ async def get_pratyaya(
                     pratyaya_data: dict[str, Any] = {
                         "name": p.name if hasattr(p, "name") else str(p),
                     }
-                    if verbosity != "minimal":
+                    if verbosity != VERBOSITY_MINIMAL:
                         pratyaya_data["type"] = getattr(p, "type", None)
                         pratyaya_data["function"] = getattr(p, "function", None)
-                    if verbosity == "detailed":
+                    if verbosity == VERBOSITY_DETAILED:
                         pratyaya_data["sutra"] = getattr(p, "sutra", None)
                     pratyayas.append(pratyaya_data)
 
@@ -224,10 +251,16 @@ async def get_pratyaya(
                             "function": "nominal ending",
                         })
 
+    lemma = None
+    if best_parse.sandhi_groups:
+        first_group = best_parse.sandhi_groups[0]
+        if first_group.base_words:
+            lemma = first_group.base_words[0].lemma
+
     return {
         "success": True,
         "word": word,
-        "lemma": best_parse.sandhi_groups[0].base_words[0].lemma if best_parse.sandhi_groups and best_parse.sandhi_groups[0].base_words else None,
+        "lemma": lemma,
         "pratyayas": pratyayas,
     }
 
@@ -250,11 +283,10 @@ async def resolve_ambiguity(
         - all_parses: Summary of all parse candidates
     """
     try:
-        # Combine context if provided
         full_text = f"{context} {text}" if context else text
         result = await _analyzer.analyze(full_text, mode=AnalysisMode.ACADEMIC)
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return _error_response(e)
 
     if not result.parse_forest:
         return {
@@ -274,19 +306,10 @@ async def resolve_ambiguity(
             selected_idx = i
             break
 
-    # Build reasoning
-    reasoning_parts = []
-    if result.confidence.overall > 0.9:
-        reasoning_parts.append("High confidence from ensemble agreement")
-    elif result.confidence.overall > 0.7:
-        reasoning_parts.append("Moderate confidence")
-    else:
-        reasoning_parts.append("Low confidence - multiple interpretations possible")
-
-    if result.confidence.engine_agreement > 0.8:
-        reasoning_parts.append("Engines largely agree")
-
-    reasoning = ". ".join(reasoning_parts) if reasoning_parts else "Default selection"
+    reasoning = _build_confidence_reasoning(
+        result.confidence.overall,
+        result.confidence.engine_agreement,
+    )
 
     return {
         "success": True,
