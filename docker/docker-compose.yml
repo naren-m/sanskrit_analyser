@@ -29,7 +29,6 @@ services:
     networks:
       - sanskrit-network
 
-  # MCP Server for AI assistants
   mcp:
     build:
       context: ..
@@ -37,18 +36,8 @@ services:
     container_name: sanskrit-mcp
     ports:
       - "8001:8001"
-    environment:
-      - MCP_HOST=0.0.0.0
-      - MCP_PORT=8001
-      - MCP_LOG_LEVEL=INFO
     volumes:
       - corpus-data:/app/data
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
     restart: unless-stopped
     networks:
       - sanskrit-network
