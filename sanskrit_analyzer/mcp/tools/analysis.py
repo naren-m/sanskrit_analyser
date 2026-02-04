@@ -2,440 +2,256 @@
 
 from typing import Any
 
-from sanskrit_analyzer.analyzer import Analyzer
-from sanskrit_analyzer.config import AnalysisMode, Config
-from sanskrit_analyzer.mcp.verbosity import Verbosity, error_response, parse_verbosity
+from mcp.server import Server
+from mcp.types import Tool, TextContent
 
-# Map mode strings to AnalysisMode enum values
-_MODE_MAP = {mode.value: mode for mode in AnalysisMode}
-
-# Shared analyzer instance
-_analyzer = Analyzer(Config())
-
-
-async def _run_analysis(text: str, mode: AnalysisMode) -> dict[str, Any] | Any:
-    """Run analysis and return result or error dict."""
-    try:
-        return await _analyzer.analyze(text, mode=mode)
-    except Exception as e:
-        return error_response(e)
+from sanskrit_analyzer import Analyzer
+from sanskrit_analyzer.config import Config
+from sanskrit_analyzer.mcp.response import error_response, json_response, text_response
+from sanskrit_analyzer.utils.normalize import detect_script
+from sanskrit_analyzer.utils.transliterate import transliterate, Script
 
 
-def _scripts_dict(scripts: Any) -> dict[str, str]:
-    """Extract scripts as a dictionary."""
-    return {
-        "devanagari": scripts.devanagari,
-        "iast": scripts.iast,
-        "slp1": scripts.slp1,
-    }
-
-
-async def analyze_sentence(
-    text: str,
-    mode: str | None = None,
-    verbosity: str | None = None,
-) -> dict[str, Any]:
-    """Analyze a Sanskrit sentence and return full morphological breakdown.
+def register_analysis_tools(server: Server) -> None:
+    """Register analysis tools with the MCP server.
 
     Args:
-        text: Sanskrit text to analyze (Devanagari, IAST, or SLP1).
-        mode: Analysis mode - 'educational', 'production', or 'academic'.
-              Defaults to 'production'.
-        verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
-                   Defaults to 'standard'.
-
-    Returns:
-        Dictionary with analysis results including:
-        - sentence_id: Unique identifier for this analysis
-        - original_text: The input text
-        - scripts: Text in multiple scripts (devanagari, iast, slp1)
-        - sandhi_groups: List of sandhi-joined units
-        - words: List of base words with morphology
-        - confidence: Overall confidence score
-        - parse_count: Number of possible interpretations
+        server: MCP server instance.
     """
-    analysis_mode = _MODE_MAP.get((mode or "").lower(), AnalysisMode.PRODUCTION)
-    level = parse_verbosity(verbosity)
+    analyzer = Analyzer(Config())
 
-    result = await _run_analysis(text, analysis_mode)
-    if isinstance(result, dict):
-        return result
-
-    return _format_analysis_response(result, level)
-
-
-def _format_analysis_response(tree: Any, level: Verbosity) -> dict[str, Any]:
-    """Format AnalysisTree as MCP response."""
-    response: dict[str, Any] = {
-        "success": True,
-        "sentence_id": tree.sentence_id,
-        "original_text": tree.original_text,
-        "scripts": _scripts_dict(tree.scripts),
-        "confidence": tree.confidence.overall,
-        "parse_count": len(tree.parse_forest),
-    }
-
-    # Get best parse
-    best_parse = tree.best_parse
-    if not best_parse:
-        response["sandhi_groups"] = []
-        response["words"] = []
-        return response
-
-    # Format sandhi groups and words
-    sandhi_groups = []
-    all_words = []
-
-    for sg in best_parse.sandhi_groups:
-        sg_data: dict[str, Any] = {"surface_form": sg.surface_form}
-
-        if level != Verbosity.MINIMAL:
-            sg_data["word_count"] = len(sg.base_words)
-
-        words_in_group = []
-        for bw in sg.base_words:
-            word_data = _format_word(bw, level)
-            words_in_group.append(word_data)
-            all_words.append(word_data)
-
-        if level == Verbosity.DETAILED:
-            sg_data["words"] = words_in_group
-
-        sandhi_groups.append(sg_data)
-
-    response["sandhi_groups"] = sandhi_groups
-    response["words"] = all_words
-
-    # Add extra details for non-minimal verbosity
-    if level != Verbosity.MINIMAL:
-        response["mode"] = tree.mode
-        response["needs_human_review"] = getattr(tree, "needs_human_review", False)
-
-    if level == Verbosity.DETAILED:
-        response["engine_agreement"] = tree.confidence.engine_agreement
-        if tree.confidence.disambiguation_score is not None:
-            response["disambiguation_score"] = tree.confidence.disambiguation_score
-
-    return response
-
-
-_MORPH_FIELDS = ("pos", "gender", "number", "case", "person", "tense", "mood", "voice")
-
-
-def _format_word(word: Any, level: Verbosity) -> dict[str, Any]:
-    """Format a BaseWord for the response."""
-    data: dict[str, Any] = {
-        "lemma": word.lemma,
-        "surface_form": word.surface_form,
-    }
-
-    if level == Verbosity.MINIMAL:
-        if word.morphology:
-            data["morph"] = _compact_morphology(word.morphology)
-        return data
-
-    # Standard and detailed: include meanings and full morphology
-    data["meanings"] = [str(m) for m in word.meanings] if word.meanings else []
-    data["confidence"] = word.confidence
-
-    if word.morphology:
-        data["morphology"] = {
-            field: getattr(word.morphology, field, None) for field in _MORPH_FIELDS
-        }
-
-    if level == Verbosity.DETAILED:
-        if word.dhatu:
-            data["dhatu"] = {
-                "root": word.dhatu.dhatu,
-                "meaning": word.dhatu.meaning,
-                "gana": word.dhatu.gana,
-                "pada": word.dhatu.pada,
-            }
-        if word.scripts:
-            data["scripts"] = _scripts_dict(word.scripts)
-
-    return data
-
-
-def _compact_morphology(morph: Any) -> str:
-    """Create compact morphology string like 'N.m.sg.nom'."""
-    parts = []
-    if pos := getattr(morph, "pos", None):
-        parts.append(pos[0].upper())  # First letter
-    if gender := getattr(morph, "gender", None):
-        parts.append(gender[:1].lower())
-    if number := getattr(morph, "number", None):
-        parts.append(number[:2].lower())
-    if case := getattr(morph, "case", None):
-        parts.append(case[:3].lower())
-    if person := getattr(morph, "person", None):
-        parts.append(f"p{person}")
-    if tense := getattr(morph, "tense", None):
-        parts.append(tense[:3].lower())
-    return ".".join(parts) if parts else ""
-
-
-async def split_sandhi(
-    text: str,
-    verbosity: str | None = None,
-) -> dict[str, Any]:
-    """Split Sanskrit text at sandhi boundaries.
-
-    Lighter weight than full analysis - focuses on identifying sandhi splits
-    without complete disambiguation.
-
-    Args:
-        text: Sanskrit text to split (Devanagari, IAST, or SLP1).
-        verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
-                   Defaults to 'standard'.
-
-    Returns:
-        Dictionary with sandhi splits including:
-        - original_text: The input text
-        - scripts: Text in multiple scripts
-        - sandhi_groups: List of sandhi-joined units with split words
-        - total_words: Total number of base words found
-    """
-    level = parse_verbosity(verbosity)
-
-    result = await _run_analysis(text, AnalysisMode.PRODUCTION)
-    if isinstance(result, dict):
-        return result
-
-    return _format_sandhi_response(result, level)
-
-
-def _format_sandhi_response(tree: Any, level: Verbosity) -> dict[str, Any]:
-    """Format AnalysisTree as sandhi-focused response."""
-    response: dict[str, Any] = {
-        "success": True,
-        "original_text": tree.original_text,
-        "scripts": _scripts_dict(tree.scripts),
-    }
-
-    best_parse = tree.best_parse
-    if not best_parse:
-        response["sandhi_groups"] = []
-        response["total_words"] = 0
-        return response
-
-    sandhi_groups = []
-    total_words = 0
-
-    for sg in best_parse.sandhi_groups:
-        sg_data: dict[str, Any] = {
-            "surface_form": sg.surface_form,
-            "words": [bw.lemma for bw in sg.base_words],
-        }
-        total_words += len(sg.base_words)
-
-        if level != Verbosity.MINIMAL:
-            # Include sandhi rule if available
-            if sg.sandhi_type:
-                sg_data["sandhi_type"] = sg.sandhi_type.value
-            if sg.sandhi_rule:
-                sg_data["sandhi_rule"] = sg.sandhi_rule
-
-        if level == Verbosity.DETAILED:
-            # Include word scripts in detailed mode
-            sg_data["word_details"] = [
-                {
-                    "lemma": bw.lemma,
-                    "surface_form": bw.surface_form,
-                    "scripts": {
-                        "devanagari": bw.scripts.devanagari if bw.scripts else None,
-                        "iast": bw.scripts.iast if bw.scripts else None,
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        return [
+            Tool(
+                name="analyze_sentence",
+                description="Analyze a Sanskrit sentence and get full morphological breakdown",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "Sanskrit text to analyze (any script)",
+                        },
                     },
-                }
-                for bw in sg.base_words
-            ]
-
-        sandhi_groups.append(sg_data)
-
-    response["sandhi_groups"] = sandhi_groups
-    response["total_words"] = total_words
-
-    return response
-
-
-async def get_morphology(
-    word: str,
-    context: str | None = None,
-    verbosity: str | None = None,
-) -> dict[str, Any]:
-    """Get morphological tags for a Sanskrit word.
-
-    Args:
-        word: Sanskrit word to analyze (Devanagari, IAST, or SLP1).
-        context: Optional sentence context for disambiguation.
-        verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
-                   Defaults to 'standard'.
-
-    Returns:
-        Dictionary with morphological analysis including:
-        - word: The input word
-        - lemma: Dictionary form of the word
-        - morphology: Tags (pos, gender, number, case, person, tense, mood, voice)
-        - meanings: List of meanings
-        - alternatives: Other possible analyses (if ambiguous)
-    """
-    level = parse_verbosity(verbosity)
-
-    # Analyze the word (or word in context)
-    text = f"{context} {word}" if context else word
-    result = await _run_analysis(text, AnalysisMode.PRODUCTION)
-    if isinstance(result, dict):
-        return result
-
-    return _format_morphology_response(result, word, level)
-
-
-def _word_matches(word: Any, target: str) -> bool:
-    """Check if word matches target by surface form, lemma, or scripts."""
-    target_lower = target.lower()
-    if word.surface_form.lower() == target_lower or word.lemma.lower() == target_lower:
-        return True
-    if word.scripts:
-        iast_match = word.scripts.iast.lower() == target_lower
-        deva_match = word.scripts.devanagari == target
-        return bool(iast_match or deva_match)
-    return False
-
-
-def _format_morphology_response(
-    tree: Any, target_word: str, level: Verbosity
-) -> dict[str, Any]:
-    """Format morphology-focused response for a single word."""
-    response: dict[str, Any] = {
-        "success": True,
-        "word": target_word,
-    }
-
-    best_parse = tree.best_parse
-    if not best_parse:
-        response["error"] = "Could not analyze word"
-        return response
-
-    # Collect all words from parse
-    all_words = [bw for sg in best_parse.sandhi_groups for bw in sg.base_words]
-    if not all_words:
-        response["error"] = "No morphological analysis found"
-        return response
-
-    # Find matching words, fallback to all words if no match
-    matches = [bw for bw in all_words if _word_matches(bw, target_word)] or all_words
-
-    # Primary result is the first match
-    primary = matches[0]
-    response["lemma"] = primary.lemma
-    response["surface_form"] = primary.surface_form
-
-    if primary.morphology:
-        if level == Verbosity.MINIMAL:
-            response["morph"] = _compact_morphology(primary.morphology)
-        else:
-            response["morphology"] = {
-                field: getattr(primary.morphology, field, None)
-                for field in _MORPH_FIELDS
-            }
-
-    if level != Verbosity.MINIMAL:
-        response["meanings"] = (
-            [str(m) for m in primary.meanings] if primary.meanings else []
-        )
-        response["confidence"] = primary.confidence
-
-    if level == Verbosity.DETAILED:
-        if primary.scripts:
-            response["scripts"] = _scripts_dict(primary.scripts)
-        if primary.dhatu:
-            response["dhatu"] = {
-                "root": primary.dhatu.dhatu,
-                "meaning": primary.dhatu.meaning,
-                "gana": primary.dhatu.gana,
-            }
-
-    # Include alternatives if multiple matches
-    if len(matches) > 1 and level != Verbosity.MINIMAL:
-        response["alternatives"] = [
-            {
-                "lemma": bw.lemma,
-                "morphology": {
-                    field: getattr(bw.morphology, field, None)
-                    for field in _MORPH_FIELDS
-                }
-                if bw.morphology
-                else None,
-            }
-            for bw in matches[1:4]  # Limit to 3 alternatives
+                    "required": ["text"],
+                },
+            ),
+            Tool(
+                name="split_sandhi",
+                description="Split sandhi in Sanskrit text to show word boundaries",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "Sanskrit text to split",
+                        },
+                    },
+                    "required": ["text"],
+                },
+            ),
+            Tool(
+                name="get_morphology",
+                description="Get morphological tags for a Sanskrit word",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "word": {
+                            "type": "string",
+                            "description": "Sanskrit word to analyze",
+                        },
+                    },
+                    "required": ["word"],
+                },
+            ),
+            Tool(
+                name="transliterate",
+                description="Convert Sanskrit text between scripts",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "Text to convert",
+                        },
+                        "to_script": {
+                            "type": "string",
+                            "enum": ["devanagari", "iast", "slp1", "itrans"],
+                            "description": "Target script",
+                        },
+                    },
+                    "required": ["text", "to_script"],
+                },
+            ),
         ]
 
-    return response
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+        if name == "analyze_sentence":
+            return await _analyze_sentence(analyzer, arguments)
+        elif name == "split_sandhi":
+            return await _split_sandhi(analyzer, arguments)
+        elif name == "get_morphology":
+            return await _get_morphology(analyzer, arguments)
+        elif name == "transliterate":
+            return _transliterate(arguments)
+        else:
+            return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 
-# Short aliases for script names
-_SCRIPT_ALIASES = {"deva": "devanagari", "slp": "slp1"}
+async def _analyze_sentence(
+    analyzer: Analyzer, arguments: dict[str, Any]
+) -> list[TextContent]:
+    """Handle analyze_sentence tool call."""
+    text = arguments.get("text", "")
 
-
-def _resolve_script(name: str) -> Any:
-    """Resolve script name to Script enum, returning None if invalid."""
-    from sanskrit_analyzer.models.scripts import Script
-
-    key = _SCRIPT_ALIASES.get(name, name)
-    for script in Script:
-        if script.value == key:
-            return script
-    return None
-
-
-def transliterate(
-    text: str,
-    from_script: str,
-    to_script: str,
-) -> dict[str, Any]:
-    """Convert Sanskrit text between different scripts.
-
-    Args:
-        text: Sanskrit text to convert.
-        from_script: Source script (devanagari, iast, slp1, itrans, hk, velthuis).
-        to_script: Target script (devanagari, iast, slp1, itrans, hk, velthuis).
-
-    Returns:
-        Dictionary with:
-        - original: The input text
-        - result: The converted text
-        - from_script: Source script used
-        - to_script: Target script used
-    """
-    from sanskrit_analyzer.utils.transliterate import transliterate as do_transliterate
-
-    from_key = from_script.lower().strip()
-    to_key = to_script.lower().strip()
-
-    from_enum = _resolve_script(from_key)
-    to_enum = _resolve_script(to_key)
-
-    valid_scripts = "devanagari, iast, slp1, itrans, hk, velthuis"
-    if not from_enum:
-        return {
-            "success": False,
-            "error": f"Unknown source script: {from_script}. Valid: {valid_scripts}",
-        }
-    if not to_enum:
-        return {
-            "success": False,
-            "error": f"Unknown target script: {to_script}. Valid: {valid_scripts}",
-        }
+    if not text:
+        return error_response("text parameter is required")
 
     try:
-        result = do_transliterate(text, from_enum, to_enum)
-    except Exception as e:
-        return error_response(e)
+        result = await analyzer.analyze(text)
 
-    return {
-        "success": True,
-        "original": text,
-        "result": result,
-        "from_script": from_script,
-        "to_script": to_script,
-    }
+        output: dict[str, Any] = {
+            "sentence": {
+                "original": result.original_text,
+                "normalized": result.normalized_slp1,
+            },
+            "confidence": result.confidence.overall,
+            "parses": [],
+        }
+
+        for parse in result.parse_forest:
+            parse_data: dict[str, Any] = {
+                "parse_id": parse.parse_id,
+                "confidence": parse.confidence,
+                "sandhi_groups": [],
+            }
+
+            for sg in parse.sandhi_groups:
+                sg_data: dict[str, Any] = {
+                    "surface_form": sg.surface_form,
+                    "words": [],
+                }
+
+                for word in sg.base_words:
+                    word_data: dict[str, Any] = {
+                        "lemma": word.lemma,
+                        "surface_form": word.surface_form,
+                        "morphology": word.morphology.to_dict() if word.morphology else None,
+                        "meanings": [str(m) for m in word.meanings],
+                        "confidence": word.confidence,
+                    }
+                    if word.dhatu:
+                        word_data["dhatu"] = word.dhatu.to_dict()
+                    sg_data["words"].append(word_data)
+
+                parse_data["sandhi_groups"].append(sg_data)
+
+            output["parses"].append(parse_data)
+
+        return json_response(output)
+
+    except Exception as e:
+        return error_response(f"analyzing text: {e}")
+
+
+async def _split_sandhi(
+    analyzer: Analyzer, arguments: dict[str, Any]
+) -> list[TextContent]:
+    """Handle split_sandhi tool call."""
+    text = arguments.get("text", "")
+
+    if not text:
+        return error_response("text parameter is required")
+
+    try:
+        result = await analyzer.analyze(text)
+
+        if not result.parse_forest:
+            return text_response("No parse found")
+
+        best_parse = result.parse_forest[0]
+        splits: list[dict[str, Any]] = []
+
+        for sg in best_parse.sandhi_groups:
+            split_data: dict[str, Any] = {
+                "original": sg.surface_form,
+                "components": [w.lemma for w in sg.base_words],
+            }
+            if sg.sandhi_type:
+                split_data["sandhi_type"] = sg.sandhi_type.value
+            if sg.sandhi_rule:
+                split_data["rule"] = sg.sandhi_rule
+            splits.append(split_data)
+
+        return json_response(splits)
+
+    except Exception as e:
+        return error_response(f"splitting sandhi: {e}")
+
+
+async def _get_morphology(
+    analyzer: Analyzer, arguments: dict[str, Any]
+) -> list[TextContent]:
+    """Handle get_morphology tool call."""
+    word = arguments.get("word", "")
+
+    if not word:
+        return error_response("word parameter is required")
+
+    try:
+        result = await analyzer.analyze(word)
+
+        if not result.parse_forest:
+            return text_response("No parse found")
+
+        best_parse = result.parse_forest[0]
+        morphologies: list[dict[str, Any]] = []
+
+        for sg in best_parse.sandhi_groups:
+            for w in sg.base_words:
+                morph_data: dict[str, Any] = {
+                    "lemma": w.lemma,
+                    "surface_form": w.surface_form,
+                }
+                if w.morphology:
+                    morph_data["morphology"] = w.morphology.to_dict()
+                morphologies.append(morph_data)
+
+        return json_response(morphologies)
+
+    except Exception as e:
+        return error_response(f"getting morphology: {e}")
+
+
+_SCRIPT_MAP = {
+    "devanagari": Script.DEVANAGARI,
+    "iast": Script.IAST,
+    "slp1": Script.SLP1,
+    "itrans": Script.ITRANS,
+}
+
+
+def _transliterate(arguments: dict[str, Any]) -> list[TextContent]:
+    """Handle transliterate tool call."""
+    text = arguments.get("text", "")
+    to_script_str = arguments.get("to_script", "")
+
+    if not text:
+        return error_response("text parameter is required")
+
+    if not to_script_str:
+        return error_response("to_script parameter is required")
+
+    try:
+        to_script = _SCRIPT_MAP.get(to_script_str.lower())
+        if not to_script:
+            return error_response(f"Unknown script: {to_script_str}")
+
+        from_script = detect_script(text)
+        result = transliterate(text, from_script, to_script)
+        return text_response(result)
+
+    except Exception as e:
+        return error_response(f"transliterating: {e}")

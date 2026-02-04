@@ -2,314 +2,257 @@
 
 from typing import Any
 
-from sanskrit_analyzer.analyzer import Analyzer
-from sanskrit_analyzer.config import AnalysisMode, Config
-from sanskrit_analyzer.mcp.verbosity import Verbosity, error_response, parse_verbosity
+from mcp.server import Server
+from mcp.types import Tool, TextContent
 
-# Shared analyzer instance
-_analyzer = Analyzer(Config())
-
-
-def _build_confidence_reasoning(overall: float, engine_agreement: float) -> str:
-    """Build human-readable reasoning from confidence scores."""
-    if overall > 0.9:
-        base = "High confidence from ensemble agreement"
-    elif overall > 0.7:
-        base = "Moderate confidence"
-    else:
-        base = "Low confidence - multiple interpretations possible"
-
-    if engine_agreement > 0.8:
-        return f"{base}. Engines largely agree"
-    return base
+from sanskrit_analyzer import Analyzer
+from sanskrit_analyzer.config import Config
+from sanskrit_analyzer.mcp.response import error_response, json_response, text_response
 
 
-async def explain_parse(
-    text: str,
-    parse_indices: list[int] | None = None,
-    verbosity: str | None = None,
-) -> dict[str, Any]:
-    """Compare multiple parse interpretations of Sanskrit text.
+def register_grammar_tools(server: Server) -> None:
+    """Register grammar tools with the MCP server.
 
     Args:
-        text: Sanskrit text to analyze.
-        parse_indices: Optional list of parse indices to include (0-based).
-                       If None, returns all parses.
-        verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
-
-    Returns:
-        Dictionary with parse comparisons:
-        - original_text: The input text
-        - parse_count: Total number of parses found
-        - parses: List of parse interpretations with confidence and words
+        server: MCP server instance.
     """
-    level = parse_verbosity(verbosity)
+    analyzer = Analyzer(Config())
+
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        return [
+            Tool(
+                name="explain_parse",
+                description="Compare multiple parse interpretations of ambiguous text",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "Sanskrit text to analyze",
+                        },
+                    },
+                    "required": ["text"],
+                },
+            ),
+            Tool(
+                name="identify_compound",
+                description="Identify compound type (samasa) in a Sanskrit word",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "word": {
+                            "type": "string",
+                            "description": "Sanskrit compound word",
+                        },
+                    },
+                    "required": ["word"],
+                },
+            ),
+            Tool(
+                name="get_pratyaya",
+                description="Identify suffixes (pratyayas) applied to a word",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "word": {
+                            "type": "string",
+                            "description": "Sanskrit word to analyze",
+                        },
+                    },
+                    "required": ["word"],
+                },
+            ),
+            Tool(
+                name="resolve_ambiguity",
+                description="Resolve ambiguous parses to find the most likely interpretation",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "Sanskrit text to disambiguate",
+                        },
+                    },
+                    "required": ["text"],
+                },
+            ),
+        ]
+
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+        if name == "explain_parse":
+            return await _explain_parse(analyzer, arguments)
+        elif name == "identify_compound":
+            return await _identify_compound(analyzer, arguments)
+        elif name == "get_pratyaya":
+            return await _get_pratyaya(analyzer, arguments)
+        elif name == "resolve_ambiguity":
+            return await _resolve_ambiguity(analyzer, arguments)
+        else:
+            return [TextContent(type="text", text=f"Unknown tool: {name}")]
+
+
+async def _explain_parse(
+    analyzer: Analyzer, arguments: dict[str, Any]
+) -> list[TextContent]:
+    """Handle explain_parse tool call."""
+    text = arguments.get("text", "")
+
+    if not text:
+        return error_response("text parameter is required")
 
     try:
-        result = await _analyzer.analyze(text, mode=AnalysisMode.ACADEMIC)
-    except Exception as e:
-        return error_response(e)
+        result = await analyzer.analyze(text)
 
-    parses = result.parse_forest
-    if not parses:
-        return {
-            "success": True,
-            "original_text": text,
-            "parse_count": 0,
+        if not result.parse_forest:
+            return text_response("No parses found")
+
+        output: dict[str, Any] = {
+            "total_parses": len(result.parse_forest),
             "parses": [],
         }
 
-    # Filter to requested indices if provided
-    if parse_indices:
-        parses = [p for i, p in enumerate(parses) if i in parse_indices]
-
-    formatted_parses = []
-    for i, parse in enumerate(parses):
-        parse_data: dict[str, Any] = {
-            "index": i,
-            "confidence": parse.confidence,
-            "is_selected": getattr(parse, "is_selected", False),
-        }
-
-        if level != Verbosity.MINIMAL:
-            words = []
-            for sg in parse.sandhi_groups:
-                for bw in sg.base_words:
-                    word_info: dict[str, Any] = {
-                        "lemma": bw.lemma,
-                        "surface_form": bw.surface_form,
-                    }
-                    if bw.morphology:
-                        word_info["pos"] = getattr(bw.morphology, "pos", None)
-                    words.append(word_info)
-            parse_data["words"] = words
-
-        if level == Verbosity.DETAILED:
-            # Include engine votes if available
-            if hasattr(parse, "engine_votes"):
-                parse_data["engine_votes"] = parse.engine_votes
-            # Include sandhi group details
-            parse_data["sandhi_groups"] = [
-                {
-                    "surface_form": sg.surface_form,
-                    "sandhi_type": sg.sandhi_type.value if sg.sandhi_type else None,
-                    "word_count": len(sg.base_words),
-                }
-                for sg in parse.sandhi_groups
-            ]
-
-        formatted_parses.append(parse_data)
-
-    return {
-        "success": True,
-        "original_text": result.original_text,
-        "parse_count": len(result.parse_forest),
-        "returned_count": len(formatted_parses),
-        "parses": formatted_parses,
-    }
-
-
-async def identify_compound(
-    word: str,
-    verbosity: str | None = None,
-) -> dict[str, Any]:
-    """Identify compound type (samasa) in a Sanskrit word.
-
-    Args:
-        word: Sanskrit word to analyze (Devanagari or IAST).
-        verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
-
-    Returns:
-        Dictionary with compound analysis:
-        - word: The input word
-        - is_compound: Whether the word is a compound
-        - compound_type: Type of compound (tatpurusha, dvandva, etc.)
-        - components: List of component words
-    """
-    level = parse_verbosity(verbosity)
-
-    try:
-        result = await _analyzer.analyze(word, mode=AnalysisMode.PRODUCTION)
-    except Exception as e:
-        return error_response(e)
-
-    best_parse = result.best_parse
-    if not best_parse or not best_parse.sandhi_groups:
-        return {
-            "success": True,
-            "word": word,
-            "is_compound": False,
-            "compound_type": None,
-            "components": [],
-        }
-
-    # Look for compound information in sandhi groups
-    sg = best_parse.sandhi_groups[0]  # First group for single word
-
-    response: dict[str, Any] = {
-        "success": True,
-        "word": word,
-        "is_compound": sg.is_compound,
-        "compound_type": sg.compound_type.value if sg.compound_type else None,
-        "components": [bw.lemma for bw in sg.base_words],
-    }
-
-    if level != Verbosity.MINIMAL and sg.base_words:
-        response["component_details"] = [
-            {
-                "lemma": bw.lemma,
-                "meaning": bw.meanings[0] if bw.meanings else None,
-            }
-            for bw in sg.base_words
-        ]
-
-    if level == Verbosity.DETAILED:
-        response["scripts"] = {
-            "devanagari": result.scripts.devanagari,
-            "iast": result.scripts.iast,
-        }
-
-    return response
-
-
-async def get_pratyaya(
-    word: str,
-    verbosity: str | None = None,
-) -> dict[str, Any]:
-    """Identify suffixes (pratyayas) applied to a Sanskrit word.
-
-    Args:
-        word: Sanskrit word to analyze (Devanagari or IAST).
-        verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
-
-    Returns:
-        Dictionary with pratyaya analysis:
-        - word: The input word
-        - pratyayas: List of identified suffixes with type and function
-    """
-    level = parse_verbosity(verbosity)
-
-    try:
-        result = await _analyzer.analyze(word, mode=AnalysisMode.EDUCATIONAL)
-    except Exception as e:
-        return error_response(e)
-
-    best_parse = result.best_parse
-    if not best_parse:
-        return {
-            "success": True,
-            "word": word,
-            "pratyayas": [],
-        }
-
-    pratyayas = []
-    for sg in best_parse.sandhi_groups:
-        for bw in sg.base_words:
-            if hasattr(bw, "pratyayas") and bw.pratyayas:
-                for p in bw.pratyayas:
-                    pratyaya_data: dict[str, Any] = {
-                        "name": p.name if hasattr(p, "name") else str(p),
-                    }
-                    if level != Verbosity.MINIMAL:
-                        pratyaya_data["type"] = getattr(p, "type", None)
-                        pratyaya_data["function"] = getattr(p, "function", None)
-                    if level == Verbosity.DETAILED:
-                        pratyaya_data["sutra"] = getattr(p, "sutra", None)
-                    pratyayas.append(pratyaya_data)
-
-    # Also check morphology for suffix indicators
-    if not pratyayas:
-        for sg in best_parse.sandhi_groups:
-            for bw in sg.base_words:
-                if bw.morphology:
-                    # Infer pratyaya type from morphology
-                    morph = bw.morphology
-                    if getattr(morph, "tense", None):
-                        pratyayas.append({
-                            "name": "tiṅ",
-                            "type": "tin",
-                            "function": "verb ending",
-                        })
-                    elif getattr(morph, "case", None):
-                        pratyayas.append({
-                            "name": "sup",
-                            "type": "sup",
-                            "function": "nominal ending",
-                        })
-
-    lemma = None
-    if best_parse.sandhi_groups:
-        first_group = best_parse.sandhi_groups[0]
-        if first_group.base_words:
-            lemma = first_group.base_words[0].lemma
-
-    return {
-        "success": True,
-        "word": word,
-        "lemma": lemma,
-        "pratyayas": pratyayas,
-    }
-
-
-async def resolve_ambiguity(
-    text: str,
-    context: str | None = None,
-) -> dict[str, Any]:
-    """Resolve ambiguous parses and return the most likely interpretation.
-
-    Args:
-        text: Sanskrit text to analyze.
-        context: Optional sentence context for better disambiguation.
-
-    Returns:
-        Dictionary with disambiguation result:
-        - selected_parse: Index of the selected parse
-        - confidence: Confidence in the selection
-        - reasoning: Explanation for the selection
-        - all_parses: Summary of all parse candidates
-    """
-    try:
-        full_text = f"{context} {text}" if context else text
-        result = await _analyzer.analyze(full_text, mode=AnalysisMode.ACADEMIC)
-    except Exception as e:
-        return error_response(e)
-
-    if not result.parse_forest:
-        return {
-            "success": True,
-            "text": text,
-            "selected_parse": None,
-            "confidence": 0.0,
-            "reasoning": "No valid parses found",
-            "all_parses": [],
-        }
-
-    # Find the selected/best parse
-    best_parse = result.best_parse
-    selected_idx = 0
-    for i, p in enumerate(result.parse_forest):
-        if p == best_parse:
-            selected_idx = i
-            break
-
-    reasoning = _build_confidence_reasoning(
-        result.confidence.overall,
-        result.confidence.engine_agreement,
-    )
-
-    return {
-        "success": True,
-        "text": text,
-        "selected_parse": selected_idx,
-        "confidence": result.confidence.overall,
-        "reasoning": reasoning,
-        "needs_human_review": getattr(result, "needs_human_review", False),
-        "all_parses": [
-            {
+        for i, parse in enumerate(result.parse_forest):
+            parse_data: dict[str, Any] = {
                 "index": i,
-                "confidence": p.confidence,
-                "word_count": sum(len(sg.base_words) for sg in p.sandhi_groups),
+                "parse_id": parse.parse_id,
+                "confidence": parse.confidence,
+                "breakdown": [],
             }
-            for i, p in enumerate(result.parse_forest[:5])  # Limit to 5
-        ],
-    }
+
+            for sg in parse.sandhi_groups:
+                for word in sg.base_words:
+                    word_info: dict[str, Any] = {
+                        "form": word.surface_form,
+                        "lemma": word.lemma,
+                    }
+                    if word.morphology:
+                        word_info["analysis"] = word.morphology.to_dict()
+                    parse_data["breakdown"].append(word_info)
+
+            output["parses"].append(parse_data)
+
+        return json_response(output)
+
+    except Exception as e:
+        return error_response(f"explaining parse: {e}")
+
+
+async def _identify_compound(
+    analyzer: Analyzer, arguments: dict[str, Any]
+) -> list[TextContent]:
+    """Handle identify_compound tool call."""
+    word = arguments.get("word", "")
+
+    if not word:
+        return error_response("word parameter is required")
+
+    try:
+        result = await analyzer.analyze(word)
+
+        if not result.parse_forest:
+            return text_response("No parse found")
+
+        best_parse = result.parse_forest[0]
+        compounds: list[dict[str, Any]] = []
+
+        for sg in best_parse.sandhi_groups:
+            if sg.is_compound:
+                compounds.append({
+                    "surface_form": sg.surface_form,
+                    "compound_type": sg.compound_type.value if sg.compound_type else "unknown",
+                    "components": [w.lemma for w in sg.base_words],
+                })
+
+        if not compounds:
+            return text_response(f"No compound detected in: {word}")
+
+        return json_response(compounds)
+
+    except Exception as e:
+        return error_response(f"identifying compound: {e}")
+
+
+async def _get_pratyaya(
+    analyzer: Analyzer, arguments: dict[str, Any]
+) -> list[TextContent]:
+    """Handle get_pratyaya tool call."""
+    word = arguments.get("word", "")
+
+    if not word:
+        return error_response("word parameter is required")
+
+    try:
+        result = await analyzer.analyze(word)
+
+        if not result.parse_forest:
+            return text_response("No parse found")
+
+        best_parse = result.parse_forest[0]
+        pratyayas: list[dict[str, Any]] = []
+
+        for sg in best_parse.sandhi_groups:
+            for w in sg.base_words:
+                if w.pratyaya:
+                    for p in w.pratyaya:
+                        pratyayas.append({
+                            "word": w.lemma,
+                            "pratyaya": str(p),
+                        })
+
+        if not pratyayas:
+            return text_response(f"No pratyayas identified in: {word}")
+
+        return json_response(pratyayas)
+
+    except Exception as e:
+        return error_response(f"getting pratyayas: {e}")
+
+
+async def _resolve_ambiguity(
+    analyzer: Analyzer, arguments: dict[str, Any]
+) -> list[TextContent]:
+    """Handle resolve_ambiguity tool call."""
+    text = arguments.get("text", "")
+
+    if not text:
+        return error_response("text parameter is required")
+
+    try:
+        result = await analyzer.analyze(text)
+
+        if not result.parse_forest:
+            return text_response("No parses found")
+
+        selected = result.parse_forest[0]
+
+        output: dict[str, Any] = {
+            "selected_parse_index": 0,
+            "selected_parse_id": selected.parse_id,
+            "confidence": selected.confidence,
+            "total_candidates": len(result.parse_forest),
+            "reasoning": f"Selected based on confidence score {selected.confidence:.2%}",
+            "selected_breakdown": [
+                {
+                    "form": w.surface_form,
+                    "lemma": w.lemma,
+                    "pos": w.morphology.pos if w.morphology else None,
+                }
+                for sg in selected.sandhi_groups
+                for w in sg.base_words
+            ],
+            "all_candidates": [
+                {
+                    "index": i,
+                    "confidence": parse.confidence,
+                    "word_count": sum(len(sg.base_words) for sg in parse.sandhi_groups),
+                }
+                for i, parse in enumerate(result.parse_forest)
+            ],
+        }
+
+        return json_response(output)
+
+    except Exception as e:
+        return error_response(f"resolving ambiguity: {e}")

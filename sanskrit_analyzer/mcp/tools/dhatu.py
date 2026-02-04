@@ -2,230 +2,215 @@
 
 from typing import Any
 
+from mcp.server import Server
+from mcp.types import Tool, TextContent
+
 from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry
-from sanskrit_analyzer.mcp.verbosity import Verbosity, error_response, parse_verbosity
-
-# Shared database instance
-_db = DhatuDB()
-
-# Traditional gana (verb class) names
-GANA_NAMES = {
-    1: "bhvādi",
-    2: "adādi",
-    3: "juhotyādi",
-    4: "divādi",
-    5: "svādi",
-    6: "tudādi",
-    7: "rudhādi",
-    8: "tanādi",
-    9: "kryādi",
-    10: "curādi",
-}
+from sanskrit_analyzer.mcp.response import error_response, json_response, text_response
 
 
-def _format_dhatu_entry(entry: DhatuEntry, level: Verbosity) -> dict[str, Any]:
-    """Format a DhatuEntry for MCP response."""
-    data: dict[str, Any] = {
-        "dhatu": entry.dhatu_devanagari,
+def _dhatu_to_dict(entry: DhatuEntry) -> dict[str, Any]:
+    """Convert DhatuEntry to dictionary."""
+    return {
+        "id": entry.id,
+        "dhatu_devanagari": entry.dhatu_devanagari,
         "dhatu_iast": entry.dhatu_iast,
-        "meaning": entry.meaning_english,
+        "meaning_english": entry.meaning_english,
+        "meaning_hindi": entry.meaning_hindi,
         "gana": entry.gana,
         "pada": entry.pada,
+        "panini_reference": entry.panini_reference,
     }
 
-    if level != Verbosity.MINIMAL:
-        data["meaning_hindi"] = entry.meaning_hindi
-        data["examples"] = entry.examples
-        data["panini_reference"] = entry.panini_reference
 
-    if level == Verbosity.DETAILED:
-        data["it_category"] = entry.it_category
-        data["synonyms"] = entry.synonyms
-        data["related_words"] = entry.related_words
-        data["id"] = entry.id
-
-    return data
-
-
-def lookup_dhatu(
-    dhatu: str,
-    include_conjugations: bool = False,
-    verbosity: str | None = None,
-) -> dict[str, Any]:
-    """Look up a dhatu by its root form.
+def register_dhatu_tools(server: Server) -> None:
+    """Register dhatu tools with the MCP server.
 
     Args:
-        dhatu: The verbal root (Devanagari or IAST).
-        include_conjugations: Whether to include conjugation tables.
-        verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
-
-    Returns:
-        Dictionary with dhatu information:
-        - dhatu: The root in Devanagari
-        - meaning: English meaning
-        - gana: Verb class (1-10)
-        - pada: Voice type
-        - conjugations: Optional conjugation forms
+        server: MCP server instance.
     """
-    level = parse_verbosity(verbosity)
+    db = DhatuDB()
 
-    try:
-        entry = _db.lookup_by_dhatu(dhatu, include_conjugations=include_conjugations)
-    except Exception as e:
-        return error_response(e)
-
-    if not entry:
-        return error_response(f"Dhatu not found: {dhatu}")
-
-    result = _format_dhatu_entry(entry, level)
-    result["success"] = True
-
-    if include_conjugations and entry.conjugations:
-        result["conjugations"] = [
-            {
-                "lakara": c.lakara,
-                "purusha": c.purusha,
-                "vacana": c.vacana,
-                "pada": c.pada,
-                "form": c.form_devanagari,
-                "form_iast": c.form_iast,
-            }
-            for c in entry.conjugations
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        return [
+            Tool(
+                name="lookup_dhatu",
+                description="Look up a dhatu (verbal root) by its root form",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "dhatu": {
+                            "type": "string",
+                            "description": "Dhatu root (e.g., gam, bhU, kR)",
+                        },
+                    },
+                    "required": ["dhatu"],
+                },
+            ),
+            Tool(
+                name="search_dhatu",
+                description="Search dhatus by meaning or pattern",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query (meaning or root pattern)",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum results to return",
+                            "default": 10,
+                        },
+                    },
+                    "required": ["query"],
+                },
+            ),
+            Tool(
+                name="conjugate_verb",
+                description="Get conjugation forms for a dhatu",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "dhatu": {
+                            "type": "string",
+                            "description": "Dhatu root",
+                        },
+                        "lakara": {
+                            "type": "string",
+                            "description": "Tense/mood (lat, lit, lut, etc.)",
+                            "default": "lat",
+                        },
+                    },
+                    "required": ["dhatu"],
+                },
+            ),
+            Tool(
+                name="list_gana",
+                description="List dhatus by verb class (gana)",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "gana": {
+                            "type": "integer",
+                            "description": "Gana number (1-10)",
+                            "minimum": 1,
+                            "maximum": 10,
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum results to return",
+                            "default": 20,
+                        },
+                    },
+                    "required": ["gana"],
+                },
+            ),
         ]
 
-    return result
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+        if name == "lookup_dhatu":
+            return _lookup_dhatu(db, arguments)
+        elif name == "search_dhatu":
+            return _search_dhatu(db, arguments)
+        elif name == "conjugate_verb":
+            return _conjugate_verb(db, arguments)
+        elif name == "list_gana":
+            return _list_gana(db, arguments)
+        else:
+            return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 
-def search_dhatu(
-    query: str,
-    limit: int = 10,
-    verbosity: str | None = None,
-) -> dict[str, Any]:
-    """Search dhatus by meaning or pattern.
+def _lookup_dhatu(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
+    """Handle lookup_dhatu tool call."""
+    dhatu = arguments.get("dhatu", "")
 
-    Args:
-        query: Search query (matches dhatu form, meaning, examples).
-        limit: Maximum number of results (default 10).
-        verbosity: Response detail level - 'minimal', 'standard', or 'detailed'.
-
-    Returns:
-        Dictionary with search results:
-        - results: List of matching dhatu entries
-        - count: Number of results
-    """
-    level = parse_verbosity(verbosity)
-    limit = min(max(1, limit), 50)  # Clamp to 1-50
+    if not dhatu:
+        return error_response("dhatu parameter is required")
 
     try:
-        entries = _db.search(query, limit=limit)
+        entry = db.lookup_by_dhatu(dhatu)
+
+        if not entry:
+            return text_response(f"Dhatu not found: {dhatu}")
+
+        return json_response(_dhatu_to_dict(entry))
+
     except Exception as e:
-        return error_response(e)
-
-    return {
-        "success": True,
-        "query": query,
-        "count": len(entries),
-        "results": [_format_dhatu_entry(e, level) for e in entries],
-    }
+        return error_response(f"looking up dhatu: {e}")
 
 
-def conjugate_verb(
-    dhatu: str,
-    lakara: str | None = None,
-    purusha: str | None = None,
-    vacana: str | None = None,
-) -> dict[str, Any]:
-    """Get conjugation forms for a dhatu.
+def _search_dhatu(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
+    """Handle search_dhatu tool call."""
+    query = arguments.get("query", "")
+    limit = arguments.get("limit", 10)
 
-    Args:
-        dhatu: The verbal root (Devanagari or IAST).
-        lakara: Optional tense/mood filter (lat, lit, lut, lrt, let, lot, lan, etc.).
-        purusha: Optional person filter (prathama, madhyama, uttama).
-        vacana: Optional number filter (ekavacana, dvivacana, bahuvacana).
-
-    Returns:
-        Dictionary with conjugation forms:
-        - dhatu: The root
-        - forms: List of conjugation forms matching filters
-    """
-    try:
-        entry = _db.lookup_by_dhatu(dhatu, include_conjugations=False)
-    except Exception as e:
-        return error_response(e)
-
-    if not entry:
-        return error_response(f"Dhatu not found: {dhatu}")
+    if not query:
+        return error_response("query parameter is required")
 
     try:
-        forms = _db.get_conjugation(
-            entry.id,
-            lakara=lakara or "lat",  # Default to present tense
-            purusha=purusha,
-            vacana=vacana,
-        )
-    except Exception as e:
-        return error_response(e)
+        results = db.search(query, limit=limit)
 
-    return {
-        "success": True,
-        "dhatu": entry.dhatu_devanagari,
-        "dhatu_iast": entry.dhatu_iast,
-        "gana": entry.gana,
-        "pada": entry.pada,
-        "lakara": lakara or "lat",
-        "form_count": len(forms),
-        "forms": [
+        if not results:
+            return text_response(f"No dhatus found matching: {query}")
+
+        return json_response([_dhatu_to_dict(entry) for entry in results])
+
+    except Exception as e:
+        return error_response(f"searching dhatus: {e}")
+
+
+def _conjugate_verb(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
+    """Handle conjugate_verb tool call."""
+    dhatu = arguments.get("dhatu", "")
+    lakara = arguments.get("lakara", "lat")
+
+    if not dhatu:
+        return error_response("dhatu parameter is required")
+
+    try:
+        conjugations = db.get_conjugation(dhatu, lakara)
+
+        if not conjugations:
+            return text_response(f"No conjugations found for: {dhatu}")
+
+        result = [
             {
-                "purusha": f.purusha,
-                "vacana": f.vacana,
-                "pada": f.pada,
-                "form": f.form_devanagari,
-                "form_iast": f.form_iast,
+                "purusha": conj.purusha,
+                "vacana": conj.vacana,
+                "pada": conj.pada,
+                "form_devanagari": conj.form_devanagari,
+                "form_iast": conj.form_iast,
             }
-            for f in forms
-        ],
-    }
+            for conj in conjugations
+        ]
+
+        return json_response(result)
+
+    except Exception as e:
+        return error_response(f"conjugating verb: {e}")
 
 
-def list_gana(
-    gana: int,
-    limit: int = 20,
-) -> dict[str, Any]:
-    """List dhatus belonging to a specific verb class (gana).
+def _list_gana(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
+    """Handle list_gana tool call."""
+    gana = arguments.get("gana")
+    limit = arguments.get("limit", 20)
 
-    Args:
-        gana: Verb class number (1-10).
-        limit: Maximum number of results (default 20).
+    if gana is None:
+        return error_response("gana parameter is required")
 
-    Returns:
-        Dictionary with gana dhatus:
-        - gana: The verb class number
-        - gana_name: Traditional name of the gana
-        - count: Number of results
-        - dhatus: List of dhatu entries
-    """
-    if gana < 1 or gana > 10:
-        return error_response(f"Invalid gana: {gana}. Must be 1-10.")
-
-    limit = min(max(1, limit), 100)  # Clamp to 1-100
+    if not 1 <= gana <= 10:
+        return error_response("gana must be between 1 and 10")
 
     try:
-        entries = _db.get_by_gana(gana, limit=limit)
-    except Exception as e:
-        return error_response(e)
+        results = db.get_by_gana(gana, limit=limit)
 
-    return {
-        "success": True,
-        "gana": gana,
-        "gana_name": GANA_NAMES.get(gana, ""),
-        "count": len(entries),
-        "dhatus": [
-            {
-                "dhatu": e.dhatu_devanagari,
-                "dhatu_iast": e.dhatu_iast,
-                "meaning": e.meaning_english,
-                "pada": e.pada,
-            }
-            for e in entries
-        ],
-    }
+        if not results:
+            return text_response(f"No dhatus found in gana {gana}")
+
+        return json_response([_dhatu_to_dict(entry) for entry in results])
+
+    except Exception as e:
+        return error_response(f"listing gana: {e}")

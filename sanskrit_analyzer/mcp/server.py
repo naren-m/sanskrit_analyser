@@ -1,122 +1,116 @@
 """MCP server implementation for Sanskrit Analyzer."""
 
 import argparse
-from collections.abc import Callable
+import asyncio
+import os
+from dataclasses import dataclass
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import Server
+from mcp.server.sse import SseServerTransport
+from starlette.applications import Starlette
+from starlette.routing import Route
 
-from sanskrit_analyzer.config import Config, MCPServerConfig
+from sanskrit_analyzer.mcp.tools.analysis import register_analysis_tools
+from sanskrit_analyzer.mcp.tools.dhatu import register_dhatu_tools
+from sanskrit_analyzer.mcp.tools.grammar import register_grammar_tools
+from sanskrit_analyzer.mcp.resources.dhatus import register_dhatu_resources
+from sanskrit_analyzer.mcp.resources.grammar import register_grammar_resources
 
-# Global server instance for tool registration
-_server: FastMCP | None = None
+
+@dataclass
+class MCPServerConfig:
+    """Configuration for the MCP server."""
+
+    host: str = "0.0.0.0"
+    port: int = 8001
+    log_level: str = "INFO"
+
+    @classmethod
+    def from_env(cls) -> "MCPServerConfig":
+        """Create config from environment variables."""
+        return cls(
+            host=os.getenv("MCP_HOST", "0.0.0.0"),
+            port=int(os.getenv("MCP_PORT", "8001")),
+            log_level=os.getenv("MCP_LOG_LEVEL", "INFO"),
+        )
 
 
-def create_server(config: MCPServerConfig | None = None) -> FastMCP:
-    """Create and configure the MCP server.
+def create_server() -> Server:
+    """Create and configure the MCP server instance.
 
-    Args:
-        config: MCP server configuration. Uses defaults from Config if not provided.
+    Returns:
+        Configured MCP Server instance.
     """
-    global _server
-
-    if config is None:
-        config = Config().mcp
-
-    _server = FastMCP(
-        name="Sanskrit Analyzer",
-        instructions="Sanskrit text analysis with morphology, dhatu lookup, and grammar tools",
-        host=config.host,
-        port=config.port,
-    )
+    server = Server("sanskrit-analyzer")
 
     # Register tools
-    _register_tools(_server)
+    register_analysis_tools(server)
+    register_dhatu_tools(server)
+    register_grammar_tools(server)
 
-    return _server
+    # Register resources
+    register_dhatu_resources(server)
+    register_grammar_resources(server)
+
+    return server
 
 
-def _register_tools(server: FastMCP) -> None:
-    """Register all MCP tools with the server.
+def create_app(config: MCPServerConfig | None = None) -> Starlette:
+    """Create the Starlette application with SSE transport.
 
-    Tools are imported from their respective modules and registered directly.
-    The docstrings in the tool modules serve as the MCP tool descriptions.
+    Args:
+        config: Server configuration. Uses defaults if not provided.
+
+    Returns:
+        Starlette application instance.
     """
-    from sanskrit_analyzer.mcp.tools.analysis import (
-        analyze_sentence,
-        get_morphology,
-        split_sandhi,
-        transliterate,
-    )
-    from sanskrit_analyzer.mcp.tools.dhatu import (
-        conjugate_verb,
-        list_gana,
-        lookup_dhatu,
-        search_dhatu,
-    )
-    from sanskrit_analyzer.mcp.tools.grammar import (
-        explain_parse,
-        get_pratyaya,
-        identify_compound,
-        resolve_ambiguity,
-    )
+    if config is None:
+        config = MCPServerConfig.from_env()
 
-    # Register all tools - the @server.tool() decorator uses each function's
-    # name and docstring for MCP metadata
-    tools: list[Callable[..., Any]] = [
-        # Analysis tools
-        analyze_sentence,
-        split_sandhi,
-        get_morphology,
-        transliterate,
-        # Dhatu tools
-        lookup_dhatu,
-        search_dhatu,
-        conjugate_verb,
-        list_gana,
-        # Grammar tools
-        explain_parse,
-        identify_compound,
-        get_pratyaya,
-        resolve_ambiguity,
-    ]
+    server = create_server()
+    sse = SseServerTransport("/messages/")
 
-    for tool_fn in tools:
-        server.tool()(tool_fn)
+    async def handle_sse(request: Any) -> None:
+        async with sse.connect_sse(
+            request.scope, request.receive, request._send
+        ) as streams:
+            await server.run(
+                streams[0], streams[1], server.create_initialization_options()
+            )
+
+    return Starlette(
+        routes=[
+            Route("/sse", endpoint=handle_sse),
+        ],
+    )
 
 
 def main() -> None:
-    """Entry point for running the MCP server."""
-    # Load config (includes env var overrides)
-    app_config = Config.load(validate=False)
-    mcp_config = app_config.mcp
-
+    """Main entry point for the MCP server."""
     parser = argparse.ArgumentParser(description="Sanskrit Analyzer MCP Server")
-    parser.add_argument(
-        "--host",
-        default=mcp_config.host,
-        help=f"Host to bind to (default: {mcp_config.host})",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=mcp_config.port,
-        help=f"Port to listen on (default: {mcp_config.port})",
-    )
-    parser.add_argument(
-        "--transport",
-        choices=["sse", "stdio"],
-        default="sse",
-        help="Transport protocol (default: sse)",
-    )
+    parser.add_argument("--host", default=None, help="Host to bind to")
+    parser.add_argument("--port", type=int, default=None, help="Port to bind to")
+    parser.add_argument("--log-level", default=None, help="Log level")
     args = parser.parse_args()
 
-    # Override config with CLI args
-    mcp_config.host = args.host
-    mcp_config.port = args.port
+    # Build config from env, then override with CLI args
+    config = MCPServerConfig.from_env()
+    if args.host:
+        config.host = args.host
+    if args.port:
+        config.port = args.port
+    if args.log_level:
+        config.log_level = args.log_level
 
-    server = create_server(config=mcp_config)
-    server.run(transport=args.transport)
+    import uvicorn
+
+    uvicorn.run(
+        create_app(config),
+        host=config.host,
+        port=config.port,
+        log_level=config.log_level.lower(),
+    )
 
 
 if __name__ == "__main__":

@@ -1,1 +1,1 @@
-"""MCP resources for browsing dhatus and grammar references."""
+"""MCP resources for Sanskrit Analyzer."""
