@@ -1,0 +1,278 @@
+# Ashtadhyayi Sutras Database
+# TODO: Full population of all sutras
+
+title: "Aṣṭādhyāyī (अष्टाध्यायी)"
+author: "Pāṇini (पाणिनि)"
+
+description: >
+  The Aṣṭādhyāyī is a Sanskrit treatise on grammar written in the 4th century BCE
+  by the Indian grammarian Pāṇini. It is the foundational text of Vyākaraṇa
+  (Sanskrit grammar) and consists of 3,959 sutras (rules) organized into 8 chapters
+  (adhyāyas) with 4 sections (pādas) each.
+
+structure:
+  adhyayas: 8
+  padas_per_adhyaya: 4
+  total_padas: 32
+  approximate_sutras: 3959
+
+total_sutras: 3959
+
+adhyayas:
+  "1":
+    title: "प्रथमोऽध्यायः"
+    title_iast: "Prathamo'dhyāyaḥ"
+    description: "First chapter - Definitions and interpretive rules"
+    padas:
+      "1":
+        - number: 1
+          text: "वृद्धिरादैच्"
+          transliteration: "vṛddhir ādaic"
+          meaning: "ā, ai, and au are called vṛddhi"
+          topic: "definitions"
+
+        - number: 2
+          text: "अदेङ्गुणः"
+          transliteration: "adeṅguṇaḥ"
+          meaning: "a, e, and o are called guṇa"
+          topic: "definitions"
+
+        - number: 3
+          text: "इको गुणवृद्धी"
+          transliteration: "iko guṇavṛddhī"
+          meaning: "guṇa and vṛddhi replace ik vowels"
+          topic: "operations"
+
+        - number: 4
+          text: "न धातुलोपे आर्धधातुके"
+          transliteration: "na dhātulope ārdhadhātuke"
+          meaning: "not when dhatu is elided before ārdhadhātuka"
+          topic: "exceptions"
+
+        - number: 5
+          text: "क्ङिति च"
+          transliteration: "kṅiti ca"
+          meaning: "and when followed by k or ṅ-marked suffix"
+          topic: "exceptions"
+
+      "2":
+        - number: 1
+          text: "अदर्शनं लोपः"
+          transliteration: "adarśanaṃ lopaḥ"
+          meaning: "non-appearance (of a phoneme) is called lopa (elision)"
+          topic: "definitions"
+
+        - number: 2
+          text: "तस्य लोपः"
+          transliteration: "tasya lopaḥ"
+          meaning: "there is elision of that (which is marked for elision)"
+          topic: "operations"
+
+        - number: 3
+          text: "हलोऽनन्तराः संयोगः"
+          transliteration: "halo'nantarāḥ saṃyogaḥ"
+          meaning: "consonants in immediate succession form a saṃyoga (cluster)"
+          topic: "definitions"
+
+        - number: 4
+          text: "सहिवत्यकारः"
+          transliteration: "sahivatyakāraḥ"
+          meaning: "the letter a (when not explicitly mentioned) is understood"
+          topic: "interpretation"
+
+        - number: 5
+          text: "आद्यन्तवदेकस्मिन्"
+          transliteration: "ādyantavadekasmín"
+          meaning: "when applied to one, it is as if applied to the beginning or end"
+          topic: "interpretation"
+
+      "3":
+        - number: 1
+          text: "भूवादयो धातवः"
+          transliteration: "bhūvādayo dhātavaḥ"
+          meaning: "bhū and the rest are called dhātus (roots)"
+          topic: "definitions"
+
+        - number: 2
+          text: "परश्च"
+          transliteration: "paraśca"
+          meaning: "and the following (element)"
+          topic: "interpretation"
+
+        - number: 3
+          text: "यस्मात्प्रत्ययविधिस्तदादि प्रत्ययेऽङ्गम्"
+          transliteration: "yasmātpratyayavidhistadādi pratyaye'ṅgam"
+          meaning: "the element from which a suffix is prescribed, together with what precedes, is called aṅga before that suffix"
+          topic: "definitions"
+
+        - number: 4
+          text: "सुप्तिङन्तं पदम्"
+          transliteration: "suptiṅantaṃ padam"
+          meaning: "that which ends in a sup or tiṅ suffix is called a pada (word)"
+          topic: "definitions"
+
+        - number: 5
+          text: "कृत्तद्धितसमासाश्च"
+          transliteration: "kṛttaddhitasamāsāśca"
+          meaning: "and kṛt-derivatives, taddhita-derivatives, and compounds"
+          topic: "definitions"
+
+      "4":
+        - number: 1
+          text: "आ कडारादेका संज्ञा"
+          transliteration: "ā kaḍārādekā saṃjñā"
+          meaning: "from ā to ḍ, only one technical term applies (to a given element)"
+          topic: "interpretation"
+
+        - number: 2
+          text: "विप्रतिषेधे परं कार्यम्"
+          transliteration: "vipratiṣedhe paraṃ kāryam"
+          meaning: "when there is mutual contradiction, the later rule prevails"
+          topic: "interpretation"
+
+        - number: 3
+          text: "स्थानिवदादेशोऽनल्विधौ"
+          transliteration: "sthānivadādeśo'nalvidhau"
+          meaning: "a substitute behaves like the original except for al (vowel) rules"
+          topic: "interpretation"
+
+        - number: 4
+          text: "तस्मिन्निति निर्दिष्टे पूर्वस्य"
+          transliteration: "tasminniti nirdiṣṭe pūrvasya"
+          meaning: "when 'in that' is stated, the operation applies to what precedes"
+          topic: "interpretation"
+
+        - number: 5
+          text: "षष्ठी स्थानेयोगा"
+          transliteration: "ṣaṣṭhī sthāneyogā"
+          meaning: "the genitive denotes 'in place of'"
+          topic: "interpretation"
+
+  "2":
+    title: "द्वितीयोऽध्यायः"
+    title_iast: "Dvitīyo'dhyāyaḥ"
+    description: "Second chapter - Compounds and case relations"
+    padas:
+      "1":
+        - number: 1
+          text: "समर्थः पदविधिः"
+          transliteration: "samarthaḥ padavidhiḥ"
+          meaning: "rules about words apply when there is syntactic connection"
+          topic: "compounds"
+
+        - number: 2
+          text: "सुबामन्त्रिते पराङ्गवत्स्वरे"
+          transliteration: "subāmantrite parāṅgavatsvare"
+          meaning: "a sup ending after vocative is like a final aṅga in accent"
+          topic: "compounds"
+
+        - number: 3
+          text: "प्राक्कडारात्समासः"
+          transliteration: "prākkaḍārātsamāsaḥ"
+          meaning: "before the kaḍāra section, compounds (are prescribed)"
+          topic: "compounds"
+
+        - number: 4
+          text: "सह सुपा"
+          transliteration: "saha supā"
+          meaning: "together with a case ending"
+          topic: "compounds"
+
+        - number: 5
+          text: "अव्ययीभावश्च"
+          transliteration: "avyayībhāvaśca"
+          meaning: "and avyayībhāva (adverbial compound)"
+          topic: "compounds"
+
+      "2":
+        - number: 1
+          text: "कर्मणि द्वितीया"
+          transliteration: "karmaṇi dvitīyā"
+          meaning: "the accusative (is used) in relation to the object"
+          topic: "case-relations"
+
+        - number: 2
+          text: "कर्तृकरणयोस्तृतीया"
+          transliteration: "kartṛkaraṇayostṛtīyā"
+          meaning: "the instrumental (is used) in relation to agent and instrument"
+          topic: "case-relations"
+
+        - number: 3
+          text: "सम्प्रदाने चतुर्थी"
+          transliteration: "sampradāne caturthī"
+          meaning: "the dative (is used) in relation to recipient"
+          topic: "case-relations"
+
+        - number: 4
+          text: "अपादाने पञ्चमी"
+          transliteration: "apādāne pañcamī"
+          meaning: "the ablative (is used) in relation to source"
+          topic: "case-relations"
+
+        - number: 5
+          text: "सम्बन्धे षष्ठी"
+          transliteration: "sambandhe ṣaṣṭhī"
+          meaning: "the genitive (is used) in relation to possession/relation"
+          topic: "case-relations"
+
+      "3":
+        - number: 1
+          text: "प्राग्दिशो विभक्तिः"
+          transliteration: "prāgdiśo vibhaktiḥ"
+          meaning: "case-endings (are prescribed) before the direction section"
+          topic: "case-endings"
+
+        - number: 2
+          text: "प्रथमा च"
+          transliteration: "prathamā ca"
+          meaning: "and the nominative"
+          topic: "case-endings"
+
+        - number: 3
+          text: "एकार्थे द्विवचनम्"
+          transliteration: "ekārthe dvívacanam"
+          meaning: "dual when two have a single meaning"
+          topic: "number"
+
+        - number: 4
+          text: "बहुषु बहुवचनम्"
+          transliteration: "bahuṣu bahuvacánam"
+          meaning: "plural when many"
+          topic: "number"
+
+        - number: 5
+          text: "द्वयोरेकवचनद्विवचने"
+          transliteration: "dvayorekavacana­dvivacanè"
+          meaning: "singular and dual for two"
+          topic: "number"
+
+      "4":
+        - number: 1
+          text: "धातोः"
+          transliteration: "dhātoḥ"
+          meaning: "from a dhatu"
+          topic: "derivation"
+
+        - number: 2
+          text: "सार्वधातुकार्धधातुकयोः"
+          transliteration: "sārvadhātukārdhadhātukayoḥ"
+          meaning: "(before) sārvadhātuka and ārdhadhātuka"
+          topic: "derivation"
+
+        - number: 3
+          text: "विकरणेभ्यः"
+          transliteration: "vikaraṇebhyaḥ"
+          meaning: "from the vikaraṇas (stem-forming suffixes)"
+          topic: "derivation"
+
+        - number: 4
+          text: "सन्नन्ताः"
+          transliteration: "sannantāḥ"
+          meaning: "those ending in san (desiderative)"
+          topic: "derivation"
+
+        - number: 5
+          text: "यङन्ताश्च"
+          transliteration: "yaṅantāśca"
+          meaning: "and those ending in yaṅ (intensive)"
+          topic: "derivation"

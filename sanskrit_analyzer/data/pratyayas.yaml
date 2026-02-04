@@ -1,0 +1,323 @@
+# Pratyayas (Suffixes) Database
+# TODO: Full population of pratyayas from Paninian grammar
+
+description: >
+  Pratyayas (प्रत्यय) are suffixes in Sanskrit that attach to roots (dhatus) or
+  nominal stems (pratipadikas) to form words. They are categorized into several types
+  based on their function and the type of base they attach to.
+
+categories:
+  krt:
+    # Primary verbal suffixes - attach directly to dhatus
+    - name: tavya
+      devanagari: तव्य
+      sutra: "3.1.96"
+      function: "future passive participle / gerundive"
+      meaning: "ought to be, should be, must be"
+      examples:
+        - base: "कृ (to do)"
+          result: "कर्तव्य"
+          meaning: "ought to be done"
+        - base: "पठ् (to read)"
+          result: "पठितव्य"
+          meaning: "ought to be read"
+
+    - name: aniya
+      devanagari: अनीय
+      sutra: "3.1.96"
+      function: "future passive participle / gerundive"
+      meaning: "ought to be, should be"
+      examples:
+        - base: "कृ (to do)"
+          result: "करणीय"
+          meaning: "ought to be done"
+        - base: "दृश् (to see)"
+          result: "दर्शनीय"
+          meaning: "worth seeing"
+
+    - name: tavat
+      devanagari: तवत्
+      sutra: "3.2.102"
+      function: "past active participle"
+      meaning: "having done"
+      examples:
+        - base: "कृ (to do)"
+          result: "कृतवत्"
+          meaning: "one who has done"
+        - base: "गम् (to go)"
+          result: "गतवत्"
+          meaning: "one who has gone"
+
+    - name: shatr
+      devanagari: शतृ
+      sutra: "3.2.124"
+      function: "present active participle"
+      meaning: "doing, being"
+      examples:
+        - base: "पठ् (to read)"
+          result: "पठत्"
+          meaning: "reading"
+        - base: "गम् (to go)"
+          result: "गच्छत्"
+          meaning: "going"
+
+    - name: shanac
+      devanagari: शानच्
+      sutra: "3.2.124"
+      function: "present middle participle"
+      meaning: "doing (for oneself)"
+      examples:
+        - base: "सेव् (to serve)"
+          result: "सेवमान"
+          meaning: "serving"
+        - base: "लभ् (to obtain)"
+          result: "लभमान"
+          meaning: "obtaining"
+
+    - name: kta
+      devanagari: क्त
+      sutra: "3.2.102"
+      function: "past passive participle"
+      meaning: "done, made"
+      examples:
+        - base: "कृ (to do)"
+          result: "कृत"
+          meaning: "done"
+        - base: "गम् (to go)"
+          result: "गत"
+          meaning: "gone"
+
+    - name: ktavatu
+      devanagari: क्तवतु
+      sutra: "3.2.102"
+      function: "past active participle"
+      meaning: "having done"
+      examples:
+        - base: "कृ (to do)"
+          result: "कृतवान्"
+          meaning: "one who has done"
+
+    - name: lyut
+      devanagari: ल्युट्
+      sutra: "3.3.115"
+      function: "action noun"
+      meaning: "the act of"
+      examples:
+        - base: "पठ् (to read)"
+          result: "पठन"
+          meaning: "reading"
+        - base: "गम् (to go)"
+          result: "गमन"
+          meaning: "going"
+
+  taddhita:
+    # Secondary suffixes - attach to nominal stems
+    - name: matup
+      devanagari: मतुप्
+      sutra: "5.2.94"
+      function: "possessive"
+      meaning: "having, possessing"
+      examples:
+        - base: "धन (wealth)"
+          result: "धनवत्"
+          meaning: "wealthy"
+        - base: "विद्या (knowledge)"
+          result: "विद्यावत्"
+          meaning: "learned"
+
+    - name: tva
+      devanagari: त्व
+      sutra: "5.1.119"
+      function: "abstract noun"
+      meaning: "-ness, state of being"
+      examples:
+        - base: "गुरु (heavy)"
+          result: "गुरुत्व"
+          meaning: "heaviness"
+        - base: "मनुष्य (human)"
+          result: "मनुष्यत्व"
+          meaning: "humanity"
+
+    - name: tal
+      devanagari: तल्
+      sutra: "5.1.119"
+      function: "abstract noun (feminine)"
+      meaning: "-ness, state of being"
+      examples:
+        - base: "सुन्दर (beautiful)"
+          result: "सुन्दरता"
+          meaning: "beauty"
+        - base: "मूर्ख (foolish)"
+          result: "मूर्खता"
+          meaning: "foolishness"
+
+    - name: iman
+      devanagari: इमन्
+      sutra: "5.1.122"
+      function: "abstract noun"
+      meaning: "-ness (quality)"
+      examples:
+        - base: "महत् (great)"
+          result: "महिमन्"
+          meaning: "greatness"
+        - base: "लघु (light)"
+          result: "लघिमन्"
+          meaning: "lightness"
+
+    - name: in
+      devanagari: इन्
+      sutra: "5.2.115"
+      function: "possessive adjective"
+      meaning: "having, characterized by"
+      examples:
+        - base: "दण्ड (stick)"
+          result: "दण्डिन्"
+          meaning: "one with a stick"
+        - base: "पाप (sin)"
+          result: "पापिन्"
+          meaning: "sinful"
+
+  tin:
+    # Verb endings (personal endings)
+    - name: tip
+      devanagari: तिप्
+      sutra: "3.4.78"
+      function: "3rd person singular parasmaipada"
+      lakaras: ["laT", "loT", "laN", "liN", "luT"]
+      examples:
+        - lakara: "laT (present)"
+          example: "पठति"
+          meaning: "he/she reads"
+
+    - name: tas
+      devanagari: तस्
+      sutra: "3.4.78"
+      function: "3rd person dual parasmaipada"
+      lakaras: ["laT", "loT", "laN", "liN", "luT"]
+      examples:
+        - lakara: "laT (present)"
+          example: "पठतः"
+          meaning: "those two read"
+
+    - name: jhi
+      devanagari: झि
+      sutra: "3.4.78"
+      function: "3rd person plural parasmaipada"
+      lakaras: ["laT", "loT", "laN", "liN", "luT"]
+      examples:
+        - lakara: "laT (present)"
+          example: "पठन्ति"
+          meaning: "they read"
+
+    - name: sip
+      devanagari: सिप्
+      sutra: "3.4.78"
+      function: "2nd person singular parasmaipada"
+      lakaras: ["laT", "loT", "laN", "liN", "luT"]
+      examples:
+        - lakara: "laT (present)"
+          example: "पठसि"
+          meaning: "you read"
+
+    - name: mip
+      devanagari: मिप्
+      sutra: "3.4.78"
+      function: "1st person singular parasmaipada"
+      lakaras: ["laT", "loT", "laN", "liN", "luT"]
+      examples:
+        - lakara: "laT (present)"
+          example: "पठामि"
+          meaning: "I read"
+
+    - name: te
+      devanagari: ते
+      sutra: "3.4.78"
+      function: "3rd person singular atmanepada"
+      lakaras: ["laT", "loT", "laN", "liN"]
+      examples:
+        - lakara: "laT (present)"
+          example: "सेवते"
+          meaning: "he/she serves"
+
+  sup:
+    # Noun endings (case endings)
+    - name: su
+      devanagari: सु
+      sutra: "4.1.2"
+      function: "nominative singular"
+      examples:
+        - stem: "राम"
+          result: "रामः"
+          meaning: "Rama (subject)"
+
+    - name: au
+      devanagari: औ
+      sutra: "4.1.2"
+      function: "nominative dual"
+      examples:
+        - stem: "राम"
+          result: "रामौ"
+          meaning: "two Ramas (subject)"
+
+    - name: jas
+      devanagari: जस्
+      sutra: "4.1.2"
+      function: "nominative plural"
+      examples:
+        - stem: "राम"
+          result: "रामाः"
+          meaning: "Ramas (subject)"
+
+    - name: am
+      devanagari: अम्
+      sutra: "4.1.2"
+      function: "accusative singular"
+      examples:
+        - stem: "राम"
+          result: "रामम्"
+          meaning: "Rama (object)"
+
+    - name: ta
+      devanagari: टा
+      sutra: "4.1.2"
+      function: "instrumental singular"
+      examples:
+        - stem: "राम"
+          result: "रामेण"
+          meaning: "by/with Rama"
+
+    - name: ne
+      devanagari: ङे
+      sutra: "4.1.2"
+      function: "dative singular"
+      examples:
+        - stem: "राम"
+          result: "रामाय"
+          meaning: "to/for Rama"
+
+    - name: nasi
+      devanagari: ङसि
+      sutra: "4.1.2"
+      function: "ablative singular"
+      examples:
+        - stem: "राम"
+          result: "रामात्"
+          meaning: "from Rama"
+
+    - name: nas
+      devanagari: ङस्
+      sutra: "4.1.2"
+      function: "genitive singular"
+      examples:
+        - stem: "राम"
+          result: "रामस्य"
+          meaning: "of Rama"
+
+    - name: ni
+      devanagari: ङि
+      sutra: "4.1.2"
+      function: "locative singular"
+      examples:
+        - stem: "राम"
+          result: "रामे"
+          meaning: "in/on Rama"
