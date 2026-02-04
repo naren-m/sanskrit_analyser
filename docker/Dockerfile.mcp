@@ -1,0 +1,66 @@
+# Sanskrit Analyzer MCP Server Dockerfile
+# Multi-stage build for optimized image size
+
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust (required for vidyut)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Copy package files
+COPY pyproject.toml README.md ./
+COPY sanskrit_analyzer ./sanskrit_analyzer
+
+# Build the package with MCP dependencies
+RUN pip install --no-cache-dir build && \
+    python -m build && \
+    pip wheel --no-cache-dir --wheel-dir /app/wheels -r <(echo ".[mcp]")
+
+# Production stage
+FROM python:3.11-slim as production
+
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy built wheels and install
+COPY --from=builder /app/wheels /wheels
+COPY --from=builder /app/dist/*.whl /wheels/
+RUN pip install --no-cache-dir /wheels/*.whl && \
+    rm -rf /wheels
+
+# Copy data files
+COPY sanskrit_analyzer/data/*.db /app/data/
+COPY sanskrit_analyzer/data/*.yaml /app/data/
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV MCP_HOST=0.0.0.0
+ENV MCP_PORT=8001
+ENV MCP_LOG_LEVEL=INFO
+
+# Expose MCP server port
+EXPOSE 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')" || exit 1
+
+# Run the MCP server
+CMD ["sanskrit-mcp"]
