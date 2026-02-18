@@ -216,6 +216,53 @@ def inject_css() -> None:
             font-family: 'Noto Sans Devanagari', 'Siddhanta', sans-serif;
             font-size: 18px;
         }
+
+        /* Reduce default Streamlit spacing */
+        .stMarkdown {
+            margin-bottom: 0 !important;
+        }
+
+        .stMarkdown p {
+            margin-bottom: 0.25rem !important;
+        }
+
+        /* Tighter spacing in tree nodes */
+        .tree-node .stMarkdown {
+            margin-bottom: 0 !important;
+        }
+
+        .tree-node .stMarkdown p {
+            margin-bottom: 0.1rem !important;
+        }
+
+        /* Compact word cards */
+        .word-card .stMarkdown {
+            margin-bottom: 0 !important;
+        }
+
+        .word-card .stMarkdown p {
+            margin-bottom: 0.15rem !important;
+        }
+
+        /* Reduce button column spacing */
+        [data-testid="column"] {
+            padding: 0 0.25rem !important;
+        }
+
+        /* Compact parse rows */
+        .parse-row .stMarkdown p {
+            margin-bottom: 0 !important;
+        }
+
+        /* Reduce spacing in results header */
+        .results-header .stMarkdown p {
+            margin-bottom: 0 !important;
+        }
+
+        /* Compact diff view */
+        .diff-column .stMarkdown p {
+            margin-bottom: 0.2rem !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,

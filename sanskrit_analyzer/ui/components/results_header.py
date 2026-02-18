@@ -66,8 +66,6 @@ def _render_script_variants(scripts: dict[str, str]) -> None:
     Args:
         scripts: Dictionary mapping script names to text.
     """
-    st.markdown('<div class="script-variants">', unsafe_allow_html=True)
-
     variants_html = []
 
     # Common script display order
@@ -87,5 +85,7 @@ def _render_script_variants(scripts: dict[str, str]) -> None:
                 f'<span class="script-variant">{script}: {text}</span>'
             )
 
-    st.markdown(" ".join(variants_html), unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="script-variants">{" ".join(variants_html)}</div>',
+        unsafe_allow_html=True,
+    )

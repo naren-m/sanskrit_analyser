@@ -128,22 +128,21 @@ def _render_scripts_section(scripts: dict[str, str]) -> None:
     Args:
         scripts: Dictionary of script variants.
     """
-    st.markdown(
-        '<div class="word-card-section">'
-        '<div class="word-card-section-title">SCRIPTS</div>',
-        unsafe_allow_html=True,
-    )
-
     parts = []
     if dev := scripts.get("devanagari"):
-        parts.append(f"**देवनागरी:** {dev}")
+        parts.append(f"<b>देवनागरी:</b> {dev}")
     if iast := scripts.get("iast"):
-        parts.append(f"**IAST:** {iast}")
+        parts.append(f"<b>IAST:</b> {iast}")
     if slp1 := scripts.get("slp1"):
-        parts.append(f"**SLP1:** {slp1}")
+        parts.append(f"<b>SLP1:</b> {slp1}")
 
-    st.markdown(" │ ".join(parts) if parts else "—")
-    st.markdown("</div>", unsafe_allow_html=True)
+    content = " │ ".join(parts) if parts else "—"
+    st.markdown(
+        f'<div class="word-card-section">'
+        f'<div class="word-card-section-title">SCRIPTS</div>'
+        f'{content}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _render_meanings_section(meanings: list[str]) -> None:
@@ -152,16 +151,13 @@ def _render_meanings_section(meanings: list[str]) -> None:
     Args:
         meanings: List of dictionary meanings.
     """
+    items = "<br>".join(f"{i}. {m}" for i, m in enumerate(meanings[:5], 1))
     st.markdown(
-        '<div class="word-card-section">'
-        '<div class="word-card-section-title">MEANINGS</div>',
+        f'<div class="word-card-section">'
+        f'<div class="word-card-section-title">MEANINGS</div>'
+        f'{items}</div>',
         unsafe_allow_html=True,
     )
-
-    for i, meaning in enumerate(meanings[:5], 1):  # Show max 5
-        st.markdown(f"{i}. {meaning}")
-
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _render_dhatu_section(dhatu: dict[str, Any]) -> None:
@@ -170,12 +166,6 @@ def _render_dhatu_section(dhatu: dict[str, Any]) -> None:
     Args:
         dhatu: Dhatu information dictionary.
     """
-    st.markdown(
-        '<div class="word-card-section">'
-        '<div class="word-card-section-title">VERBAL ROOT</div>',
-        unsafe_allow_html=True,
-    )
-
     root = dhatu.get("root", "")
     meaning = dhatu.get("meaning", "")
     gana = dhatu.get("gana", "")
@@ -188,8 +178,13 @@ def _render_dhatu_section(dhatu: dict[str, Any]) -> None:
     if gana:
         parts.append(f"({gana} gaṇa)")
 
-    st.markdown(" ".join(parts) if parts else "—")
-    st.markdown("</div>", unsafe_allow_html=True)
+    content = " ".join(parts) if parts else "—"
+    st.markdown(
+        f'<div class="word-card-section">'
+        f'<div class="word-card-section-title">VERBAL ROOT</div>'
+        f'{content}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _render_confidence_footer(confidence: float) -> None:

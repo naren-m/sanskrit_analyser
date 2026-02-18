@@ -92,44 +92,32 @@ def _render_parse_column(parse: dict[str, Any]) -> None:
     """
     confidence = parse.get("confidence", 0)
     css_class = confidence_class(confidence)
-
-    st.markdown(
-        f'<div class="diff-column">'
-        f'<span class="confidence-badge {css_class}">'
-        f'{int(confidence * 100)}%</span>',
-        unsafe_allow_html=True,
-    )
-
     sandhi_groups = parse.get("sandhi_groups", [])
 
+    # Build all content as HTML
+    lines = [
+        f'<span class="confidence-badge {css_class}">{int(confidence * 100)}%</span>'
+    ]
     for sg in sandhi_groups:
-        _render_sandhi_group_compact(sg)
+        scripts = sg.get("scripts", {})
+        surface = scripts.get("devanagari", sg.get("surface_form", ""))
+        base_words = sg.get("base_words", [])
 
-    st.markdown("</div>", unsafe_allow_html=True)
+        word_parts = []
+        for word in base_words:
+            ws = word.get("scripts", {})
+            dev = ws.get("devanagari", word.get("lemma", ""))
+            morph = word.get("morphology", {})
+            pos = morph.get("pos", "") if morph else ""
+            word_parts.append(f"{dev} ({pos})" if pos else dev)
 
+        breakdown = " + ".join(word_parts) if word_parts else "—"
+        lines.append(f"<b>{surface}</b> → {breakdown}")
 
-def _render_sandhi_group_compact(group: dict[str, Any]) -> None:
-    """Render a compact view of a sandhi group for comparison.
-
-    Args:
-        group: Sandhi group data.
-    """
-    scripts = group.get("scripts", {})
-    surface = scripts.get("devanagari", group.get("surface_form", ""))
-    base_words = group.get("base_words", [])
-
-    # Build word breakdown
-    word_parts = []
-    for word in base_words:
-        ws = word.get("scripts", {})
-        dev = ws.get("devanagari", word.get("lemma", ""))
-        morph = word.get("morphology", {})
-        pos = morph.get("pos", "") if morph else ""
-        word_parts.append(f"{dev} ({pos})" if pos else dev)
-
-    breakdown = " + ".join(word_parts) if word_parts else "—"
-
-    st.markdown(f"**{surface}** → {breakdown}")
+    st.markdown(
+        f'<div class="diff-column">{"<br>".join(lines)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _render_diff_summary(left: dict[str, Any], right: dict[str, Any]) -> None:

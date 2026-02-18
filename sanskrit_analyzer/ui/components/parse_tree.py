@@ -157,10 +157,7 @@ def _render_sandhi_group(group: dict[str, Any], group_id: str) -> None:
     surface = scripts.get("devanagari", group.get("surface_form", ""))
     base_words = group.get("base_words", [])
 
-    # Tree structure styling
-    st.markdown('<div class="tree-node">', unsafe_allow_html=True)
-
-    # Group header
+    # Group header with type info
     sandhi_type = group.get("sandhi_type")
     compound_info = ""
     if group.get("is_compound"):
@@ -169,16 +166,16 @@ def _render_sandhi_group(group: dict[str, Any], group_id: str) -> None:
 
     type_info = f" ({sandhi_type})" if sandhi_type else ""
 
-    st.markdown(f"**SandhiGroup:** {surface}{type_info}{compound_info}")
+    st.markdown(
+        f'<div class="tree-node"><b>SandhiGroup:</b> {surface}{type_info}{compound_info}</div>',
+        unsafe_allow_html=True,
+    )
 
     # Render base words
     for word_idx, word in enumerate(base_words):
         word_id = f"{group_id}_w{word_idx}"
-        st.markdown('<div class="tree-node">', unsafe_allow_html=True)
-        render_word_card(word, word_id)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)
+        with st.container():
+            render_word_card(word, word_id)
 
 
 def _render_engine_votes(votes: dict[str, float]) -> None:
