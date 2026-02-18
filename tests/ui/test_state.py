@@ -1,35 +1,16 @@
 """Tests for the Sanskrit Analyzer UI state management."""
 
 import pytest
-from unittest.mock import MagicMock, patch
-
-
-class MockSessionState:
-    """A mock for Streamlit's session_state that behaves like a dict."""
-
-    def __init__(self) -> None:
-        self.history: list = []
-        self.analysis_result = None
-        self.selected_mode = "educational"
-        self.show_compare = False
-        self.expanded_parses: set = set()
-        self.expanded_words: set = set()
-
-    def __contains__(self, key: str) -> bool:
-        return hasattr(self, key)
+from unittest.mock import MagicMock
 
 
 class TestStateManagement:
     """Tests for session state management functions."""
 
     @pytest.fixture(autouse=True)
-    def mock_streamlit(self) -> MagicMock:
-        """Mock streamlit session_state for each test."""
-        mock_state = MockSessionState()
-
-        with patch("sanskrit_analyzer.ui.state.st") as mock_st:
-            mock_st.session_state = mock_state
-            yield mock_st
+    def setup_mock(self, mock_streamlit: MagicMock) -> None:
+        """Use shared mock_streamlit fixture."""
+        self.mock_st = mock_streamlit
 
     def test_init_state_creates_defaults(self, mock_streamlit: MagicMock) -> None:
         """init_state creates all required state keys."""

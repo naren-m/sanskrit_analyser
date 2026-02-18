@@ -101,53 +101,50 @@ def get_analysis_result() -> dict[str, Any] | None:
     return st.session_state.analysis_result
 
 
-def toggle_parse_expanded(parse_id: str) -> None:
-    """Toggle expansion state of a parse.
+def _toggle_expanded(item_id: str, state_key: str) -> None:
+    """Toggle expansion state of an item in a set.
 
     Args:
-        parse_id: The parse identifier.
+        item_id: The item identifier.
+        state_key: The session state key containing the set.
     """
     init_state()
-    if parse_id in st.session_state.expanded_parses:
-        st.session_state.expanded_parses.discard(parse_id)
+    expanded_set = getattr(st.session_state, state_key)
+    if item_id in expanded_set:
+        expanded_set.discard(item_id)
     else:
-        st.session_state.expanded_parses.add(parse_id)
+        expanded_set.add(item_id)
+
+
+def _is_expanded(item_id: str, state_key: str) -> bool:
+    """Check if an item is expanded.
+
+    Args:
+        item_id: The item identifier.
+        state_key: The session state key containing the set.
+
+    Returns:
+        True if expanded, False otherwise.
+    """
+    init_state()
+    return item_id in getattr(st.session_state, state_key)
+
+
+def toggle_parse_expanded(parse_id: str) -> None:
+    """Toggle expansion state of a parse."""
+    _toggle_expanded(parse_id, "expanded_parses")
 
 
 def is_parse_expanded(parse_id: str) -> bool:
-    """Check if a parse is expanded.
-
-    Args:
-        parse_id: The parse identifier.
-
-    Returns:
-        True if expanded, False otherwise.
-    """
-    init_state()
-    return parse_id in st.session_state.expanded_parses
+    """Check if a parse is expanded."""
+    return _is_expanded(parse_id, "expanded_parses")
 
 
 def toggle_word_expanded(word_id: str) -> None:
-    """Toggle expansion state of a word detail card.
-
-    Args:
-        word_id: The word identifier.
-    """
-    init_state()
-    if word_id in st.session_state.expanded_words:
-        st.session_state.expanded_words.discard(word_id)
-    else:
-        st.session_state.expanded_words.add(word_id)
+    """Toggle expansion state of a word detail card."""
+    _toggle_expanded(word_id, "expanded_words")
 
 
 def is_word_expanded(word_id: str) -> bool:
-    """Check if a word detail card is expanded.
-
-    Args:
-        word_id: The word identifier.
-
-    Returns:
-        True if expanded, False otherwise.
-    """
-    init_state()
-    return word_id in st.session_state.expanded_words
+    """Check if a word detail card is expanded."""
+    return _is_expanded(word_id, "expanded_words")

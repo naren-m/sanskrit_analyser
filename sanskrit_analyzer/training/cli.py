@@ -86,6 +86,21 @@ async def generate_disambig_data(
     return count
 
 
+def _validate_corpus_path(corpus_path: Path) -> bool:
+    """Validate corpus path exists, log error if not."""
+    if not corpus_path.exists():
+        logging.getLogger(__name__).error(f"Corpus file not found: {corpus_path}")
+        return False
+    return True
+
+
+def _print_summary(count: int, output_path: Path) -> None:
+    """Print generation summary."""
+    print(f"\nSummary:")
+    print(f"  Examples generated: {count}")
+    print(f"  Output file: {output_path}")
+
+
 def cmd_generate_grammar(args: argparse.Namespace) -> int:
     """Handle generate-grammar command."""
     setup_logging(args.log_level)
@@ -94,28 +109,18 @@ def cmd_generate_grammar(args: argparse.Namespace) -> int:
     corpus_path = Path(args.corpus)
     output_path = Path(args.output)
 
-    if not corpus_path.exists():
-        logger.error(f"Corpus file not found: {corpus_path}")
+    if not _validate_corpus_path(corpus_path):
         return 1
 
     logger.info(f"Generating grammar training data from {corpus_path}")
-    logger.info(f"Output: {output_path}")
-    logger.info(f"Min confidence: {args.min_confidence}")
+    logger.info(f"Output: {output_path}, Min confidence: {args.min_confidence}")
 
     count = asyncio.run(
-        generate_grammar_data(
-            corpus_path,
-            output_path,
-            args.min_confidence,
-            args.max_examples,
-        )
+        generate_grammar_data(corpus_path, output_path, args.min_confidence, args.max_examples)
     )
 
     logger.info(f"Generated {count} grammar training examples")
-    print(f"\nSummary:")
-    print(f"  Examples generated: {count}")
-    print(f"  Output file: {output_path}")
-
+    _print_summary(count, output_path)
     return 0
 
 
@@ -127,26 +132,16 @@ def cmd_generate_disambig(args: argparse.Namespace) -> int:
     corpus_path = Path(args.corpus)
     output_path = Path(args.output)
 
-    if not corpus_path.exists():
-        logger.error(f"Corpus file not found: {corpus_path}")
+    if not _validate_corpus_path(corpus_path):
         return 1
 
     logger.info(f"Generating disambiguation training data from {corpus_path}")
     logger.info(f"Output: {output_path}")
 
-    count = asyncio.run(
-        generate_disambig_data(
-            corpus_path,
-            output_path,
-            args.max_examples,
-        )
-    )
+    count = asyncio.run(generate_disambig_data(corpus_path, output_path, args.max_examples))
 
     logger.info(f"Generated {count} disambiguation training examples")
-    print(f"\nSummary:")
-    print(f"  Examples generated: {count}")
-    print(f"  Output file: {output_path}")
-
+    _print_summary(count, output_path)
     return 0
 
 

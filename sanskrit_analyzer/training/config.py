@@ -45,24 +45,16 @@ class TrainingConfig:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TrainingConfig":
         """Create config from dictionary."""
-        config = cls()
-        if "min_confidence" in data:
-            config.min_confidence = float(data["min_confidence"])
-        if "max_examples" in data:
-            config.max_examples = int(data["max_examples"])
-        if "output_dir" in data:
-            config.output_dir = Path(data["output_dir"])
-        if "corpus_dir" in data:
-            config.corpus_dir = Path(data["corpus_dir"])
-        if "grammar_output" in data:
-            config.grammar_output = str(data["grammar_output"])
-        if "disambig_output" in data:
-            config.disambig_output = str(data["disambig_output"])
-        if "batch_size" in data:
-            config.batch_size = int(data["batch_size"])
-        if "log_level" in data:
-            config.log_level = str(data["log_level"])
-        return config
+        return cls(
+            min_confidence=float(data["min_confidence"]) if "min_confidence" in data else 0.85,
+            max_examples=int(data["max_examples"]) if "max_examples" in data else 0,
+            output_dir=Path(data["output_dir"]) if "output_dir" in data else Path("training_data"),
+            corpus_dir=Path(data["corpus_dir"]) if "corpus_dir" in data else Path("sanskrit_analyzer/data/corpora"),
+            grammar_output=str(data["grammar_output"]) if "grammar_output" in data else "grammar_training.jsonl",
+            disambig_output=str(data["disambig_output"]) if "disambig_output" in data else "disambig_training.jsonl",
+            batch_size=int(data["batch_size"]) if "batch_size" in data else 100,
+            log_level=str(data["log_level"]) if "log_level" in data else "INFO",
+        )
 
     def grammar_output_path(self) -> Path:
         """Get full path for grammar training data output."""

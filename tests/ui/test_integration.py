@@ -3,21 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-
-class MockSessionState:
-    """A mock for Streamlit's session_state."""
-
-    def __init__(self) -> None:
-        self.history: list = []
-        self.analysis_result = None
-        self.selected_mode = "educational"
-        self.show_compare = False
-        self.expanded_parses: set = set()
-        self.expanded_words: set = set()
-        self.sanskrit_input = ""
-
-    def __contains__(self, key: str) -> bool:
-        return hasattr(self, key)
+from tests.ui.conftest import MockSessionState
 
 
 # Sample API response for testing (in API format, will be transformed by client)
@@ -74,16 +60,6 @@ SAMPLE_ANALYSIS_RESPONSE = {
 
 class TestFullAnalysisFlow:
     """Integration tests for the complete analysis workflow."""
-
-    @pytest.fixture
-    def mock_streamlit(self) -> MagicMock:
-        """Create mock Streamlit environment."""
-        mock_state = MockSessionState()
-        mock_st = MagicMock()
-        mock_st.session_state = mock_state
-        mock_st.spinner = MagicMock(return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()))
-        mock_st.rerun = MagicMock()
-        return mock_st
 
     @pytest.mark.asyncio
     async def test_analyze_stores_result_in_session(self) -> None:

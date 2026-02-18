@@ -90,6 +90,8 @@ class GrammarFormatConverter:
 
         return output
 
+    MORPHOLOGY_FIELDS = ["pos", "case", "number", "gender", "person", "tense", "voice"]
+
     def _format_word(self, word: dict[str, Any]) -> dict[str, Any]:
         """Format a single word entry.
 
@@ -99,23 +101,7 @@ class GrammarFormatConverter:
         Returns:
             Formatted word for training output.
         """
-        # Build morphology string
-        morphology_parts = []
-        if "pos" in word:
-            morphology_parts.append(word["pos"])
-        if "case" in word:
-            morphology_parts.append(word["case"])
-        if "number" in word:
-            morphology_parts.append(word["number"])
-        if "gender" in word:
-            morphology_parts.append(word["gender"])
-        if "person" in word:
-            morphology_parts.append(word["person"])
-        if "tense" in word:
-            morphology_parts.append(word["tense"])
-        if "voice" in word:
-            morphology_parts.append(word["voice"])
-
+        morphology_parts = [word[f] for f in self.MORPHOLOGY_FIELDS if f in word]
         morphology = "-".join(morphology_parts) if morphology_parts else "unknown"
 
         formatted: dict[str, Any] = {
@@ -123,9 +109,8 @@ class GrammarFormatConverter:
             "morphology": morphology,
         }
 
-        # Add dhatu info for verbs
-        if word.get("dhatu"):
-            formatted["dhatu"] = f"√{word['dhatu']}"
+        if dhatu := word.get("dhatu"):
+            formatted["dhatu"] = f"√{dhatu}"
 
         return formatted
 

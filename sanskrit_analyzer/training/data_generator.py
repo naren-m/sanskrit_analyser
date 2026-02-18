@@ -14,6 +14,20 @@ from sanskrit_analyzer.training.corpus_loader import CorpusEntry, CorpusLoader
 logger = logging.getLogger(__name__)
 
 
+def _extract_confidence(confidence_value: Any) -> float:
+    """Extract float confidence from various formats.
+
+    Args:
+        confidence_value: Confidence as float, int, or object with .overall attribute.
+
+    Returns:
+        Float confidence value.
+    """
+    if hasattr(confidence_value, "overall"):
+        return float(confidence_value.overall)
+    return float(confidence_value) if confidence_value else 0.0
+
+
 @dataclass
 class AnalysisResult:
     """Result of analyzing a corpus entry.
@@ -70,16 +84,9 @@ class BatchAnalyzer:
             analyzer = self._get_analyzer()
             result = await analyzer.analyze(entry.text)
 
-            # Extract confidence and parse count
             raw_confidence = result.confidence if hasattr(result, "confidence") else 0.0
-            # Handle ConfidenceMetrics object or float
-            if hasattr(raw_confidence, "overall"):
-                confidence = float(raw_confidence.overall)
-            else:
-                confidence = float(raw_confidence)
+            confidence = _extract_confidence(raw_confidence)
             num_parses = len(result.parse_forest) if hasattr(result, "parse_forest") else 1
-
-            # Convert to dict for serialization
             parse_dict = result.model_dump() if hasattr(result, "model_dump") else {}
 
             return AnalysisResult(
@@ -209,14 +216,9 @@ class DisambiguationGenerator:
             fill_template,
         )
 
-        # Detect applicable rule and get parameters
         rule_name, params = detect_applicable_rule(parses, selected_index)
         reasoning = fill_template(rule_name, **params)
-
-        # Calculate confidence based on parse scores
-        selected_conf = parses[selected_index].get("confidence", 0.5)
-        if hasattr(selected_conf, "overall"):
-            selected_conf = float(selected_conf.overall)
+        selected_conf = _extract_confidence(parses[selected_index].get("confidence", 0.5))
 
         return {
             "input": {
@@ -224,11 +226,7 @@ class DisambiguationGenerator:
                 "parses": [
                     {
                         "interpretation": p.get("interpretation", f"Parse {i}"),
-                        "confidence": float(
-                            p.get("confidence", 0.5)
-                            if not hasattr(p.get("confidence"), "overall")
-                            else p["confidence"].overall
-                        ),
+                        "confidence": _extract_confidence(p.get("confidence", 0.5)),
                     }
                     for i, p in enumerate(parses)
                 ],
@@ -237,7 +235,7 @@ class DisambiguationGenerator:
             "output": {
                 "selected": selected_index,
                 "reasoning": reasoning,
-                "confidence": float(selected_conf),
+                "confidence": selected_conf,
             },
         }
 
@@ -267,9 +265,7 @@ class DisambiguationGenerator:
         best_index = 0
         best_conf = 0.0
         for i, parse in enumerate(parse_forest):
-            conf = parse.get("confidence", 0.0)
-            if hasattr(conf, "overall"):
-                conf = float(conf.overall)
+            conf = _extract_confidence(parse.get("confidence", 0.0))
             if conf > best_conf:
                 best_conf = conf
                 best_index = i
