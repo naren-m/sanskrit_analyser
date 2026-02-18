@@ -1,0 +1,211 @@
+{
+  "project": "Sanskrit Analyzer",
+  "branchName": "ralph/streamlit-ui",
+  "description": "Streamlit UI for Sanskrit Analyzer - folder-expansion style interface for exploring sentence parse trees",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Project Setup and API Client",
+      "description": "As a developer, I need the basic project structure and API client so that the UI can communicate with the FastAPI backend.",
+      "acceptanceCriteria": [
+        "Create ui/ directory with __init__.py",
+        "Create ui/api_client.py with SanskritAPIClient class",
+        "API client has async methods: analyze(text, mode), health_check()",
+        "API URL configurable via SANSKRIT_API_URL env var (default: http://localhost:8000)",
+        "Typecheck passes (mypy)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Completed with full error handling for connection, timeout, and server errors"
+    },
+    {
+      "id": "US-002",
+      "title": "Session State Management",
+      "description": "As a developer, I need session state management for history and UI state so that user preferences persist.",
+      "acceptanceCriteria": [
+        "Create ui/state.py with state management functions",
+        "Functions: init_state(), get_history(), add_to_history(text, mode), clear_history()",
+        "History stored in st.session_state (max 20 entries, FIFO)",
+        "Each history entry has: text, timestamp, mode",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Includes toggle functions for parse and word expansion state"
+    },
+    {
+      "id": "US-003",
+      "title": "Custom CSS Styles",
+      "description": "As a developer, I need custom CSS for tree-line styling and cards so the UI looks polished.",
+      "acceptanceCriteria": [
+        "Create ui/styles.py with inject_css() function",
+        "CSS for tree lines using border-left and indentation",
+        "CSS for card styling with subtle borders",
+        "CSS for expand/collapse indicators",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Includes confidence_class() and expand_icon() helper functions"
+    },
+    {
+      "id": "US-004",
+      "title": "Input Panel Component",
+      "description": "As a user, I want an input area with text box and examples so I can quickly enter text to analyze.",
+      "acceptanceCriteria": [
+        "Create ui/components/input_panel.py",
+        "Left section: text input field + Analyze button",
+        "Right section: clickable example sentences (3-5 Sanskrit examples)",
+        "Right section: history list from session state",
+        "Clicking example/history populates text input",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Includes mode selector (Educational/Research/Quick)"
+    },
+    {
+      "id": "US-005",
+      "title": "Results Header Component",
+      "description": "As a user, I want to see a summary of analysis results so I understand the output at a glance.",
+      "acceptanceCriteria": [
+        "Create ui/components/results_header.py",
+        "Display original sentence and confidence percentage",
+        "Show script variants (Devanagari, IAST, SLP1)",
+        "Show number of parse candidates",
+        "Compare button visible when multiple parses exist",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Confidence badge with color coding (high/medium/low)"
+    },
+    {
+      "id": "US-006",
+      "title": "Word Card Component",
+      "description": "As a user, I want to see word details in a card format with minimal and expanded views.",
+      "acceptanceCriteria": [
+        "Create ui/components/word_card.py",
+        "Minimal view: lemma, POS, morphology tags, primary meaning",
+        "Show dhatu info for verbs",
+        "Show more link expands to full details",
+        "Expanded view: all scripts, all meanings, confidence, engine votes",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Data-driven morphology field rendering"
+    },
+    {
+      "id": "US-007",
+      "title": "Parse Tree Component",
+      "description": "As a user, I want to see the parse tree with folder-style expansion so I can explore the grammatical structure.",
+      "acceptanceCriteria": [
+        "Create ui/components/parse_tree.py",
+        "Render parse candidates as expandable list",
+        "Each parse expands to show SandhiGroups",
+        "Each SandhiGroup expands to show BaseWords",
+        "Tree-line styling with visual indicators",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Includes engine votes display and parse preview"
+    },
+    {
+      "id": "US-008",
+      "title": "Diff View Component",
+      "description": "As a user, I want to compare parse candidates side-by-side so I can understand differences.",
+      "acceptanceCriteria": [
+        "Create ui/components/diff_view.py",
+        "Side-by-side columns for two parses",
+        "Highlight words that differ between parses",
+        "Close button to return to normal view",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Computes and displays differences in word count, lemmas, and morphology"
+    },
+    {
+      "id": "US-009",
+      "title": "Main App with Full Integration",
+      "description": "As a user, I want the complete app that integrates all components so I can analyze Sanskrit text.",
+      "acceptanceCriteria": [
+        "Create ui/app.py as main entry point",
+        "Header with title and mode selector (Educational/Research/Quick)",
+        "Integrate input panel, results header, parse tree components",
+        "Loading spinner during API calls",
+        "Error handling with detailed messages",
+        "Typecheck passes",
+        "Verify in browser: can analyze text and see results"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Full integration with compare mode toggle"
+    },
+    {
+      "id": "US-010",
+      "title": "Unit Tests for API Client",
+      "description": "As a developer, I need unit tests for the API client to ensure reliability.",
+      "acceptanceCriteria": [
+        "Create tests/ui/test_api_client.py",
+        "Test analyze() with mocked successful response",
+        "Test analyze() with connection error",
+        "Test analyze() with timeout",
+        "Test health_check()",
+        "All tests pass"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "13 tests covering all error scenarios"
+    },
+    {
+      "id": "US-011",
+      "title": "Unit Tests for State Management",
+      "description": "As a developer, I need unit tests for state management to ensure history works correctly.",
+      "acceptanceCriteria": [
+        "Create tests/ui/test_state.py",
+        "Test add_to_history() adds entries",
+        "Test history max size (20 entries)",
+        "Test clear_history()",
+        "Test FIFO eviction",
+        "All tests pass"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "17 tests including toggle expansion state tests"
+    },
+    {
+      "id": "US-012",
+      "title": "Integration Tests",
+      "description": "As a developer, I need integration tests for the full analysis flow.",
+      "acceptanceCriteria": [
+        "Create tests/ui/test_integration.py",
+        "Test full flow: input -> API call -> results displayed",
+        "Test mode selection affects API request",
+        "Test error states display correctly",
+        "Tests use mocked API responses",
+        "All tests pass"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "8 integration tests for full analysis workflow"
+    },
+    {
+      "id": "US-013",
+      "title": "Documentation",
+      "description": "As a developer, I need documentation on how to run and test the UI.",
+      "acceptanceCriteria": [
+        "Create ui/README.md with component overview",
+        "Document environment variables",
+        "Document run command: streamlit run sanskrit_analyzer/ui/app.py",
+        "Document test command: pytest tests/ui/ -v",
+        "Update main README.md with Streamlit UI section"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "Both ui/README.md and main README.md updated"
+    }
+  ]
+}

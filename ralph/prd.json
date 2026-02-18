@@ -1,510 +1,241 @@
 {
   "project": "Sanskrit Analyzer",
-  "branchName": "ralph/sanskrit-mcp-server",
-  "description": "MCP Server exposing Sanskrit Analyzer as Model Context Protocol service with 12 tools for analysis, dhatu lookup, and grammar operations, plus 4 resource categories for browsing reference data",
+  "branchName": "ralph/model-training",
+  "description": "Model Training Pipeline - Generate training data from Sanskrit corpora and fine-tune LLMs for grammar analysis and disambiguation",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Create MCP module structure",
-      "description": "As a developer, I need the basic module structure for MCP server code so that I have a place to add tools and resources.",
+      "title": "Create training module structure",
+      "description": "As a developer, I need the basic module structure for training code so that I have a place to add data generation and training scripts.",
       "acceptanceCriteria": [
-        "Create sanskrit_analyzer/mcp/__init__.py",
-        "Create sanskrit_analyzer/mcp/server.py (empty placeholder)",
-        "Create sanskrit_analyzer/mcp/tools/__init__.py",
-        "Create sanskrit_analyzer/mcp/tools/analysis.py (empty placeholder)",
-        "Create sanskrit_analyzer/mcp/tools/dhatu.py (empty placeholder)",
-        "Create sanskrit_analyzer/mcp/tools/grammar.py (empty placeholder)",
-        "Create sanskrit_analyzer/mcp/resources/__init__.py",
-        "Create sanskrit_analyzer/mcp/resources/dhatus.py (empty placeholder)",
-        "Create sanskrit_analyzer/mcp/resources/grammar.py (empty placeholder)",
+        "Create sanskrit_analyzer/training/__init__.py",
+        "Create sanskrit_analyzer/training/data_generator.py (empty placeholder)",
+        "Create sanskrit_analyzer/training/corpus_loader.py (empty placeholder)",
+        "Create sanskrit_analyzer/training/format_converter.py (empty placeholder)",
+        "Create sanskrit_analyzer/training/config.py with TrainingConfig dataclass",
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Module structure created with config, corpus_loader, data_generator, format_converter"
     },
     {
       "id": "US-002",
-      "title": "Set up MCP server with HTTP/SSE transport",
-      "description": "As a developer, I need the MCP server skeleton with HTTP/SSE transport so AI clients can connect remotely.",
+      "title": "Implement corpus loader for text files",
+      "description": "As a developer, I need to load Sanskrit text corpora from various formats so I can process them for training data.",
       "acceptanceCriteria": [
-        "Install mcp package and add to pyproject.toml dependencies",
-        "Implement create_server() function in server.py that returns MCP Server instance",
-        "Configure HTTP/SSE transport (not stdio)",
-        "Server listens on configurable port (default 8001)",
-        "Server can be started with python -m sanskrit_analyzer.mcp.server",
+        "CorpusLoader class in corpus_loader.py",
+        "Support loading from plain text files (.txt)",
+        "Support loading from JSON files with verse structure",
+        "Iterator interface yielding sentences/verses",
+        "Track source metadata (corpus name, chapter, verse number)",
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "CorpusLoader with text/JSON support and iterator interface"
     },
     {
       "id": "US-003",
-      "title": "Add MCP server configuration",
-      "description": "As a developer, I need server configuration options so deployment can be customized.",
+      "title": "Add sample corpus data",
+      "description": "As a developer, I need sample Sanskrit text data so I can test the training pipeline.",
       "acceptanceCriteria": [
-        "Add MCPServerConfig dataclass with: host, port, log_level",
-        "Support configuration via environment variables: MCP_HOST, MCP_PORT, MCP_LOG_LEVEL",
-        "Support configuration via existing config.yaml under new mcp: section",
-        "Environment variables override config file values",
+        "Create sanskrit_analyzer/data/corpora/ directory",
+        "Add sample_ramayana.txt with 50-100 verses from Balakanda",
+        "Add sample_gita.txt with 20-30 verses",
+        "Include proper attribution and source notes",
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Sample Ramayana (50 verses) and Gita (25 verses) in data/corpora/"
     },
     {
       "id": "US-004",
-      "title": "Implement analyze_sentence tool",
-      "description": "As an AI assistant, I want to analyze a Sanskrit sentence so I can provide full morphological breakdown to users.",
+      "title": "Implement batch analyzer for corpus processing",
+      "description": "As a developer, I need to run the analyzer on corpus texts in batch mode to generate training examples.",
       "acceptanceCriteria": [
-        "Register analyze_sentence tool with MCP server",
-        "Accept parameters: text (str), mode (optional: educational|production|academic), verbosity (optional: str)",
-        "Call existing Analyzer.analyze() method",
-        "Return JSON with sandhi_groups, words, meanings, confidence",
-        "Handle errors gracefully with descriptive messages",
+        "BatchAnalyzer class in data_generator.py",
+        "Process sentences through existing Analyzer",
+        "Capture full parse results with confidence scores",
+        "Filter results by confidence threshold (configurable, default 0.85)",
+        "Save results to JSONL format",
+        "Progress tracking with logging",
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "BatchAnalyzer with async processing, JSONL output, and confidence filtering"
     },
     {
       "id": "US-005",
-      "title": "Implement split_sandhi tool",
-      "description": "As an AI assistant, I want to split sandhi in Sanskrit text so I can show word boundaries without full analysis.",
+      "title": "Create grammar training data format converter",
+      "description": "As a developer, I need to convert analyzer output to the grammar model training format.",
       "acceptanceCriteria": [
-        "Register split_sandhi tool with MCP server",
-        "Accept parameters: text (str), verbosity (optional: str)",
-        "Return list of sandhi groups with split points",
-        "Include sandhi rule applied (sutra reference) when available",
-        "Lighter weight than full analyze (skip disambiguation if possible)",
+        "GrammarFormatConverter class in format_converter.py",
+        "Convert ParseResult to training JSON format",
+        "Input format: 'Parse: {sanskrit_text}'",
+        "Output format: structured JSON with sandhi_groups, words, morphology",
+        "Validate output matches expected schema",
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "GrammarFormatConverter with schema validation"
     },
     {
       "id": "US-006",
-      "title": "Implement get_morphology tool",
-      "description": "As an AI assistant, I want to get morphological tags for a word so I can explain its grammatical function.",
+      "title": "Create disambiguation training data generator",
+      "description": "As a developer, I need to generate disambiguation training examples from ambiguous parses.",
       "acceptanceCriteria": [
-        "Register get_morphology tool with MCP server",
-        "Accept parameters: word (str), context (optional: str), verbosity (optional: str)",
-        "Return morphological tags: case, gender, number, person, tense, mood, voice",
-        "Support both Devanagari and IAST input",
+        "DisambiguationGenerator class in data_generator.py",
+        "Identify sentences with multiple parse candidates",
+        "Generate reasoning text using rule templates",
+        "Output format: parses array, selected index, reasoning string",
+        "Templates for: case_agreement, verb_agreement, sandhi_preference, semantic_coherence",
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DisambiguationGenerator with template-based reasoning"
     },
     {
       "id": "US-007",
-      "title": "Implement transliterate tool",
-      "description": "As an AI assistant, I want to convert text between scripts so I can present Sanskrit in the user's preferred format.",
+      "title": "Add reasoning templates",
+      "description": "As a developer, I need reasoning templates so disambiguation examples include explanatory text.",
       "acceptanceCriteria": [
-        "Register transliterate tool with MCP server",
-        "Accept parameters: text (str), from_script (str), to_script (str)",
-        "Support scripts: devanagari, iast, slp1, itrans",
-        "Use existing ScriptVariants utilities",
-        "Return converted text string",
+        "Create sanskrit_analyzer/training/reasoning_templates.py",
+        "REASONING_TEMPLATES dict with template strings",
+        "Templates for: case_agreement, verb_agreement, sandhi_preference, semantic_coherence",
+        "Function to fill template with parse-specific details",
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "reasoning_templates.py with 6 templates and fill functions"
     },
     {
       "id": "US-008",
-      "title": "Implement lookup_dhatu tool",
-      "description": "As an AI assistant, I want to look up a dhatu by its root so I can explain verb meanings and forms.",
+      "title": "Implement training data CLI",
+      "description": "As a developer, I need a CLI tool to generate training data from corpora.",
       "acceptanceCriteria": [
-        "Register lookup_dhatu tool with MCP server",
-        "Accept parameters: dhatu (str), include_conjugations (optional: bool), verbosity (optional: str)",
-        "Call existing DhatuDB.lookup_by_dhatu() method",
-        "Return DhatuEntry JSON with meanings, gana, pada, examples",
-        "Optionally include full conjugation tables",
+        "Create sanskrit_analyzer/training/cli.py",
+        "Command: generate-grammar --corpus PATH --output PATH --min-confidence 0.85",
+        "Command: generate-disambig --corpus PATH --output PATH",
+        "Progress bar for long operations",
+        "Summary statistics at completion",
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "CLI with generate-grammar, generate-disambig, validate, stats commands"
     },
     {
       "id": "US-009",
-      "title": "Implement search_dhatu tool",
-      "description": "As an AI assistant, I want to search dhatus by meaning or pattern so I can find roots when users ask 'what is the verb for X'.",
+      "title": "Add training CLI entry point",
+      "description": "As a developer, I need a proper entry point so the training CLI can be easily invoked.",
       "acceptanceCriteria": [
-        "Register search_dhatu tool with MCP server",
-        "Accept parameters: query (str), limit (optional: int, default 10), verbosity (optional: str)",
-        "Call existing DhatuDB.search() method",
-        "Return list of matching DhatuEntry JSON objects",
+        "Add [project.scripts] entry: sanskrit-train = sanskrit_analyzer.training.cli:main",
+        "CLI can be started with sanskrit-train command after install",
+        "Help text documents available commands",
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Entry point sanskrit-train added to pyproject.toml"
     },
     {
       "id": "US-010",
-      "title": "Implement conjugate_verb tool",
-      "description": "As an AI assistant, I want to get conjugation forms for a dhatu so I can show users how verbs inflect.",
+      "title": "Create data validation utilities",
+      "description": "As a developer, I need validation utilities to ensure training data quality.",
       "acceptanceCriteria": [
-        "Register conjugate_verb tool with MCP server",
-        "Accept parameters: dhatu (str), lakara (optional: str), purusha (optional: str), vacana (optional: str)",
-        "Call existing DhatuDB.get_conjugation() method",
-        "Return conjugation table or filtered forms based on parameters",
-        "Include both Devanagari and IAST forms",
+        "Create sanskrit_analyzer/training/validation.py",
+        "validate_grammar_example() checks JSON schema compliance",
+        "validate_disambig_example() checks required fields",
+        "Report invalid examples with specific errors",
+        "CLI command: sanskrit-train validate --input PATH",
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Validation in format_converter.py and CLI validate command"
     },
     {
       "id": "US-011",
-      "title": "Implement list_gana tool",
-      "description": "As an AI assistant, I want to list dhatus by verb class (gana) so I can explain gana patterns to users.",
+      "title": "Add unit tests for corpus loader",
+      "description": "As a developer, I need unit tests for the corpus loader.",
       "acceptanceCriteria": [
-        "Register list_gana tool with MCP server",
-        "Accept parameters: gana (int, 1-10), limit (optional: int, default 20)",
-        "Call existing DhatuDB.get_by_gana() method",
-        "Return list of DhatuEntry JSON objects in that gana",
-        "Validate gana is 1-10, return error otherwise",
-        "Typecheck passes"
+        "Create tests/training/test_corpus_loader.py",
+        "Test loading text files",
+        "Test loading JSON files",
+        "Test metadata tracking",
+        "Test iterator behavior",
+        "All tests pass"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "13 tests in test_corpus_loader.py"
     },
     {
       "id": "US-012",
-      "title": "Implement explain_parse tool",
-      "description": "As an AI assistant, I want to compare multiple parse interpretations so I can explain ambiguity to users.",
+      "title": "Add unit tests for format converters",
+      "description": "As a developer, I need unit tests for the format converters.",
       "acceptanceCriteria": [
-        "Register explain_parse tool with MCP server",
-        "Accept parameters: text (str), parse_indices (optional: list of int), verbosity (optional: str)",
-        "Run analysis and return multiple parses from parse_forest",
-        "If parse_indices provided, return only those parses",
-        "Include confidence scores and engine votes for comparison",
-        "Typecheck passes"
+        "Create tests/training/test_format_converter.py",
+        "Test grammar format conversion",
+        "Test disambiguation format conversion",
+        "Test reasoning template filling",
+        "Test schema validation",
+        "All tests pass"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "17 tests in test_format_converter.py"
     },
     {
       "id": "US-013",
-      "title": "Implement identify_compound tool",
-      "description": "As an AI assistant, I want to identify compound types (samasa) so I can explain Sanskrit compound formation.",
+      "title": "Add integration test for full pipeline",
+      "description": "As a developer, I need integration tests for the full training data generation pipeline.",
       "acceptanceCriteria": [
-        "Register identify_compound tool with MCP server",
-        "Accept parameters: word (str), verbosity (optional: str)",
-        "Detect compound type: tatpurusha, dvandva, bahuvrihi, avyayibhava, karmadharaya, dvigu",
-        "Return compound type and component breakdown",
-        "Use existing CompoundType enum",
-        "Typecheck passes"
+        "Create tests/training/test_integration.py",
+        "Test end-to-end: corpus → analyze → format → validate",
+        "Test with sample corpus data",
+        "Verify output file formats",
+        "All tests pass"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "8 tests in test_integration.py"
     },
     {
       "id": "US-014",
-      "title": "Implement get_pratyaya tool",
-      "description": "As an AI assistant, I want to identify suffixes applied to a word so I can explain word formation.",
+      "title": "Create training data statistics utility",
+      "description": "As a developer, I need to generate statistics about training datasets.",
       "acceptanceCriteria": [
-        "Register get_pratyaya tool with MCP server",
-        "Accept parameters: word (str), verbosity (optional: str)",
-        "Analyze word and return list of pratyayas (suffixes) applied",
-        "Include pratyaya type (krt, taddhita, tin, sup) and grammatical function",
-        "Use existing Pratyaya model",
+        "Add stats command to CLI: sanskrit-train stats --input PATH",
+        "Report: total examples, avg confidence, morphology distribution",
+        "Report: disambiguation reasoning type distribution",
+        "Output as JSON or formatted text",
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Stats command in CLI with JSON output option"
     },
     {
       "id": "US-015",
-      "title": "Implement resolve_ambiguity tool",
-      "description": "As an AI assistant, I want to resolve ambiguous parses so I can give users the most likely interpretation.",
+      "title": "Document training data generation",
+      "description": "As a developer, I need documentation on how to generate training data.",
       "acceptanceCriteria": [
-        "Register resolve_ambiguity tool with MCP server",
-        "Accept parameters: text (str), context (optional: str)",
-        "Run full disambiguation pipeline (rules then LLM if enabled)",
-        "Return selected parse index, confidence, and reasoning",
-        "Include all parse candidates for reference",
-        "Typecheck passes"
+        "Create sanskrit_analyzer/training/README.md",
+        "Document corpus format requirements",
+        "Document CLI commands with examples",
+        "Document output formats with samples",
+        "Update main README.md with training section"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-016",
-      "title": "Add verbosity parameter handling",
-      "description": "As a developer, I need consistent verbosity handling across all tools so AI can control response detail level.",
-      "acceptanceCriteria": [
-        "Create Verbosity enum: minimal, standard, detailed",
-        "Create format_response(data, verbosity) helper function",
-        "Minimal: essential data only (lemma, morphology codes)",
-        "Standard: data with common fields expanded (default)",
-        "Detailed: full data with explanatory text",
-        "Apply to all tools that accept verbosity parameter",
-        "Typecheck passes"
-      ],
-      "priority": 16,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-017",
-      "title": "Create dhatus resource provider",
-      "description": "As an AI assistant, I want to browse the dhatu database as a resource so I can explore available roots.",
-      "acceptanceCriteria": [
-        "Register /dhatus resource with MCP server",
-        "/dhatus returns overview: total count, gana distribution",
-        "/dhatus/gana/{n} returns dhatus in gana n (1-10)",
-        "/dhatus/{dhatu} returns full entry for specific dhatu",
-        "/dhatus/{dhatu}/conjugations returns conjugation tables",
-        "Typecheck passes"
-      ],
-      "priority": 17,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-018",
-      "title": "Create sandhi-rules resource provider",
-      "description": "As an AI assistant, I want to browse sandhi rules as a resource so I can cite specific rules when explaining.",
-      "acceptanceCriteria": [
-        "Register /grammar/sandhi-rules resource with MCP server",
-        "/grammar/sandhi-rules returns index of sandhi categories",
-        "/grammar/sandhi-rules/vowel returns vowel sandhi rules (ac-sandhi)",
-        "/grammar/sandhi-rules/consonant returns consonant sandhi rules (hal-sandhi)",
-        "/grammar/sandhi-rules/visarga returns visarga sandhi rules",
-        "Load rules from data/sandhi_rules.yaml",
-        "Typecheck passes"
-      ],
-      "priority": 18,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-019",
-      "title": "Create pratyayas resource provider",
-      "description": "As an AI assistant, I want to browse suffix reference as a resource so I can cite specific pratyayas.",
-      "acceptanceCriteria": [
-        "Register /grammar/pratyayas resource with MCP server",
-        "/grammar/pratyayas returns index of suffix types",
-        "/grammar/pratyayas/krt returns primary suffixes (krt pratyayas)",
-        "/grammar/pratyayas/taddhita returns secondary suffixes",
-        "/grammar/pratyayas/tin returns verb endings",
-        "/grammar/pratyayas/sup returns noun endings",
-        "Load data from data/pratyayas.yaml",
-        "Typecheck passes"
-      ],
-      "priority": 19,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-020",
-      "title": "Create sutras resource provider",
-      "description": "As an AI assistant, I want to browse Paninian sutras as a resource so I can cite grammatical rules authoritatively.",
-      "acceptanceCriteria": [
-        "Register /grammar/sutras resource with MCP server",
-        "/grammar/sutras returns Astadhyayi overview (8 adhyayas, 4 padas each)",
-        "/grammar/sutras/{adhyaya}/{pada} returns sutras in that section",
-        "/grammar/sutras/search?q={term} searches sutras by topic",
-        "Load data from data/sutras.yaml",
-        "Typecheck passes"
-      ],
-      "priority": 20,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-021",
-      "title": "Create sandhi_rules.yaml placeholder",
-      "description": "As a developer, I need a sandhi rules data file so the resource provider has data to serve.",
-      "acceptanceCriteria": [
-        "Create sanskrit_analyzer/data/sandhi_rules.yaml",
-        "Include structure for vowel, consonant, visarga categories",
-        "Add 5-10 example rules per category with: rule name, sutra reference, before, after, example",
-        "Mark as placeholder with TODO for full population",
-        "Typecheck passes (if any Python loading code)"
-      ],
-      "priority": 21,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-022",
-      "title": "Create pratyayas.yaml placeholder",
-      "description": "As a developer, I need a pratyayas data file so the resource provider has data to serve.",
-      "acceptanceCriteria": [
-        "Create sanskrit_analyzer/data/pratyayas.yaml",
-        "Include structure for krt, taddhita, tin, sup categories",
-        "Add 5-10 example pratyayas per category with: name, meaning, grammatical function, example",
-        "Mark as placeholder with TODO for full population",
-        "Typecheck passes (if any Python loading code)"
-      ],
-      "priority": 22,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-023",
-      "title": "Create sutras.yaml placeholder",
-      "description": "As a developer, I need a sutras data file so the resource provider has data to serve.",
-      "acceptanceCriteria": [
-        "Create sanskrit_analyzer/data/sutras.yaml",
-        "Include structure: adhyaya to pada to sutra list",
-        "Add 3-5 example sutras per pada for adhyaya 1 (as sample)",
-        "Each sutra has: number, text (Devanagari), transliteration, meaning",
-        "Mark as placeholder with TODO for full population",
-        "Typecheck passes (if any Python loading code)"
-      ],
-      "priority": 23,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-024",
-      "title": "Add unit tests for analysis tools",
-      "description": "As a developer, I need unit tests for analysis tools so I can verify they work correctly.",
-      "acceptanceCriteria": [
-        "Create tests/mcp/test_analysis_tools.py",
-        "Test analyze_sentence with valid Sanskrit input",
-        "Test split_sandhi returns correct sandhi groups",
-        "Test get_morphology returns valid morphological tags",
-        "Test transliterate correctly converts between scripts",
-        "Test error handling for invalid inputs",
-        "All tests pass"
-      ],
-      "priority": 24,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-025",
-      "title": "Add unit tests for dhatu tools",
-      "description": "As a developer, I need unit tests for dhatu tools so I can verify they work correctly.",
-      "acceptanceCriteria": [
-        "Create tests/mcp/test_dhatu_tools.py",
-        "Test lookup_dhatu with known dhatu (e.g., gam)",
-        "Test search_dhatu returns relevant results for meaning search",
-        "Test conjugate_verb returns correct conjugation forms",
-        "Test list_gana returns dhatus for valid gana (1-10)",
-        "Test error handling for unknown dhatu, invalid gana",
-        "All tests pass"
-      ],
-      "priority": 25,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-026",
-      "title": "Add unit tests for grammar tools",
-      "description": "As a developer, I need unit tests for grammar tools so I can verify they work correctly.",
-      "acceptanceCriteria": [
-        "Create tests/mcp/test_grammar_tools.py",
-        "Test explain_parse returns multiple parse candidates",
-        "Test identify_compound detects known compound types",
-        "Test get_pratyaya identifies suffixes",
-        "Test resolve_ambiguity returns selected parse with reasoning",
-        "Test error handling for invalid inputs",
-        "All tests pass"
-      ],
-      "priority": 26,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-027",
-      "title": "Add unit tests for resource providers",
-      "description": "As a developer, I need unit tests for resource providers so I can verify they serve correct data.",
-      "acceptanceCriteria": [
-        "Create tests/mcp/test_resources.py",
-        "Test /dhatus resource returns overview",
-        "Test /dhatus/gana/1 returns gana 1 dhatus",
-        "Test /grammar/sandhi-rules returns rule index",
-        "Test /grammar/pratyayas returns suffix index",
-        "Test /grammar/sutras returns sutra overview",
-        "All tests pass"
-      ],
-      "priority": 27,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-028",
-      "title": "Add MCP client integration test",
-      "description": "As a developer, I need an integration test that connects as an MCP client to verify end-to-end functionality.",
-      "acceptanceCriteria": [
-        "Create tests/mcp/test_integration.py",
-        "Start MCP server in test fixture",
-        "Connect using MCP client SDK",
-        "Call analyze_sentence tool and verify response structure",
-        "Read /dhatus resource and verify data",
-        "Test passes with real HTTP/SSE connection",
-        "All tests pass"
-      ],
-      "priority": 28,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-029",
-      "title": "Add MCP server entry point",
-      "description": "As a developer, I need a proper entry point so the MCP server can be easily started.",
-      "acceptanceCriteria": [
-        "Add [project.scripts] entry in pyproject.toml: sanskrit-mcp = sanskrit_analyzer.mcp.server:main",
-        "Implement main() function that starts the server",
-        "Support --host, --port, --log-level CLI arguments",
-        "Server can be started with sanskrit-mcp command after install",
-        "Typecheck passes"
-      ],
-      "priority": 29,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-030",
-      "title": "Create homelab deployment configuration",
-      "description": "As a developer, I need deployment configuration so the MCP server can run on homelab.",
-      "acceptanceCriteria": [
-        "Create docker/mcp/Dockerfile for MCP server",
-        "Add sanskrit-mcp service to docker/docker-compose.yml",
-        "Configure port 8001 (separate from FastAPI on 8000)",
-        "Add health check configuration",
-        "Document deployment in README or separate doc",
-        "Docker build succeeds"
-      ],
-      "priority": 30,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-031",
-      "title": "Add health check endpoint",
-      "description": "As an operator, I need a health check so monitoring can verify the MCP server is running.",
-      "acceptanceCriteria": [
-        "Add /health endpoint to MCP server",
-        "Returns JSON with: status, version, uptime, component health",
-        "Check analyzer availability",
-        "Check DhatuDB connectivity",
-        "Return appropriate HTTP status codes (200 OK, 503 unhealthy)",
-        "Typecheck passes"
-      ],
-      "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "README.md created in training module"
     }
   ]
 }

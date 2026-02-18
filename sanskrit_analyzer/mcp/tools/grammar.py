@@ -90,7 +90,7 @@ def register_grammar_tools(server: Server) -> None:
         elif name == "resolve_ambiguity":
             return await _resolve_ambiguity(analyzer, arguments)
         else:
-            return [TextContent(type="text", text=f"Unknown tool: {name}")]
+            return error_response(f"Unknown tool: {name}")
 
 
 async def _explain_parse(

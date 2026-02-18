@@ -1,21 +1,11 @@
 """Session state management for the Streamlit UI."""
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
 import streamlit as st
 
 MAX_HISTORY_SIZE = 20
-
-
-@dataclass
-class HistoryEntry:
-    """A single history entry."""
-
-    text: str
-    mode: str
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
 def init_state() -> None:
@@ -38,6 +28,14 @@ def init_state() -> None:
     if "expanded_words" not in st.session_state:
         st.session_state.expanded_words = set()
 
+    if "sanskrit_input" not in st.session_state:
+        st.session_state.sanskrit_input = ""
+
+    # Apply pending input (set by example/history clicks, applied before widget creation)
+    if "pending_input" in st.session_state:
+        st.session_state.sanskrit_input = st.session_state.pending_input
+        del st.session_state.pending_input
+
 
 def get_history() -> list[dict[str, Any]]:
     """Get the current history list.
@@ -46,8 +44,7 @@ def get_history() -> list[dict[str, Any]]:
         List of history entries as dictionaries.
     """
     init_state()
-    history: list[dict[str, Any]] = st.session_state.history
-    return history
+    return st.session_state.history
 
 
 def add_to_history(text: str, mode: str) -> None:
@@ -101,8 +98,7 @@ def get_analysis_result() -> dict[str, Any] | None:
         The stored analysis result or None.
     """
     init_state()
-    result: dict[str, Any] | None = st.session_state.analysis_result
-    return result
+    return st.session_state.analysis_result
 
 
 def toggle_parse_expanded(parse_id: str) -> None:

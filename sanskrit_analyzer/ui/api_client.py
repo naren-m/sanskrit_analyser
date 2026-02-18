@@ -6,6 +6,115 @@ from typing import Any
 
 import httpx
 
+from sanskrit_analyzer.models.scripts import Script
+from sanskrit_analyzer.utils.transliterate import transliterate
+
+
+def _slp1_to_devanagari(text: str) -> str:
+    """Convert SLP1 text to Devanagari."""
+    if not text:
+        return text
+    return transliterate(text, Script.SLP1, Script.DEVANAGARI)
+
+
+def _transform_api_response(data: dict[str, Any]) -> dict[str, Any]:
+    """Transform API response to UI-expected format.
+
+    The API returns a structure with parse_forest, original_text, etc.
+    The UI expects parses, sentence.original, confidence as float, etc.
+
+    Args:
+        data: Raw API response data.
+
+    Returns:
+        Transformed data matching UI component expectations.
+    """
+    # Extract confidence value (API returns nested object)
+    confidence_data = data.get("confidence", {})
+    confidence = confidence_data.get("overall", 0) if isinstance(confidence_data, dict) else confidence_data
+
+    # Transform parse_forest to parses with UI-expected structure
+    parses = [
+        {
+            "parse_id": parse.get("parse_id", ""),
+            "confidence": parse.get("confidence", 0),
+            "sandhi_groups": _transform_sandhi_groups(parse.get("sandhi_groups", [])),
+        }
+        for parse in data.get("parse_forest", [])
+    ]
+
+    return {
+        "sentence": {
+            "original": data.get("original_text", ""),
+            "scripts": data.get("scripts", {}),
+        },
+        "parses": parses,
+        "confidence": confidence,
+        "mode": data.get("mode", ""),
+    }
+
+
+def _transform_sandhi_groups(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Transform sandhi groups to UI-expected format.
+
+    Args:
+        groups: List of sandhi group data from API.
+
+    Returns:
+        Transformed sandhi groups.
+    """
+    return [
+        {
+            "group_id": group.get("group_id", ""),
+            "surface_form": group.get("surface_form", ""),
+            "scripts": {"devanagari": _slp1_to_devanagari(group.get("surface_form", ""))},
+            "base_words": _transform_base_words(group.get("base_words", [])),
+        }
+        for group in groups
+    ]
+
+
+def _transform_base_words(words: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Transform base words to UI-expected format.
+
+    Args:
+        words: List of base word data from API.
+
+    Returns:
+        Transformed base words.
+    """
+    return [
+        {
+            "word_id": word.get("word_id", ""),
+            "lemma": word.get("lemma", ""),
+            "surface_form": word.get("surface_form", ""),
+            "scripts": word.get("scripts", {}),
+            "morphology": word.get("morphology", {}),
+            "meanings": word.get("meanings", []),
+            "dhatu": _transform_dhatu(word.get("dhatu")),
+            "confidence": word.get("confidence", 0),
+        }
+        for word in words
+    ]
+
+
+def _transform_dhatu(dhatu: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Transform dhatu data to UI-expected format.
+
+    Args:
+        dhatu: Dhatu data from API or None.
+
+    Returns:
+        Transformed dhatu or None.
+    """
+    if not dhatu:
+        return None
+    return {
+        "root": dhatu.get("dhatu", ""),
+        "meaning": dhatu.get("meaning", ""),
+        "gana": dhatu.get("gana"),
+    }
+
 
 @dataclass
 class APIError:
@@ -57,7 +166,10 @@ class SanskritAPIClient:
                 )
 
                 if response.status_code == 200:
-                    return AnalysisResult(success=True, data=response.json())
+                    data = response.json()
+                    # Transform API response to UI-expected format
+                    transformed = _transform_api_response(data)
+                    return AnalysisResult(success=True, data=transformed)
 
                 # Handle 4xx/5xx errors
                 error_msg = self._get_error_message(response)

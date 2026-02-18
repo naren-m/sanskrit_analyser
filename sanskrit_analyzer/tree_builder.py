@@ -270,7 +270,9 @@ class TreeBuilder:
         Returns:
             BaseWord with full analysis.
         """
-        scripts = ScriptVariants.from_text(segment.lemma, Script.SLP1)
+        # Use lemma if available, otherwise fall back to surface form
+        lemma = segment.lemma or segment.surface
+        scripts = ScriptVariants.from_text(lemma, Script.SLP1)
 
         # Parse morphology if available
         morphology = self._parse_morphology(segment.morphology, segment.pos)
@@ -278,7 +280,7 @@ class TreeBuilder:
         # Look up dhatu if this is a verb
         dhatu = None
         if self._config.lookup_dhatus and self._is_verb(segment.pos, morphology):
-            dhatu = self._lookup_dhatu(segment.lemma)
+            dhatu = self._lookup_dhatu(lemma)
 
         # Build meanings
         meanings: list[Meaning] = []
@@ -286,7 +288,7 @@ class TreeBuilder:
             meanings = [Meaning(text=m) for m in segment.meanings]
 
         return BaseWord(
-            lemma=segment.lemma,
+            lemma=lemma,
             surface_form=segment.surface,
             scripts=scripts,
             morphology=morphology,

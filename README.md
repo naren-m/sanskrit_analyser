@@ -67,6 +67,17 @@ uvicorn sanskrit_analyzer.api.app:create_app --factory --host 0.0.0.0 --port 800
 
 ### Running the UI
 
+**Streamlit UI (Python-based):**
+```bash
+# Run the Streamlit UI
+streamlit run sanskrit_analyzer/ui/app.py
+
+# UI available at http://localhost:8501
+# Set API URL via environment variable:
+# SANSKRIT_API_URL=http://localhost:8000 streamlit run sanskrit_analyzer/ui/app.py
+```
+
+**Vue.js UI (JavaScript-based):**
 ```bash
 cd ui
 npm install

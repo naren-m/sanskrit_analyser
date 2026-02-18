@@ -65,6 +65,7 @@ dev = [
 
 [project.scripts]
 sanskrit-mcp = "sanskrit_analyzer.mcp.server:main"
+sanskrit-train = "sanskrit_analyzer.training.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/narenmudivarthy/sanskrit-analyzer"

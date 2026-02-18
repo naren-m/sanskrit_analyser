@@ -120,7 +120,7 @@ def register_dhatu_tools(server: Server) -> None:
         elif name == "list_gana":
             return _list_gana(db, arguments)
         else:
-            return [TextContent(type="text", text=f"Unknown tool: {name}")]
+            return error_response(f"Unknown tool: {name}")
 
 
 def _lookup_dhatu(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:

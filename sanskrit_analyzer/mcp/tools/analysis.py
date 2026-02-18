@@ -97,7 +97,7 @@ def register_analysis_tools(server: Server) -> None:
         elif name == "transliterate":
             return _transliterate(arguments)
         else:
-            return [TextContent(type="text", text=f"Unknown tool: {name}")]
+            return error_response(f"Unknown tool: {name}")
 
 
 async def _analyze_sentence(
