@@ -22,7 +22,7 @@ COPY sanskrit_analyzer ./sanskrit_analyzer
 # Build the package with all extras
 RUN pip install --no-cache-dir build && \
     python -m build && \
-    pip wheel --no-cache-dir --wheel-dir /app/wheels -r <(echo ".[api,ui]")
+    pip install --no-cache-dir --target=/app/wheels .[api,ui]
 
 # Production stage
 FROM python:3.11-slim as production
@@ -35,11 +35,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy built wheels and install
-COPY --from=builder /app/wheels /wheels
-COPY --from=builder /app/dist/*.whl /wheels/
-RUN pip install --no-cache-dir /wheels/*.whl && \
-    rm -rf /wheels
+# Copy built package and install
+COPY --from=builder /app/dist/*.whl /tmp/
+RUN pip install --no-cache-dir /tmp/*.whl && \
+    pip install --no-cache-dir streamlit uvicorn && \
+    rm -rf /tmp/*.whl
 
 # Copy supervisord config
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
