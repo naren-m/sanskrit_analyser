@@ -1,0 +1,11 @@
+@Library('homelab-shared-library') _
+
+gitopsPipeline(
+    appName: 'sanskrit-analyzer',
+    registry: '192.168.68.124:30501',
+    manifestRelativePath: 'base/applications/sanskrit-analyzer',
+    namespace: 'sanskrit-analyzer',
+    multiArch: false,  // ARM64 only
+    buildContext: '.',
+    dockerfilePath: 'docker/Dockerfile.combined'
+)
