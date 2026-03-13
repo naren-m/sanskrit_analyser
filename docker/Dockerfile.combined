@@ -41,23 +41,21 @@ COPY --from=builder /app/dist/*.whl /wheels/
 RUN pip install --no-cache-dir /wheels/*.whl && \
     rm -rf /wheels
 
-# Copy configuration files
-COPY config.yaml.example /app/config.yaml
-COPY sanskrit_analyzer/data/*.db /app/data/
+# Copy supervisord config
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Copy source for Streamlit (needs access to ui/app.py)
+# Copy source for Streamlit (needs access to ui/app.py) and data files
 COPY sanskrit_analyzer /app/sanskrit_analyzer
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+# Create directories and non-root user
+RUN mkdir -p /app/data /home/appuser/.sanskrit_analyzer && \
+    useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app /home/appuser
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV SANSKRIT_CONFIG_PATH=/app/config.yaml
-ENV SANSKRIT_CORPUS_PATH=/app/data/corpus.db
 ENV SANSKRIT_API_URL=http://localhost:8000
+ENV HOME=/home/appuser
 
 # Expose ports
 EXPOSE 8000 8501
