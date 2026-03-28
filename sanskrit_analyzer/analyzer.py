@@ -29,6 +29,8 @@ from sanskrit_analyzer.models.scripts import Script, ScriptVariants
 from sanskrit_analyzer.models.tree import AnalysisTree, CacheTier
 from sanskrit_analyzer.tree_builder import TreeBuilder, TreeBuilderConfig
 from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1
+from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry
+from sanskrit_analyzer.models.dhatu import DhatuInfo
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +92,7 @@ class Analyzer:
         self._cache: TieredCache | None = None
         self._disambiguation: DisambiguationPipeline | None = None
         self._tree_builder: TreeBuilder | None = None
+        self._dhatu_db: DhatuDB | None = None
 
         # Lazy initialization flags
         self._initialized = False
@@ -185,10 +188,22 @@ class Analyzer:
             except ImportError:
                 logger.warning("Heritage engine not available")
 
+        if self._config.engines.local_byt5:
+            try:
+                from sanskrit_analyzer.engines.local_byt5_engine import LocalByT5Engine
+                engines.append(LocalByT5Engine(
+                    model_name=self._config.engines.local_byt5_model,
+                    device=self._config.engines.local_byt5_device,
+                ))
+                logger.debug("Local ByT5 engine loaded")
+            except ImportError:
+                logger.warning("Local ByT5 engine not available (install transformers torch)")
+
         ensemble_config = EnsembleConfig(
             vidyut_weight=self._config.engines.vidyut_weight,
             dharmamitra_weight=self._config.engines.dharmamitra_weight,
             heritage_weight=self._config.engines.heritage_weight,
+            local_byt5_weight=self._config.engines.local_byt5_weight,
         )
 
         return EnsembleAnalyzer(engines=engines, config=ensemble_config)
@@ -674,3 +689,69 @@ class Analyzer:
 
         # SQLite clear is generally not recommended
         logger.info("Cache cleared: %s", tier or "all")
+
+    def _ensure_dhatu_db(self) -> DhatuDB:
+        """Ensure dhatu database is initialized."""
+        if self._dhatu_db is None:
+            self._dhatu_db = DhatuDB()
+        return self._dhatu_db
+
+    def lookup_dhatu(self, dhatu: str) -> DhatuInfo | None:
+        """Look up dhatu (verbal root) information.
+
+        Args:
+            dhatu: The dhatu to look up (Devanagari or IAST).
+
+        Returns:
+            DhatuInfo if found, None otherwise.
+        """
+        # First try the TreeBuilder's common dhatus lookup
+        if self._tree_builder:
+            result = self._tree_builder._lookup_dhatu(dhatu)
+            if result:
+                return result
+
+        # Fall back to dhatu database
+        db = self._ensure_dhatu_db()
+        entry = db.lookup_by_dhatu(dhatu)
+        if entry:
+            meanings = []
+            if entry.meaning_english:
+                meanings.append(entry.meaning_english)
+            if entry.meaning_hindi:
+                meanings.append(entry.meaning_hindi)
+            return DhatuInfo.create(
+                dhatu_slp1=entry.dhatu_iast or entry.dhatu_devanagari,
+                gana=entry.gana or 1,
+                pada=entry.pada or "parasmaipada",
+                meanings=meanings,
+            )
+        return None
+
+    def dictionary_lookup(self, word: str) -> list[dict]:
+        """Look up word meanings from available dictionaries.
+
+        Currently uses the dhatu database for verb roots.
+        For nouns and other words, returns empty results.
+
+        Args:
+            word: The word to look up (Devanagari or IAST).
+
+        Returns:
+            List of dictionary entries with keys: word, meaning, source.
+        """
+        results = []
+
+        # Search dhatu database
+        db = self._ensure_dhatu_db()
+        entries = db.search(word, limit=5)
+        for entry in entries:
+            results.append({
+                "word": entry.dhatu_devanagari,
+                "meaning": entry.meaning_english or entry.meaning_hindi or "",
+                "source": "dhatu_db",
+                "gana": entry.gana,
+                "pada": entry.pada,
+            })
+
+        return results

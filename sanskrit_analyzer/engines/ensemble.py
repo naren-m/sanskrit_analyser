@@ -13,6 +13,7 @@ class EnsembleConfig:
     vidyut_weight: float = 0.35
     dharmamitra_weight: float = 0.40
     heritage_weight: float = 0.25
+    local_byt5_weight: float = 0.45
     min_agreement_for_high_confidence: float = 0.95
     min_agreement_for_medium_confidence: float = 0.70
 
@@ -98,6 +99,7 @@ class EnsembleAnalyzer:
             "vidyut": self._config.vidyut_weight,
             "dharmamitra": self._config.dharmamitra_weight,
             "heritage": self._config.heritage_weight,
+            "local_byt5": self._config.local_byt5_weight,
         }
 
     def add_engine(self, engine: EngineBase) -> None:
