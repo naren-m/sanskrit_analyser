@@ -54,6 +54,11 @@ class EngineConfig:
     heritage_mode: str = "local"  # local | remote | fallback
     heritage_local_url: str = "http://localhost:8080"
     heritage_lexicon_path: str | None = None
+    # Local ByT5 engine (runs model locally instead of API)
+    local_byt5: bool = False
+    local_byt5_weight: float = 0.45
+    local_byt5_model: str = "chronbmm/sanskrit5-multitask"
+    local_byt5_device: str = "auto"  # auto | cpu | cuda | mps
 
     def validate(self) -> None:
         """Validate engine configuration.
@@ -66,6 +71,7 @@ class EngineConfig:
             ("vidyut_weight", self.vidyut_weight),
             ("dharmamitra_weight", self.dharmamitra_weight),
             ("heritage_weight", self.heritage_weight),
+            ("local_byt5_weight", self.local_byt5_weight),
         ]:
             if not 0.0 <= weight <= 1.0:
                 raise ConfigError(f"{name} must be between 0.0 and 1.0, got {weight}")
@@ -77,11 +83,15 @@ class EngineConfig:
                 f"heritage_mode must be one of {valid_modes}, got {self.heritage_mode}"
             )
 
-        # Validate dharmamitra device
+        # Validate device settings
         valid_devices = ("auto", "cpu", "cuda", "mps")
         if self.dharmamitra_device not in valid_devices:
             raise ConfigError(
                 f"dharmamitra_device must be one of {valid_devices}, got {self.dharmamitra_device}"
+            )
+        if self.local_byt5_device not in valid_devices:
+            raise ConfigError(
+                f"local_byt5_device must be one of {valid_devices}, got {self.local_byt5_device}"
             )
 
 
@@ -564,6 +574,10 @@ academic:
                 "heritage_weight": self.engines.heritage_weight,
                 "heritage_mode": self.engines.heritage_mode,
                 "heritage_local_url": self.engines.heritage_local_url,
+                "local_byt5": self.engines.local_byt5,
+                "local_byt5_weight": self.engines.local_byt5_weight,
+                "local_byt5_model": self.engines.local_byt5_model,
+                "local_byt5_device": self.engines.local_byt5_device,
             },
             "cache": {
                 "memory_enabled": self.cache.memory_enabled,
