@@ -19,6 +19,7 @@
 **Context:** `ensemble.py` has `EnsembleConfig` with weights summing to 1.45 (Vidyut 0.35 + Dharmamitra 0.40 + Heritage 0.25 + LocalByT5 0.45). The `_merge_results` method uses these raw weights. We need to normalize at initialization time.
 
 **Files:**
+
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/engines/ensemble.py`
 - Modify: `~/Projects/sanskrit_analyzer/tests/test_engines/test_ensemble.py`
 
@@ -93,22 +94,26 @@ After the `__init__` method (line 103), add:
 Then update `_merge_results` at line 255 to use normalized weights:
 
 Replace:
+
 ```python
                     weight = self._weights.get(engine_name, 0.33)
 ```
 
 With:
+
 ```python
                     nw = self.normalized_weights
                     weight = nw.get(engine_name, 1.0 / max(len(nw), 1))
 ```
 
 And at line 268, replace:
+
 ```python
             total_weight = sum(self._weights.get(name, 0.33) for name in votes.keys())
 ```
 
 With:
+
 ```python
             nw = self.normalized_weights
             total_weight = sum(nw.get(name, 0.0) for name in votes.keys())
@@ -138,6 +143,7 @@ git commit -m "Normalize ensemble weights to sum to 1.0"
 **Context:** `vidyut_engine.py` hardcodes confidence at 0.9 (line 222). Instead, confidence should reflect the number of parse candidates — a single unambiguous parse should be high confidence, multiple ambiguous parses should be lower.
 
 **Files:**
+
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/engines/vidyut_engine.py`
 - Modify: `~/Projects/sanskrit_analyzer/tests/test_engines/test_vidyut_engine.py`
 
@@ -267,6 +273,7 @@ git commit -m "Calibrate Vidyut confidence based on parse quality"
 **Context:** `dharmamitra_engine.py` hardcodes confidence at 0.92 (line 204, 214). Confidence should be based on the completeness of the morphological tags returned.
 
 **Files:**
+
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/engines/dharmamitra_engine.py`
 - Modify: `~/Projects/sanskrit_analyzer/tests/test_engines/test_dharmamitra_engine.py`
 
@@ -388,6 +395,7 @@ git commit -m "Calibrate Dharmamitra confidence based on tag completeness"
 **Context:** `local_byt5_engine.py` hardcodes confidence at 0.90 (line 356, 361). Confidence should be based on whether the model produced well-formed output (all three components: surface, lemma, tags).
 
 **Files:**
+
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/engines/local_byt5_engine.py`
 - Modify: `~/Projects/sanskrit_analyzer/tests/test_engines/test_local_byt5_engine.py`
 
@@ -509,11 +517,13 @@ git commit -m "Calibrate LocalByT5 confidence based on output completeness"
 **Context:** `heritage_engine.py:84-141` has a stubbed `_parse_heritage_response` that returns the original text as a single segment with hardcoded confidence. The Heritage Engine returns complex HTML. Rather than build a fragile HTML parser for an external service we don't control, we'll take the spec's alternative path: **disable Heritage from the default ensemble** and update config to reflect a 3-engine system.
 
 This is the pragmatic choice because:
+
 1. Heritage HTML format is undocumented and can change without notice
 2. LocalByT5 (added recently) provides the third perspective the ensemble needs
 3. Heritage can be re-enabled later with a proper parser
 
 **Files:**
+
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/config.py`
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/engines/ensemble.py`
 - Modify: `~/Projects/sanskrit_analyzer/tests/test_engines/test_ensemble.py`
@@ -622,6 +632,7 @@ git commit -m "Disable Heritage engine by default (stubbed parser), use 3-engine
 **Context:** In `ensemble.py` `_merge_results`, lines 287-289 use the first engine's morphology and POS. They should use majority voting (same logic as lemma voting).
 
 **Files:**
+
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/engines/ensemble.py`
 - Modify: `~/Projects/sanskrit_analyzer/tests/test_engines/test_ensemble.py`
 
@@ -748,6 +759,7 @@ git commit -m "Add POS majority voting and morphology selection to ensemble"
 **Context:** Even though Heritage is disabled by default, its confidence values should be correct for when it's re-enabled. Currently it hardcodes 0.5-0.7. Since the HTML parser is still stubbed, confidence should be 0.0 for unparsed results (honest about the quality).
 
 **Files:**
+
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/engines/heritage_engine.py`
 - Modify: `~/Projects/sanskrit_analyzer/tests/test_engines/test_heritage_engine.py`
 
@@ -786,28 +798,37 @@ Expected: FAIL — current confidence is 0.7.
 In `~/Projects/sanskrit_analyzer/sanskrit_analyzer/engines/heritage_engine.py`:
 
 Replace line 132 (confidence in `_parse_heritage_response`):
+
 ```python
                     confidence=0.7,  # Lower confidence for unparsed response
 ```
+
 with:
+
 ```python
                     confidence=0.2,  # Stub parser: honest about quality
 ```
 
 Replace line 218 (fallback confidence in `analyze`):
+
 ```python
                     confidence=0.5,
 ```
+
 with:
+
 ```python
                     confidence=0.1,  # Unparsed fallback
 ```
 
 Replace line 224 (overall confidence in `analyze`):
+
 ```python
                 confidence=0.7 if segments else 0.0,
 ```
+
 with:
+
 ```python
                 confidence=0.2 if segments else 0.0,  # Stub parser
 ```
@@ -851,6 +872,7 @@ Expected: All 515+ tests pass.
 - [ ] **Step 2: If any failures, fix them**
 
 Common failure scenarios:
+
 - Tests that hardcode expected confidence values (e.g., `assert result.confidence == 0.9`) — update to use ranges
 - Tests that expect Heritage in `create_default` — already updated in Task 5
 

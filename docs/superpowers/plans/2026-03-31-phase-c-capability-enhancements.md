@@ -19,12 +19,14 @@
 **Context:** `local_byt5_engine.py:279-308` `_decode_tags` only extracts POS from the first character of tags like "SNM" or "VP3S". The full ByT5-Sanskrit tag format (per Nehrdich et al. 2024) encodes case, gender, number for nominals and tense, person, number for verbs. We need to decode all positions.
 
 The tag format based on the model's training data and output patterns:
+
 - Nominal: `S` + case(1 char) + gender(1 char) + number(optional) — e.g., "SNM" = Nominative Masculine, "SANe" = Accusative Neuter
 - Verbal: `V` + tense(1 char) + person(1 char) + number(1 char) — e.g., "VP3S" = Present 3rd Singular
 - Adjective: `A` + case + gender
 - Indeclinable: `I`
 
 **Files:**
+
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/engines/local_byt5_engine.py`
 - Modify: `~/Projects/sanskrit_analyzer/tests/test_engines/test_local_byt5_engine.py`
 
@@ -230,6 +232,7 @@ git commit -m "Full morphological tag decoding for LocalByT5 engine"
 **Context:** `vidyut_engine.py` stores raw Vidyut Pada data in `raw_output` but doesn't populate `Segment.sandhi_info` or `Segment.prakriya`. The `_parse_pada_data` method already extracts morphological info — we should also extract sandhi and prakriya data if available.
 
 **Files:**
+
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/engines/vidyut_engine.py`
 - Modify: `~/Projects/sanskrit_analyzer/tests/test_engines/test_vidyut_engine.py`
 
@@ -332,6 +335,7 @@ git commit -m "Extract sandhi info from Vidyut parse data"
 **Context:** Heritage Engine has a 10-second timeout hardcoded. The ensemble should have per-engine timeouts configurable through `Config`, and should proceed with available results if an engine times out.
 
 **Files:**
+
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/config.py`
 - Modify: `~/Projects/sanskrit_analyzer/sanskrit_analyzer/engines/ensemble.py`
 - Modify: `~/Projects/sanskrit_analyzer/tests/test_engines/test_ensemble.py`
@@ -447,6 +451,7 @@ git commit -m "Add per-engine timeout to ensemble analyzer"
 **Context:** All engine tests use mocks. We need test fixtures with known-correct Sanskrit analysis results so we can validate engine output format without requiring live engines.
 
 **Files:**
+
 - Create: `~/Projects/sanskrit_analyzer/tests/test_engines/test_engine_integration.py`
 - Create: `~/Projects/sanskrit_analyzer/tests/fixtures/expected_analyses.py`
 
