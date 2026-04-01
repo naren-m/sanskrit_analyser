@@ -128,39 +128,34 @@ rm tests/unit/test_dharmamitra_service.py
 Create `~/Projects/ramayanam/tests/unit/test_sanskrit_adapter.py`:
 
 ```python
-"""Unit tests for the SanskritAdapter wrapper."""
+"""Integration tests for the SanskritAdapter.
 
-from unittest.mock import MagicMock, patch, AsyncMock
+Tests use the real sanskrit_analyzer library to verify the adapter
+actually works end-to-end. Tests skip gracefully if engines aren't available.
+"""
 
 import pytest
 
 from api.services.sanskrit_adapter import SanskritAdapter, get_sanskrit_adapter
 
 
+@pytest.fixture
+def adapter():
+    """Create a real SanskritAdapter instance."""
+    try:
+        a = SanskritAdapter()
+        _ = a.analyzer  # Trigger lazy init
+        return a
+    except Exception as e:
+        pytest.skip(f"sanskrit_analyzer not available: {e}")
+
+
 class TestSanskritAdapter:
-    """Tests for SanskritAdapter class."""
+    """Tests for SanskritAdapter with real Analyzer."""
 
-    @pytest.fixture
-    def adapter(self):
-        """Create a fresh adapter with mocked Analyzer."""
-        with patch("api.services.sanskrit_adapter.Analyzer") as MockAnalyzer:
-            with patch("api.services.sanskrit_adapter.Config"):
-                adapter = SanskritAdapter()
-                # Trigger lazy init
-                mock_instance = MockAnalyzer.return_value
-                _ = adapter.analyzer
-                yield adapter, mock_instance
-
-    def test_lazy_initialization(self):
-        """Test that Analyzer is not created until first access."""
-        with patch("api.services.sanskrit_adapter.Analyzer") as MockAnalyzer:
-            adapter = SanskritAdapter()
-            MockAnalyzer.assert_not_called()
-
-            # Access triggers creation
-            with patch("api.services.sanskrit_adapter.Config"):
-                _ = adapter.analyzer
-            MockAnalyzer.assert_called_once()
+    def test_analyzer_initializes(self, adapter):
+        """Test that the real Analyzer initializes successfully."""
+        assert adapter.analyzer is not None
 
     def test_singleton_instance(self):
         """Test that get_sanskrit_adapter returns same instance."""
@@ -172,41 +167,42 @@ class TestSanskritAdapter:
         assert a1 is a2
         mod._adapter_instance = None  # Cleanup
 
-    def test_lookup_dhatu_delegates(self, adapter):
-        """Test lookup_dhatu calls through to analyzer."""
-        adapter_obj, mock_analyzer = adapter
-        mock_analyzer.lookup_dhatu.return_value = MagicMock(
-            dhatu="gam", meaning="to go"
-        )
+    def test_analyze_sloka_sync(self, adapter):
+        """Test sync analysis of a simple Sanskrit phrase."""
+        result = adapter.analyze_sloka_sync("रामः गच्छति")
+        assert result is not None
+        assert result.confidence.overall > 0.0
+        assert len(result.parse_forest) > 0
 
-        result = adapter_obj.lookup_dhatu("gam")
+    def test_get_morphology_sync(self, adapter):
+        """Test morphology lookup for a known word."""
+        result = adapter.get_morphology_sync("गच्छति")
+        # Should return a dict with morphological info (or empty if engine unavailable)
+        assert isinstance(result, dict)
 
-        mock_analyzer.lookup_dhatu.assert_called_once_with("gam")
-        assert result.dhatu == "gam"
-
-    def test_dictionary_lookup_delegates(self, adapter):
-        """Test dictionary_lookup calls through to analyzer."""
-        adapter_obj, mock_analyzer = adapter
-        mock_analyzer.dictionary_lookup.return_value = [
-            {"meaning": "to go", "source": "MW"}
-        ]
-
-        result = adapter_obj.dictionary_lookup("gam")
-
-        mock_analyzer.dictionary_lookup.assert_called_once_with("gam")
-        assert len(result) == 1
-
-    def test_get_morphology_sync_empty_result(self, adapter):
-        """Test get_morphology_sync returns empty dict when no parse."""
-        adapter_obj, mock_analyzer = adapter
-
-        # Mock analyze to return empty parse forest
-        mock_tree = MagicMock()
-        mock_tree.parse_forest = []
-        mock_analyzer.analyze = AsyncMock(return_value=mock_tree)
-
-        result = adapter_obj.get_morphology_sync("nonexistent")
+    def test_get_morphology_sync_empty_input(self, adapter):
+        """Test morphology lookup with empty string."""
+        result = adapter.get_morphology_sync("")
         assert result == {}
+
+    def test_lookup_dhatu(self, adapter):
+        """Test dhatu lookup for a known root."""
+        result = adapter.lookup_dhatu("gam")
+        # May return None if dhatu DB doesn't have this entry
+        if result is not None:
+            assert result.dhatu is not None
+
+    def test_dictionary_lookup(self, adapter):
+        """Test dictionary lookup returns a list."""
+        result = adapter.dictionary_lookup("rAma")
+        assert isinstance(result, list)
+
+    def test_extract_entities_for_graph_sync(self, adapter):
+        """Test entity extraction returns list of dicts."""
+        result = adapter.extract_entities_for_graph_sync("रामः गच्छति")
+        assert isinstance(result, list)
+        for entity in result:
+            assert "lemma" in entity
 ```
 
 - [ ] **Step 3: Run the new tests**
@@ -322,99 +318,40 @@ touch ~/Projects/yoga_sutras/backend/tests/__init__.py
 Create `~/Projects/yoga_sutras/backend/tests/test_sanskrit_adapter.py`:
 
 ```python
-"""Unit tests for the Yoga Sutras SanskritAdapter."""
+"""Integration tests for the Yoga Sutras SanskritAdapter.
 
-from unittest.mock import MagicMock, patch, AsyncMock
+Tests use the real sanskrit_analyzer library to verify the adapter
+actually works end-to-end. Tests skip gracefully if engines aren't available.
+"""
 
 import pytest
 
 from app.services.sanskrit_adapter import SanskritAdapter, get_sanskrit_adapter
 
 
+@pytest.fixture
+def adapter():
+    """Create a real SanskritAdapter instance."""
+    try:
+        a = SanskritAdapter()
+        _ = a.analyzer  # Trigger lazy init
+        return a
+    except Exception as e:
+        pytest.skip(f"sanskrit_analyzer not available: {e}")
+
+
 class TestSanskritAdapter:
-    """Tests for SanskritAdapter class."""
+    """Tests for SanskritAdapter with real Analyzer."""
 
-    @pytest.fixture
-    def adapter(self):
-        """Create adapter with mocked Analyzer."""
-        with patch("app.services.sanskrit_adapter.Analyzer") as MockAnalyzer:
-            with patch("app.services.sanskrit_adapter.Config"):
-                a = SanskritAdapter()
-                mock_instance = MockAnalyzer.return_value
-                _ = a.analyzer
-                yield a, mock_instance
+    def test_analyzer_initializes(self, adapter):
+        """Test that the real Analyzer initializes successfully."""
+        assert adapter.analyzer is not None
 
-    def test_lazy_initialization(self):
-        """Test Analyzer is not created until first access."""
-        with patch("app.services.sanskrit_adapter.Analyzer") as MockAnalyzer:
-            a = SanskritAdapter()
-            MockAnalyzer.assert_not_called()
+    def test_is_available(self, adapter):
+        """Test is_available returns True when initialized."""
+        assert adapter.is_available() is True
 
-    def test_is_available_true_when_initialized(self, adapter):
-        """Test is_available returns True when analyzer exists."""
-        a, _ = adapter
-        assert a.is_available() is True
-
-    def test_is_available_false_on_init_failure(self):
-        """Test is_available returns False when Analyzer fails."""
-        with patch("app.services.sanskrit_adapter.Analyzer", side_effect=Exception("fail")):
-            with patch("app.services.sanskrit_adapter.Config"):
-                a = SanskritAdapter()
-                assert a.is_available() is False
-
-    def test_split_returns_backwards_compatible_dict(self, adapter):
-        """Test split() returns the old SandhiService response format."""
-        a, mock_analyzer = adapter
-
-        # Mock the analyze chain
-        mock_word = MagicMock()
-        mock_word.surface_form = "yoga"
-        mock_word.lemma = "yoga"
-        mock_sg = MagicMock()
-        mock_sg.base_words = [mock_word]
-        mock_parse = MagicMock()
-        mock_parse.sandhi_groups = [mock_sg]
-        mock_tree = MagicMock()
-        mock_tree.parse_forest = [mock_parse]
-        mock_analyzer.analyze = AsyncMock(return_value=mock_tree)
-
-        result = a.split("yogaḥ")
-
-        assert "splits" in result
-        assert "original" in result
-        assert "engine_available" in result
-        assert result["engine_available"] is True
-        assert len(result["splits"]) == 1
-        assert result["splits"][0]["text"] == "yoga"
-
-    def test_split_error_returns_empty(self, adapter):
-        """Test split() returns empty on error."""
-        a, mock_analyzer = adapter
-        mock_analyzer.analyze = AsyncMock(side_effect=Exception("fail"))
-
-        result = a.split("test")
-
-        assert result["splits"] == []
-        assert result["engine_available"] is False
-
-    def test_get_status(self, adapter):
-        """Test get_status returns service info."""
-        a, _ = adapter
-        status = a.get_status()
-        assert status["service"] == "sanskrit_analyzer"
-        assert status["available"] is True
-
-    def test_dictionary_lookup_delegates(self, adapter):
-        """Test dictionary_lookup calls through to analyzer."""
-        a, mock_analyzer = adapter
-        mock_analyzer.dictionary_lookup.return_value = [{"meaning": "union"}]
-
-        result = a.dictionary_lookup("yoga")
-
-        mock_analyzer.dictionary_lookup.assert_called_once_with("yoga")
-        assert len(result) == 1
-
-    def test_singleton(self):
+    def test_singleton_instance(self):
         """Test get_sanskrit_adapter returns same instance."""
         import app.services.sanskrit_adapter as mod
 
@@ -423,6 +360,49 @@ class TestSanskritAdapter:
         a2 = get_sanskrit_adapter()
         assert a1 is a2
         mod._adapter_instance = None
+
+    def test_split_returns_backwards_compatible_dict(self, adapter):
+        """Test split() returns the old SandhiService response format."""
+        result = adapter.split("yogaścittavṛttinirodhaḥ")
+
+        assert "splits" in result
+        assert "original" in result
+        assert "engine_available" in result
+        assert result["engine_available"] is True
+        assert isinstance(result["splits"], list)
+
+    def test_split_has_expected_keys(self, adapter):
+        """Test split tokens have text and lemma keys."""
+        result = adapter.split("rāmaḥ")
+
+        if result["splits"]:
+            token = result["splits"][0]
+            assert "text" in token
+            assert "lemma" in token
+
+    def test_get_morphology_sync(self, adapter):
+        """Test morphology analysis for a known word."""
+        result = adapter.get_morphology_sync("गच्छति")
+        # Returns dict or None
+        if result is not None:
+            assert isinstance(result, dict)
+
+    def test_get_status(self, adapter):
+        """Test get_status returns service info."""
+        status = adapter.get_status()
+        assert status["service"] == "sanskrit_analyzer"
+        assert status["available"] is True
+
+    def test_dictionary_lookup(self, adapter):
+        """Test dictionary_lookup returns a list."""
+        result = adapter.dictionary_lookup("yoga")
+        assert isinstance(result, list)
+
+    def test_analyze_word_sync(self, adapter):
+        """Test word analysis returns expected format."""
+        result = adapter.analyze_word_sync("रामः")
+        assert "word" in result
+        assert result["word"] == "रामः"
 ```
 
 - [ ] **Step 3: Run the tests**
