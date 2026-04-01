@@ -19,10 +19,11 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 COPY pyproject.toml README.md ./
 COPY sanskrit_analyzer ./sanskrit_analyzer
 
-# Build the package
+# Build the package and create wheels for dependencies
 RUN pip install --no-cache-dir build && \
     python -m build && \
-    pip wheel --no-cache-dir --wheel-dir /app/wheels -r <(echo ".[api]")
+    echo ".[api]" > /tmp/req.txt && \
+    pip wheel --no-cache-dir --wheel-dir /app/wheels -r /tmp/req.txt
 
 # Production stage
 FROM python:3.11-slim as production
@@ -40,8 +41,7 @@ COPY --from=builder /app/dist/*.whl /wheels/
 RUN pip install --no-cache-dir /wheels/*.whl && \
     rm -rf /wheels
 
-# Copy configuration and data files
-COPY config.yaml.example /app/config.yaml
+# Copy data files (config is auto-created by the app if missing)
 COPY sanskrit_analyzer/data/*.db /app/data/
 
 # Create non-root user
@@ -51,7 +51,6 @@ USER appuser
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV SANSKRIT_CONFIG_PATH=/app/config.yaml
 ENV SANSKRIT_CORPUS_PATH=/app/data/corpus.db
 
 # Expose port
