@@ -54,7 +54,7 @@ class Vocabulary:
         return cls.from_file(_DEFAULT_VOCAB_PATH)
 
     @classmethod
-    def from_file(cls, path: Path) -> Vocabulary:
+    def from_file(cls, path: str | Path) -> Vocabulary:
         """Load vocabulary from a JSON file.
 
         Args:
@@ -67,6 +67,7 @@ class Vocabulary:
             FileNotFoundError: If *path* does not exist.
             ValueError: If the JSON is malformed or missing ``words``.
         """
+        path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"Vocabulary file not found: {path}")
 
@@ -82,7 +83,9 @@ class Vocabulary:
         indeclinables: set[str] = set()
 
         for entry in raw["words"]:
-            slp1 = entry["slp1"]
+            slp1 = entry.get("slp1")
+            if not slp1:
+                raise ValueError(f"Entry missing 'slp1' key in vocabulary file: {path}")
             words[slp1] = entry
             if entry.get("indeclinable", False):
                 indeclinables.add(slp1)

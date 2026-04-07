@@ -119,6 +119,24 @@ class TestVocabularyFromFile:
         with pytest.raises(ValueError, match="words"):
             Vocabulary.from_file(bad_file)
 
+    def test_from_file_entry_missing_slp1_raises(self, tmp_path: Path) -> None:
+        """An entry without 'slp1' key raises ValueError."""
+        bad_file = tmp_path / "no_slp1.json"
+        bad_file.write_text(
+            '{"words": [{"lemma": "test", "type": "noun", "indeclinable": false}]}'
+        )
+        with pytest.raises(ValueError, match="slp1"):
+            Vocabulary.from_file(bad_file)
+
+    def test_from_file_accepts_string_path(self, tmp_path: Path) -> None:
+        """from_file should accept a string path."""
+        vocab_file = tmp_path / "str_path.json"
+        vocab_file.write_text(
+            '{"words": [{"lemma": "test", "slp1": "test", "type": "noun", "indeclinable": false}]}'
+        )
+        vocab = Vocabulary.from_file(str(vocab_file))
+        assert len(vocab) == 1
+
 
 class TestVocabularyEmpty:
     """Tests for empty vocabulary behavior."""
