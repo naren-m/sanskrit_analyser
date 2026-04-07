@@ -1,5 +1,6 @@
 """Validation layer for Sanskrit analysis results."""
 
+from sanskrit_analyzer.validation.split_validator import SplitValidator
 from sanskrit_analyzer.validation.vocabulary import Vocabulary
 
-__all__ = ["Vocabulary"]
+__all__ = ["SplitValidator", "Vocabulary"]
