@@ -59,10 +59,13 @@ class SplitValidator:
             return segments  # fallback
 
         # 3. Score and pick the best
-        best = max(candidates, key=self.score_candidate)
+        max_seg_count = max(len(c) for c in candidates)
+        best = max(candidates, key=lambda c: self.score_candidate(c, max_seg_count))
         return best
 
-    def score_candidate(self, segments: list[Segment]) -> float:
+    def score_candidate(
+        self, segments: list[Segment], max_segments: int | None = None
+    ) -> float:
         """Score a candidate split.
 
         Scoring signals:
@@ -72,12 +75,18 @@ class SplitValidator:
           -2.0  segment is a single character
           -1.0  segment lemma not found anywhere
           +0.5  per reduction vs max segment count (simplicity bonus)
+
+        Args:
+            segments: The candidate segments to score.
+            max_segments: Maximum segment count across all candidates being
+                compared. When ``None`` (standalone usage), the simplicity
+                bonus is zero.
         """
         if not segments:
             return -100.0
 
+        ref = max_segments if max_segments is not None else len(segments)
         score = 0.0
-        max_segments = max(len(segments), 1)
 
         for seg in segments:
             lemma = seg.lemma
@@ -96,8 +105,7 @@ class SplitValidator:
                 score -= 2.0
 
         # Simplicity bonus: fewer segments is better
-        # Compare against max_segments (the largest candidate we consider)
-        simplicity_bonus = (max_segments - len(segments)) * 0.5
+        simplicity_bonus = (ref - len(segments)) * 0.5
         score += simplicity_bonus
 
         return score
