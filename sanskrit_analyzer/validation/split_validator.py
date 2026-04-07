@@ -10,7 +10,19 @@ from sanskrit_analyzer.engines.base import Segment
 from sanskrit_analyzer.validation.vocabulary import Vocabulary
 
 # Maximum number of candidates to evaluate
-_MAX_CANDIDATES = 20
+_MAX_CANDIDATES = 40
+
+# Common vowel sandhi rules (SLP1 encoding).
+# Maps a fused character to possible (left_ending, right_beginning) pairs.
+_VOWEL_SANDHI: dict[str, list[tuple[str, str]]] = {
+    "A": [("a", "a"), ("a", "A"), ("A", "a"), ("A", "A")],
+    "I": [("i", "i"), ("i", "I"), ("I", "i"), ("I", "I")],
+    "U": [("u", "u"), ("u", "U"), ("U", "u"), ("U", "U")],
+    "e": [("a", "i"), ("a", "I")],
+    "o": [("a", "u"), ("a", "U")],
+    "E": [("a", "e"), ("a", "E")],
+    "O": [("a", "o"), ("a", "O")],
+}
 
 
 class SplitValidator:
@@ -95,6 +107,9 @@ class SplitValidator:
                 score += 3.0
             elif self._vocab.contains(lemma):
                 score += 2.0
+            elif self._vocab.find_stem(seg.surface) is not None:
+                # Surface form is an inflected form of a known word
+                score += 1.5
             else:
                 score -= 1.0
 
@@ -204,10 +219,60 @@ class SplitValidator:
                 right_seg = self._make_segment(right_str)
                 add_fn([left_seg, right_seg])
 
+            # Also check if either side is an inflected form
+            if not (left_in_vocab or right_in_vocab):
+                left_stem = self._vocab.find_stem(left_str)
+                right_stem = self._vocab.find_stem(right_str)
+                if left_stem is not None or right_stem is not None:
+                    left_seg = self._make_segment(left_str)
+                    right_seg = self._make_segment(right_str)
+                    add_fn([left_seg, right_seg])
+
+        # Try sandhi-aware splits
+        self._try_sandhi_splits(text, add_fn)
+
         # Greedy longest-match from left
         greedy = self._greedy_split(text)
         if greedy and len(greedy) > 1:
             add_fn(greedy)
+
+    def _try_sandhi_splits(
+        self,
+        text: str,
+        add_fn: callable,
+    ) -> None:
+        """Try splitting *text* by reversing common vowel sandhi rules.
+
+        At each position, if the character is a sandhi product, try
+        expanding it back into separate endings/beginnings and check
+        if the resulting parts are in the vocabulary.
+        """
+        for i in range(1, len(text)):
+            fused_char = text[i - 1]
+            replacements = _VOWEL_SANDHI.get(fused_char)
+            if not replacements:
+                continue
+
+            prefix = text[: i - 1]  # everything before the fused char
+            suffix = text[i:]  # everything after the fused char
+
+            for left_end, right_begin in replacements:
+                left_str = prefix + left_end
+                right_str = right_begin + suffix
+
+                left_ok = (
+                    self._vocab.contains(left_str)
+                    or self._vocab.find_stem(left_str) is not None
+                )
+                right_ok = (
+                    self._vocab.contains(right_str)
+                    or self._vocab.find_stem(right_str) is not None
+                )
+
+                if left_ok and right_ok:
+                    left_seg = self._make_segment(left_str)
+                    right_seg = self._make_segment(right_str)
+                    add_fn([left_seg, right_seg])
 
     def _greedy_split(self, text: str) -> list[Segment]:
         """Split *text* using greedy longest-match against the vocabulary."""
@@ -239,5 +304,12 @@ class SplitValidator:
         elif self._vocab.contains(surface):
             entry = self._vocab.words.get(surface, {})
             pos = entry.get("type")
+        else:
+            # Try to find a vocabulary stem for an inflected form
+            stem = self._vocab.find_stem(surface)
+            if stem is not None:
+                lemma = stem
+                entry = self._vocab.words.get(stem, {})
+                pos = entry.get("type")
 
         return Segment(surface=surface, lemma=lemma, pos=pos)

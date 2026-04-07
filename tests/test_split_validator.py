@@ -112,7 +112,7 @@ class TestCandidateGeneration:
         assert result[0].lemma == "yoga"
 
     def test_candidate_count_capped(self) -> None:
-        """Number of candidates should not exceed 20."""
+        """Number of candidates should be capped and not explode."""
         vocab = _vocab_with("yoga", "sUtra")
         sv = SplitValidator(vocabulary=vocab)
 

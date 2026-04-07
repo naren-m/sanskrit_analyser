@@ -1,0 +1,23 @@
+[
+  {"input": "atha", "expected_lemmas": ["aTa"], "note": "indeclinable"},
+  {"input": "iti", "expected_lemmas": ["iti"], "note": "indeclinable"},
+  {"input": "ca", "expected_lemmas": ["ca"], "note": "indeclinable"},
+  {"input": "eva", "expected_lemmas": ["eva"], "note": "indeclinable"},
+  {"input": "tadā", "expected_lemmas": ["tadA"], "note": "indeclinable"},
+  {"input": "yoga", "expected_lemmas": ["yuj"], "note": "single word, Vidyut lemma is verb root"},
+  {"input": "citta", "expected_lemmas": ["cit"], "note": "single word, Vidyut lemma is verb root"},
+  {"input": "duḥkha", "expected_lemmas": ["duHKa"], "note": "single word"},
+  {"input": "nirodha", "expected_lemmas": ["niroDa"], "note": "single word"},
+  {"input": "svarūpe", "expected_lemmas": ["svarUpa"], "note": "single word, inflected (locative), stem found via suffix stripping"},
+  {"input": "yogasūtra", "expected_lemmas": ["yoga", "sUtra"], "note": "2-part compound, simple positional split"},
+  {"input": "cittavṛtti", "expected_lemmas": ["citta", "vftti"], "note": "2-part compound, validator-only (no engine segments)"},
+  {"input": "yogānuśāsanam", "expected_lemmas": ["yoga", "anuSAsana"], "note": "2-part compound, sandhi: a+a=A, inflected form -am"},
+  {"input": "yogāṅga", "expected_lemmas": ["yoga", "aNga"], "note": "2-part compound, sandhi: a+a=A"},
+  {"input": "sthirasukham", "expected_lemmas": ["sTira", "suKa"], "note": "2-part compound, inflected form -am"},
+  {"input": "vṛttisārūpyam", "expected_lemmas": ["vftti", "sArUpya"], "note": "2-part compound, inflected form -am"},
+  {"input": "abhyāsavairāgyābhyām", "expected_lemmas": ["aByAsa", "vErAgya"], "note": "2-part compound, inflected form -AbhyAm"},
+  {"input": "vivekakhyāti", "expected_lemmas": ["viveka", "KyAti"], "note": "2-part compound"},
+  {"input": "cittavṛttinirodha", "expected_lemmas": ["citta", "vftti", "niroDa"], "note": "3-part compound"},
+  {"input": "kleśakarmavipāka", "expected_lemmas": ["kleSa", "karma", "vipAka"], "note": "3-part compound"},
+  {"input": "dhāraṇādhyānasamādhi", "expected_lemmas": ["DAraRA", "DyAna", "samADi"], "note": "3-part compound, sandhi: A+dhy"}
+]

@@ -40,6 +40,58 @@ class Vocabulary:
         """Return True if *slp1_lemma* is a known indeclinable (avyaya)."""
         return slp1_lemma in self.indeclinables
 
+    def find_stem(self, slp1_form: str) -> str | None:
+        """Try to find a vocabulary stem that *slp1_form* could be inflected from.
+
+        Strips common Sanskrit case-ending suffixes and checks if any
+        resulting stem is in the vocabulary.  Returns the matching stem
+        or ``None``.
+        """
+        if self.contains(slp1_form):
+            return slp1_form
+
+        # Common nominal case-ending suffixes (most specific first).
+        # These cover the most frequent inflectional endings seen in
+        # Yoga Sutra compounds / padapāṭha forms.
+        _SUFFIXES = (
+            "AByAm", "sByAm",  # instrumental/dative/ablative dual
+            "AnAm",  # genitive plural
+            "asya",  # genitive singular (a-stem)
+            "eBya",  # dative/ablative plural
+            "ezu",   # locative plural
+            "ayoH",  # genitive/locative dual
+            "Aya",   # dative singular (a-stem)
+            "ena",   # instrumental singular (a-stem)
+            "asya",  # genitive singular
+            "Am",    # genitive plural / other
+            "su",    # locative plural
+            "AH",    # nominative plural
+            "aH",    # nominative singular (a-stem masc)
+            "am",    # accusative singular / nom-acc neuter
+            "At",    # ablative singular
+            "iH",    # nominative singular (i-stem)
+            "yA",    # instrumental singular (i/ī-stem)
+            "yoH",   # gen/loc dual
+            "In",    # masculine i-stem strong cases
+            "e",     # locative singular (a-stem)
+            "O",     # nominative/accusative dual
+            "A",     # instrumental singular fem, nominative dual neuter
+            "m",     # accusative singular
+        )
+
+        for suffix in _SUFFIXES:
+            if slp1_form.endswith(suffix) and len(slp1_form) > len(suffix):
+                stem = slp1_form[: -len(suffix)]
+                if self.contains(stem):
+                    return stem
+                # For a-stem nouns, the stem stored in vocab already
+                # ends in 'a', but the inflected form drops it before
+                # some suffixes.  Try adding 'a' back.
+                if self.contains(stem + "a"):
+                    return stem + "a"
+
+        return None
+
     def __len__(self) -> int:
         """Return the number of words in the vocabulary."""
         return len(self.words)

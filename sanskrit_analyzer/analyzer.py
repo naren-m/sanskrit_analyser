@@ -31,6 +31,8 @@ from sanskrit_analyzer.tree_builder import TreeBuilder, TreeBuilderConfig
 from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1
 from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry
 from sanskrit_analyzer.models.dhatu import DhatuInfo
+from sanskrit_analyzer.validation.split_validator import SplitValidator
+from sanskrit_analyzer.validation.vocabulary import Vocabulary
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,7 @@ class Analyzer:
         self._disambiguation: DisambiguationPipeline | None = None
         self._tree_builder: TreeBuilder | None = None
         self._dhatu_db: DhatuDB | None = None
+        self._split_validator: SplitValidator | None = None
 
         # Lazy initialization flags
         self._initialized = False
@@ -149,6 +152,15 @@ class Analyzer:
 
         # Initialize tree builder
         self._tree_builder = TreeBuilder(TreeBuilderConfig())
+
+        # Initialize split validator with curated vocabulary
+        try:
+            vocab = Vocabulary.load_default()
+            self._split_validator = SplitValidator(vocab)
+            logger.info("Split validator loaded with %d vocabulary entries", len(vocab))
+        except Exception as e:
+            logger.warning("Split validator not available: %s", e)
+            self._split_validator = None
 
         self._initialized = True
         logger.info("Sanskrit Analyzer initialized successfully")
@@ -331,14 +343,46 @@ class Analyzer:
         if engines:
             self._ensemble._engines = original_engines
 
-        # Build parse tree
+        # Validate and re-score splits if validator is available
         assert self._tree_builder is not None
-        tree = self._tree_builder.build(
-            ensemble_result,
-            original_text,
-            normalized_slp1,
-            mode.value,
-        )
+        if self._split_validator:
+            # Extract raw Segment objects for the validator.
+            # Prefer vidyut engine's raw segments if available; otherwise
+            # convert MergedSegments via to_segment().
+            raw_segments = None
+            if ensemble_result.segments:
+                for ename in ("vidyut",):
+                    engine_result = ensemble_result.engine_results.get(ename)
+                    if engine_result and engine_result.segments:
+                        raw_segments = engine_result.segments
+                        break
+
+                if raw_segments is None:
+                    # Fallback: convert MergedSegments to Segments
+                    raw_segments = [ms.to_segment() for ms in ensemble_result.segments]
+
+            # Pass empty list when no engine produced segments; the
+            # validator can still split using vocabulary alone.
+            validated_segments = self._split_validator.validate_and_rescore(
+                raw_segments or [],
+                normalized_slp1,
+            )
+            # Build tree from validated segments
+            tree = self._tree_builder.build_from_segments(
+                validated_segments,
+                original_text,
+                normalized_slp1,
+                engine_name="vidyut+validator",
+                mode=mode.value,
+            )
+        else:
+            # Build parse tree from ensemble (original path)
+            tree = self._tree_builder.build(
+                ensemble_result,
+                original_text,
+                normalized_slp1,
+                mode.value,
+            )
 
         # Run disambiguation if multiple parses and enabled
         if (

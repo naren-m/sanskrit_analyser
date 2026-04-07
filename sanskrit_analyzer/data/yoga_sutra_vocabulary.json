@@ -84,6 +84,22 @@
     {"lemma": "eva", "slp1": "eva", "type": "indeclinable", "indeclinable": true},
     {"lemma": "api", "slp1": "api", "type": "indeclinable", "indeclinable": true},
     {"lemma": "vā", "slp1": "vA", "type": "indeclinable", "indeclinable": true},
-    {"lemma": "na", "slp1": "na", "type": "indeclinable", "indeclinable": true}
+    {"lemma": "na", "slp1": "na", "type": "indeclinable", "indeclinable": true},
+    {"lemma": "sthira", "slp1": "sTira", "type": "adjective", "indeclinable": false},
+    {"lemma": "sārūpya", "slp1": "sArUpya", "type": "noun", "indeclinable": false},
+    {"lemma": "tad", "slp1": "tad", "type": "pronoun", "indeclinable": false},
+    {"lemma": "parama", "slp1": "parama", "type": "adjective", "indeclinable": false},
+    {"lemma": "hāna", "slp1": "hAna", "type": "noun", "indeclinable": false},
+    {"lemma": "heya", "slp1": "heya", "type": "adjective", "indeclinable": false},
+    {"lemma": "phala", "slp1": "Pala", "type": "noun", "indeclinable": false},
+    {"lemma": "virāma", "slp1": "virAma", "type": "noun", "indeclinable": false},
+    {"lemma": "pratyaya", "slp1": "pratyaya", "type": "noun", "indeclinable": false},
+    {"lemma": "upāya", "slp1": "upAya", "type": "noun", "indeclinable": false},
+    {"lemma": "kriyā", "slp1": "kriyA", "type": "noun", "indeclinable": false},
+    {"lemma": "dṛśya", "slp1": "dfSya", "type": "adjective", "indeclinable": false},
+    {"lemma": "sattva", "slp1": "sattva", "type": "noun", "indeclinable": false},
+    {"lemma": "rajas", "slp1": "rajas", "type": "noun", "indeclinable": false},
+    {"lemma": "tamas", "slp1": "tamas", "type": "noun", "indeclinable": false},
+    {"lemma": "aṅga", "slp1": "aNga", "type": "noun", "indeclinable": false}
   ]
 }
