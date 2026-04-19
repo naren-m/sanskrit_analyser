@@ -69,3 +69,40 @@ class TestByT5SanskritEmbedderConstruction:
         )
         # byt5-small has d_model=1472
         assert embedder.embedding_dim == 1472
+
+
+class TestByT5SanskritEmbedderEncode:
+    @pytest.fixture(scope="class")
+    def embedder(self) -> ByT5SanskritEmbedder:
+        return ByT5SanskritEmbedder(
+            model_name="google/byt5-small", device="cpu"
+        )
+
+    @pytest.mark.slow
+    def test_encode_returns_expected_shape(self, embedder):
+        texts = ["रामो गच्छति", "सीता वनम् गता", "हनुमान् उड्डयते"]
+        vectors = embedder.encode(texts)
+        assert isinstance(vectors, np.ndarray)
+        assert vectors.shape == (3, embedder.embedding_dim)
+
+    @pytest.mark.slow
+    def test_encode_different_inputs_produce_different_vectors(self, embedder):
+        a, b = embedder.encode(["रामो गच्छति", "कोकिला कूजति"])
+        cosine = float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+        assert cosine < 0.9999
+
+    @pytest.mark.slow
+    def test_encode_normalization(self, embedder):
+        vectors = embedder.encode(["रामो गच्छति", "सीता वनम् गता"])
+        norms = np.linalg.norm(vectors, axis=1)
+        np.testing.assert_allclose(norms, np.ones(2), rtol=1e-4, atol=1e-4)
+
+    def test_encode_empty_list_returns_empty_array(self, embedder):
+        vectors = embedder.encode([])
+        assert isinstance(vectors, np.ndarray)
+        assert vectors.shape == (0, embedder.embedding_dim)
+
+    @pytest.mark.slow
+    def test_encode_no_nan_or_inf(self, embedder):
+        vectors = embedder.encode(["रामो गच्छति"])
+        assert np.isfinite(vectors).all()

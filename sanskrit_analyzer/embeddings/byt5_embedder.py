@@ -9,7 +9,9 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+import numpy as np
 import torch
+import torch.nn.functional as F
 from transformers import ByT5Tokenizer, T5ForConditionalGeneration
 
 logger = logging.getLogger(__name__)
@@ -83,3 +85,38 @@ class ByT5SanskritEmbedder:
         model.train(False)
         model.to(self.device)
         self._model = model
+
+    def encode(self, texts: list[str], batch_size: int = 8) -> np.ndarray:
+        """Devanagari or IAST → (N, d_model) embeddings, optionally L2-normalized."""
+        if len(texts) == 0:
+            return np.zeros((0, self.embedding_dim), dtype=np.float32)
+        if self._model is None:
+            self._load()
+
+        all_pooled: list[torch.Tensor] = []
+        with torch.no_grad():
+            for start in range(0, len(texts), batch_size):
+                batch = texts[start : start + batch_size]
+                enc = self._tokenizer(
+                    batch,
+                    padding=True,
+                    truncation=True,
+                    max_length=self.max_length,
+                    return_tensors="pt",
+                )
+                input_ids = enc["input_ids"].to(self.device)
+                attention_mask = enc["attention_mask"].to(self.device)
+
+                encoder_out = self._model.encoder(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    return_dict=True,
+                )
+                pooled = _masked_mean_pool(
+                    encoder_out.last_hidden_state, attention_mask
+                )
+                if self.normalize:
+                    pooled = F.normalize(pooled, p=2, dim=1)
+                all_pooled.append(pooled.cpu())
+
+        return torch.cat(all_pooled, dim=0).numpy().astype(np.float32)
