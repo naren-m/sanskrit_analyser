@@ -4,7 +4,10 @@ import numpy as np
 import pytest
 import torch
 
-from sanskrit_analyzer.embeddings.byt5_embedder import _masked_mean_pool
+from sanskrit_analyzer.embeddings.byt5_embedder import (
+    ByT5SanskritEmbedder,
+    _masked_mean_pool,
+)
 
 
 class TestMaskedMeanPool:
@@ -44,3 +47,25 @@ class TestMaskedMeanPool:
         mask = torch.tensor([[0]])
         pooled = _masked_mean_pool(hidden, mask)
         assert torch.isfinite(pooled).all()
+
+
+class TestByT5SanskritEmbedderConstruction:
+    def test_explicit_device_is_honored(self):
+        embedder = ByT5SanskritEmbedder(
+            model_name="google/byt5-small", device="cpu", lazy=True
+        )
+        assert embedder.device == "cpu"
+
+    def test_auto_device_selects_available_backend(self):
+        embedder = ByT5SanskritEmbedder(
+            model_name="google/byt5-small", lazy=True
+        )
+        assert embedder.device in {"mps", "cuda", "cpu"}
+
+    @pytest.mark.slow
+    def test_embedding_dim_available_after_load(self):
+        embedder = ByT5SanskritEmbedder(
+            model_name="google/byt5-small", device="cpu"
+        )
+        # byt5-small has d_model=1472
+        assert embedder.embedding_dim == 1472
