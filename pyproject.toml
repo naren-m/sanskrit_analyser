@@ -79,6 +79,15 @@ Repository = "https://github.com/narenmudivarthy/sanskrit-analyzer"
 [tool.hatch.build.targets.wheel]
 packages = ["sanskrit_analyzer"]
 
+# Required because the [project.optional-dependencies].api group includes a
+# direct reference (`homelab-observability @ git+...`). Without this flag
+# hatchling rejects the metadata, breaking every downstream consumer that
+# does `pip install -r requirements.txt` containing
+# `sanskrit-analyzer @ git+https://...`. Recorded today after this exact
+# error blocked ramayanam's CI image build.
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true
