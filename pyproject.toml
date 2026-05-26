@@ -46,6 +46,10 @@ cache = [
 api = [
     "fastapi>=0.104.0",
     "uvicorn>=0.24.0",
+    # Shared observability lib. v0.1.0 lacks fastapi_app= support so we add
+    # the FastAPI auto-instrumentation directly here; v0.2.0 will fold it in.
+    "homelab-observability @ git+https://github.com/naren-m/homelab-observability.git@v0.1.0#subdirectory=python",
+    "opentelemetry-instrumentation-fastapi>=0.47b0",
 ]
 mcp = [
     "mcp>=1.0.0",

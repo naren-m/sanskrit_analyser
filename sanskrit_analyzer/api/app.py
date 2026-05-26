@@ -71,7 +71,28 @@ def create_app(
     # Register routers
     _register_routes(app)
 
+    # Observability via shared homelab-observability lib.
+    # OTLP endpoint, sampler, Loki endpoint, etc. come from HOMELAB_* env vars
+    # set by the homelab-observability Kustomize component at deploy time.
+    # Skipped if the lib isn't installed (e.g. dev shells without [api] extras).
+    _setup_observability(app)
+
     return app
+
+
+def _setup_observability(app: FastAPI) -> None:
+    """Wire OpenTelemetry tracing + metrics + logs via homelab-observability.
+
+    No-op when the lib (or its FastAPI instrumentor) isn't installed; that
+    lets dev shells run without pulling the full observability stack.
+    """
+    try:
+        import homelab_observability as hobs
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    except ImportError:
+        return
+    hobs.setup(service_name="sanskrit-analyzer", service_version=__version__)
+    FastAPIInstrumentor.instrument_app(app)
 
 
 def _register_routes(app: FastAPI) -> None:
