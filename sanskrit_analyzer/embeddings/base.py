@@ -7,7 +7,8 @@ inherit from this class.
 Existing conforming implementations
 ------------------------------------
 * :class:`~.byt5_embedder.ByT5SanskritEmbedder` — ByT5 encoder with
-  masked mean pooling (1472-dim for byt5-small, 1536 for byt5-base).
+  masked mean pooling (default model ``chronbmm/sanskrit5-multitask``;
+  output dimension equals the loaded model's ``d_model``).
 * :class:`~.bge_m3_embedder.BgeM3Embedder` — BAAI/bge-m3 dense vectors
   via ``sentence-transformers`` (1024-dim, L2-normalized by default).
 """

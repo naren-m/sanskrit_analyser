@@ -51,8 +51,13 @@ class BgeM3Embedder:
     device:
         ``"cpu"``, ``"cuda"``, ``"mps"``, or ``None`` (auto-detect).
     normalize:
-        When ``True`` (default), output vectors are L2-normalised to unit
-        length — required for cosine-similarity search in Qdrant.
+        Passed through to sentence-transformers as ``normalize_embeddings``.
+        Note: BGE-M3 L2-normalises its dense output *inside the model*, so
+        vectors come back unit-norm even with ``normalize=False`` — the flag
+        cannot produce un-normalised vectors for this model.  It is kept for
+        constructor symmetry with :class:`ByT5SanskritEmbedder` and for any
+        future model_name override where it would take effect.  Unit-norm
+        output is what cosine-similarity search in Qdrant requires.
     lazy:
         When ``True``, defer model loading until the first ``encode()`` call.
         Useful in test environments to avoid loading the model at construction
