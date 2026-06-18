@@ -479,7 +479,9 @@ class TreeBuilder:
         """Check if this segment represents a verb."""
         if morphology and morphology.pos == PartOfSpeech.VERB:
             return True
-        if pos and pos.lower() in ("verb", "v", "tiṅanta"):
+        # Vidyut emits the POS as "tinanta" (plain n); accept both that and
+        # the diacritic spelling "tiṅanta".
+        if pos and pos.lower() in ("verb", "v", "tinanta", "tiṅanta"):
             return True
         return False
 

@@ -153,11 +153,27 @@ class Analyzer:
         # Initialize tree builder
         self._tree_builder = TreeBuilder(TreeBuilderConfig())
 
-        # Initialize split validator with curated vocabulary
+        # Initialize split validator. Prefer the full kosha-backed vocabulary
+        # (millions of forms) so real lemmas score positively and correct
+        # segmentations win; fall back to the curated vocabulary if the kosha
+        # is unavailable.
         try:
-            vocab = Vocabulary.load_default()
+            try:
+                from sanskrit_analyzer.validation.kosha_vocabulary import (
+                    KoshaVocabulary,
+                )
+
+                vocab = KoshaVocabulary()
+                logger.info("Split validator using kosha-backed vocabulary")
+            except Exception as e:
+                vocab = Vocabulary.load_default()
+                logger.warning(
+                    "Kosha vocabulary unavailable (%s); falling back to "
+                    "curated vocabulary with %d entries",
+                    e,
+                    len(vocab),
+                )
             self._split_validator = SplitValidator(vocab)
-            logger.info("Split validator loaded with %d vocabulary entries", len(vocab))
         except Exception as e:
             logger.warning("Split validator not available: %s", e)
             self._split_validator = None

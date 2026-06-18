@@ -119,8 +119,10 @@ class SplitValidator:
             if len(seg.surface) == 1:
                 score -= 2.0
 
-        # Simplicity bonus: fewer segments is better
+        # Simplicity bonus: fewer segments is better. Clamp it so it can
+        # never outweigh a correctly-scored split (real lemmas score +2 each).
         simplicity_bonus = (ref - len(segments)) * 0.5
+        simplicity_bonus = min(simplicity_bonus, 1.0)
         score += simplicity_bonus
 
         return score
@@ -156,8 +158,11 @@ class SplitValidator:
         if segments:
             _add(segments)
 
-        # 2. Unsplit -- whole string as one segment
-        if original_slp1:
+        # 2. Unsplit -- whole string as one segment.
+        # Do NOT emit the whole-string candidate when the input spans multiple
+        # words (contains a space): a multi-word line is never a single token,
+        # and emitting it lets the simplicity bonus collapse correct splits.
+        if original_slp1 and " " not in original_slp1:
             _add([self._make_segment(original_slp1)])
 
         # 3. Merge adjacent pairs and re-split
@@ -206,6 +211,19 @@ class SplitValidator:
         add_fn: callable,
     ) -> None:
         """Try splitting *text* at every position using greedy longest-match."""
+        # If the whole token is itself a known word, do not fragment it. With a
+        # large kosha-backed vocabulary almost any token has in-vocab substrings
+        # (e.g. "yoga" -> "yo"+"ga"), and an over-split of two short known words
+        # can spuriously outscore the correct single word. A token already
+        # recognised as a complete word should stay whole; multi-word inputs
+        # arrive pre-split by the engine, so their individual tokens are still
+        # segmented upstream.
+        if " " not in text and (
+            self._vocab.contains(text) or self._vocab.find_stem(text) is not None
+        ):
+            self._try_sandhi_splits(text, add_fn)
+            return
+
         # Try simple 2-way splits where at least one side is in vocab
         for i in range(1, len(text)):
             left_str = text[:i]
