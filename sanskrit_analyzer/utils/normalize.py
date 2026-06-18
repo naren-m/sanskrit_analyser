@@ -13,6 +13,12 @@ _IAST_DIACRITICS = re.compile(r"[āīūṛṝḷḹēōṃḥñṅṇṭḍśṣ
 def detect_script(text: str) -> Script:
     """Detect the script of Sanskrit text.
 
+    This is a Sanskrit-domain heuristic. It assumes the input is Sanskrit in
+    one of Devanagari, IAST, or SLP1, and may misclassify text that is not
+    (e.g. plain English, camelCase identifiers, or Harvard-Kyoto, which shares
+    SLP1's capital-letter conventions). Full Harvard-Kyoto support is out of
+    scope; HK input may be read as SLP1.
+
     Args:
         text: The Sanskrit text to analyze.
 
@@ -24,7 +30,9 @@ def detect_script(text: str) -> Script:
         Script.DEVANAGARI
         >>> detect_script("rāma")
         Script.IAST
-        >>> detect_script("rAma")
+        >>> detect_script("rAma")  # plain ASCII, no SLP1 markers -> IAST
+        Script.IAST
+        >>> detect_script("gacCati")  # mid-word capital aspirate -> SLP1
         Script.SLP1
     """
     if not text.strip():
@@ -38,25 +46,34 @@ def detect_script(text: str) -> Script:
     if _IAST_DIACRITICS.search(text):
         return Script.IAST
 
-    # Check for SLP1-specific patterns (uppercase vowels, specific consonants)
-    # SLP1 uses: A I U R L M H for long vowels/anusvara/visarga
-    # and specific letters like: w (ṭ), W (ṭh), q (ḍ), Q (ḍh), N (ṇ), S (ṣ), z (ś)
-    # plus vocalic-liquid lowercase letters f (ṛ), F (ṝ), x (ḷ), X (ḹ) that
-    # romanized IAST never uses as bare ASCII (IAST writes ṛ/ṝ/ḷ/ḹ). These let
-    # SLP1 like "cittavftti" be recognised instead of corrupted as IAST.
-    slp1_markers = re.compile(r"[wWqQzSNfFxX]|[AIURLMH](?![a-z])")
-    if slp1_markers.search(text):
-        return Script.SLP1
+    # Acronym / all-caps guard: SLP1 capitals are single transliteration
+    # letters always interspersed with lowercase, so a run of 3+ consecutive
+    # ASCII uppercase letters indicates an English acronym (JSON, USA, KGB),
+    # never SLP1. (A 2-run like the visarga+consonant in "duHKa" is legitimate
+    # SLP1, so the threshold is 3, not 2.) When such a run is present, skip the
+    # SLP1 heuristics entirely.
+    has_caps_run = re.search(r"[A-Z]{3,}", text) is not None
 
-    # SLP1 also encodes aspirate/special consonants as capitals (K G C J T D
-    # P B = kh gh ch jh th dh ph bh, etc.). IAST never uses a bare capital
-    # consonant mid-word, so a capital in [KGCJWQTDPBYwq] preceded by a
-    # lowercase letter is an unambiguous SLP1 marker. This is what lets
-    # "gacCati" (gaccha-) be recognised as SLP1 rather than mangled as IAST
-    # (which would lowercase the aspirate C -> c, corrupting छ into च).
-    slp1_aspirate = re.compile(r"[a-z][KGCJTDPBY]")
-    if slp1_aspirate.search(text):
-        return Script.SLP1
+    if not has_caps_run:
+        # Check for SLP1-specific patterns (uppercase vowels, specific
+        # consonants). SLP1 uses: A I U R L M H for long vowels/anusvara/
+        # visarga and specific letters like: w (ṭ), W (ṭh), q (ḍ), Q (ḍh),
+        # N (ṇ), S (ṣ), z (ś), plus vocalic-liquid lowercase letters f (ṛ),
+        # F (ṝ), x (ḷ), X (ḹ) that romanized IAST never uses as bare ASCII
+        # (IAST writes ṛ/ṝ/ḷ/ḹ). These let SLP1 like "cittavftti" be recognised
+        # instead of corrupted as IAST.
+        slp1_markers = re.compile(r"[wWqQzSNfFxX]|[AIURLMH](?![a-z])")
+        if slp1_markers.search(text):
+            return Script.SLP1
+
+        # SLP1 also encodes aspirate/special consonants as capitals (K G C J
+        # T D P B = kh gh ch jh th dh ph bh, etc.). IAST never uses a bare
+        # capital consonant mid-word, so a capital in [KGCJTDPBY] preceded by a
+        # lowercase letter is an SLP1 marker. This lets "gacCati" (gaccha-) be
+        # recognised as SLP1 rather than mangled as IAST (which would lowercase
+        # the aspirate C -> c, corrupting छ into च).
+        if re.search(r"[a-z][KGCJTDPBY]", text):
+            return Script.SLP1
 
     # Default to IAST for plain ASCII that might be simplified transliteration
     return Script.IAST

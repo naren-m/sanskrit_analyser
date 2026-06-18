@@ -582,6 +582,10 @@ class Analyzer:
                         from sanskrit_analyzer.models.dhatu import COMMON_DHATUS
 
                         root = dhatu_dict.get("dhatu", "")
+                        # NOTE: COMMON_DHATUS entries are shared singletons; the
+                        # rebuilt tree references the canonical DhatuInfo rather
+                        # than a per-call copy. DhatuInfo is treated as
+                        # read-only here, so the sharing is safe.
                         dhatu = COMMON_DHATUS.get(root)
                         if dhatu is None:
                             meaning = dhatu_dict.get("meaning")

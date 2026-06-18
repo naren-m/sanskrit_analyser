@@ -51,14 +51,25 @@ class SplitValidator:
 
     # ------------------------------------------------------------------
 
+    # Minimum SLP1 length for a token to be lockable. The kosha recognises
+    # 1-2 char particles/fragments (a, i, u, na, ca, am, ...), so locking those
+    # would freeze them in place and could ENTRENCH a cheda over-split (e.g.
+    # blocking the desired merge "van" + "am" -> "vanam"). Only tokens long
+    # enough to be a "real word worth protecting" are locked.
+    _MIN_LOCK_LEN = 3
+
     def _is_locked(self, surface: str) -> bool:
         """Return True if *surface* is a real whole word that must not be split.
 
-        A "locked" token is one the kosha word-guard recognises. Such tokens
-        are real Sanskrit words (e.g. "gacCati", "yoga") and must stay whole;
-        the validator may still merge fragments and split non-words.
+        A "locked" token is a sufficiently long surface that the kosha
+        word-guard recognises. Such tokens are real Sanskrit words (e.g.
+        "gacCati", "yoga", "duHKa") and must stay whole; the validator may
+        still merge fragments and split non-words. Short tokens (< 3 SLP1
+        chars) are never locked so cheda over-splits can still be merged back.
         """
         if self._word_guard is None or not surface:
+            return False
+        if len(surface) < self._MIN_LOCK_LEN:
             return False
         try:
             return bool(self._word_guard.contains(surface))

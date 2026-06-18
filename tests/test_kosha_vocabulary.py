@@ -5,7 +5,10 @@ from sanskrit_analyzer.validation.kosha_vocabulary import KoshaVocabulary
 
 @pytest.fixture(scope="module")
 def vocab():
-    return KoshaVocabulary()
+    try:
+        return KoshaVocabulary()
+    except Exception:
+        pytest.skip("vidyut kosha data not available")
 
 
 def test_contains_known_lemma(vocab):

@@ -111,6 +111,27 @@ class TestDetectScript:
         # Note: Plain "rAma" without SLP1 markers defaults to IAST
         # since uppercase alone is ambiguous
 
+    def test_detect_slp1_aspirate_capitals(self) -> None:
+        """Mid-word SLP1 capital aspirates / vocalic-liquids are detected.
+
+        These regressed the engine: detect_script mis-read them as IAST, so the
+        engine re-transliterated and corrupted the word (C -> c, f -> P0).
+        """
+        assert detect_script("gacCati") == Script.SLP1  # C = ch (छ)
+        assert detect_script("cittavftti") == Script.SLP1  # f = ṛ
+        assert detect_script("duHKa") == Script.SLP1  # visarga + aspirate K
+
+    def test_detect_plain_ascii_aspirate_is_iast(self) -> None:
+        """Plain lowercase ASCII (no SLP1 markers) stays IAST, not SLP1."""
+        assert detect_script("gacchati") == Script.IAST
+
+    def test_detect_acronyms_not_slp1(self) -> None:
+        """A run of 3+ ASCII uppercase letters is an acronym, never SLP1."""
+        assert detect_script("JSON") != Script.SLP1
+        assert detect_script("USA") != Script.SLP1
+        assert detect_script("KGB") != Script.SLP1
+        assert detect_script("isJSON") != Script.SLP1
+
     def test_detect_empty_defaults_to_slp1(self) -> None:
         """Test that empty text defaults to SLP1."""
         assert detect_script("") == Script.SLP1

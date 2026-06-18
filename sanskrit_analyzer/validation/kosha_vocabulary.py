@@ -93,6 +93,9 @@ class KoshaVocabulary:
         # keep their metadata. Kosha-only words simply yield ``{}`` (pos=None).
         self.words = self._curated.words
 
+    # NOTE: lru_cache on a method keys on (self, form), so the cache is shared
+    # across instances and keeps each instance alive for the process lifetime.
+    # That is fine here — the Analyzer holds a single long-lived KoshaVocabulary.
     @functools.lru_cache(maxsize=100_000)
     def _kosha_has(self, form: str) -> bool:
         """Return True if *form* (already SLP1) yields a kosha entry."""

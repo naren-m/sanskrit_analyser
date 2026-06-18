@@ -28,14 +28,15 @@ def analyzer():
 # passed live — the suite previously appeared green only because it ran with
 # caching enabled and was served stale, hand-correct results from a persistent
 # SQLite cache. With a genuinely clean cache the live baseline (before any of
-# this branch's changes) passes only 7/21; this branch passes 9/21 (a strict
-# superset — it additionally recovers cittavṛttinirodha and kleśakarmavipāka,
-# and regresses none). The remaining misses are cheda compound-splitting
-# quality gaps (e.g. duḥkha -> "dus"+"Kan", yogasūtra -> "yuj"+"u"+"ra"): cheda
-# itself emits these fragments and the curated scorer cannot always recover the
-# intended split. This is the deferred compound-splitting concern, NOT a
-# regression from the segmentation/veto/transliteration fixes. xfail'd (not
-# deleted) so the gap stays visible; verified identical on the pre-change tree.
+# this branch's changes) passes only 7/21; this branch passes 10/21 (a strict
+# superset — it additionally recovers cittavṛttinirodha, kleśakarmavipāka, and
+# dhāraṇādhyānasamādhi, and regresses none). The remaining misses are cheda
+# compound-splitting quality gaps (e.g. duḥkha -> "dus"+"Kan", yogasūtra ->
+# "yuj"+"u"+"ra"): cheda itself emits these fragments and the curated scorer
+# cannot always recover the intended split. This is the deferred
+# compound-splitting concern, NOT a regression from the segmentation / veto /
+# transliteration fixes. xfail'd (not deleted) so the gap stays visible;
+# verified identical on the pre-change tree.
 _LIVE_COMPOUND_GAPS = {
     "duḥkha",
     "nirodha",
@@ -48,7 +49,6 @@ _LIVE_COMPOUND_GAPS = {
     "vṛttisārūpyam",
     "abhyāsavairāgyābhyām",
     "vivekakhyāti",
-    "dhāraṇādhyānasamādhi",
 }
 
 
