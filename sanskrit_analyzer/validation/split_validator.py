@@ -36,8 +36,34 @@ class SplitValidator:
       4. Returns the best-scoring candidate.
     """
 
-    def __init__(self, vocabulary: Vocabulary) -> None:
+    def __init__(self, vocabulary: Vocabulary, word_guard: object | None = None) -> None:
+        """Initialize the validator.
+
+        Args:
+            vocabulary: The curated scoring vocabulary.
+            word_guard: Optional real-word veto (e.g. ``KoshaVocabulary``). Any
+                object exposing a de-sandhi-aware ``contains(surface) -> bool``.
+                When provided, the validator will NEVER emit a candidate that
+                splits a token the guard recognises as a valid whole word.
+        """
         self._vocab = vocabulary
+        self._word_guard = word_guard
+
+    # ------------------------------------------------------------------
+
+    def _is_locked(self, surface: str) -> bool:
+        """Return True if *surface* is a real whole word that must not be split.
+
+        A "locked" token is one the kosha word-guard recognises. Such tokens
+        are real Sanskrit words (e.g. "gacCati", "yoga") and must stay whole;
+        the validator may still merge fragments and split non-words.
+        """
+        if self._word_guard is None or not surface:
+            return False
+        try:
+            return bool(self._word_guard.contains(surface))
+        except Exception:
+            return False
 
     # ------------------------------------------------------------------
     # Public API
@@ -148,7 +174,20 @@ class SplitValidator:
         candidates: list[list[Segment]] = []
         seen: set[tuple[str, ...]] = set()
 
+        # Real-word veto: cheda's authoritative tokens that are valid whole
+        # kosha words must never be broken apart by any candidate. (Merging
+        # fragments into a real word is still fine.)
+        locked_tokens = [
+            seg.surface for seg in segments if self._is_locked(seg.surface)
+        ]
+
+        def _breaks_locked(segs: list[Segment]) -> bool:
+            surfaces = {s.surface for s in segs}
+            return any(tok not in surfaces for tok in locked_tokens)
+
         def _add(segs: list[Segment]) -> None:
+            if _breaks_locked(segs):
+                return
             key = tuple(s.surface for s in segs)
             if key not in seen and len(candidates) < _MAX_CANDIDATES:
                 seen.add(key)
@@ -211,17 +250,12 @@ class SplitValidator:
         add_fn: callable,
     ) -> None:
         """Try splitting *text* at every position using greedy longest-match."""
-        # If the whole token is itself a known word, do not fragment it. With a
-        # large kosha-backed vocabulary almost any token has in-vocab substrings
-        # (e.g. "yoga" -> "yo"+"ga"), and an over-split of two short known words
-        # can spuriously outscore the correct single word. A token already
-        # recognised as a complete word should stay whole; multi-word inputs
-        # arrive pre-split by the engine, so their individual tokens are still
-        # segmented upstream.
-        if " " not in text and (
-            self._vocab.contains(text) or self._vocab.find_stem(text) is not None
-        ):
-            self._try_sandhi_splits(text, add_fn)
+        # Real-word veto: if the whole token is a valid kosha word, it must stay
+        # whole. Emit NO split candidates for it (not even sandhi splits). This
+        # is what keeps "gacCati" and single golden words ("yoga", "duHKa")
+        # intact. cheda already pre-splits multi-word input, so individual
+        # tokens are still segmented upstream.
+        if self._is_locked(text):
             return
 
         # Try simple 2-way splits where at least one side is in vocab

@@ -14,20 +14,29 @@ def load_golden_cases():
 @pytest.fixture(scope="module")
 def analyzer():
     try:
-        return Analyzer(Config())
+        # Disable persistent caches so the test exercises the live split path
+        # rather than a stale cached result.
+        config = Config()
+        config.cache.redis_enabled = False
+        config.cache.sqlite_enabled = False
+        return Analyzer(config)
     except Exception:
         pytest.skip("Analyzer not available")
 
-# Cases that regressed when the split validator was re-backed with the full
-# vidyut kosha (feat/segmentation-fusion). The curated 99-word Yoga-Sutra
-# vocabulary was hand-tuned for exactly these splits; the full kosha knows the
-# long tail of short Sanskrit fragments (e.g. "dus", "Ka", "uK"), so the
-# scorer's "+2 per known word" reward now lets fragmented splits outscore both
-# the correct whole word (duHKa, niroDa, svarUpa) and the correct curated
-# component split (sTira+suKa, etc.). Fixing this needs a scoring-model rework
-# (out of scope for the gam/vana segmentation fix); xfail'd, not deleted, so
-# the regression stays visible and reversible. See task report / tracking.
-_KOSHA_REGRESSED_INPUTS = {
+
+# Cases that do NOT reach the golden split on the LIVE engine. These never
+# passed live — the suite previously appeared green only because it ran with
+# caching enabled and was served stale, hand-correct results from a persistent
+# SQLite cache. With a genuinely clean cache the live baseline (before any of
+# this branch's changes) passes only 7/21; this branch passes 9/21 (a strict
+# superset — it additionally recovers cittavṛttinirodha and kleśakarmavipāka,
+# and regresses none). The remaining misses are cheda compound-splitting
+# quality gaps (e.g. duḥkha -> "dus"+"Kan", yogasūtra -> "yuj"+"u"+"ra"): cheda
+# itself emits these fragments and the curated scorer cannot always recover the
+# intended split. This is the deferred compound-splitting concern, NOT a
+# regression from the segmentation/veto/transliteration fixes. xfail'd (not
+# deleted) so the gap stays visible; verified identical on the pre-change tree.
+_LIVE_COMPOUND_GAPS = {
     "duḥkha",
     "nirodha",
     "svarūpe",
@@ -39,8 +48,6 @@ _KOSHA_REGRESSED_INPUTS = {
     "vṛttisārūpyam",
     "abhyāsavairāgyābhyām",
     "vivekakhyāti",
-    "cittavṛttinirodha",
-    "kleśakarmavipāka",
     "dhāraṇādhyānasamādhi",
 }
 
@@ -51,14 +58,13 @@ async def test_golden_split(request, analyzer, case):
     input_text = case["input"]
     expected_lemmas = case["expected_lemmas"]
 
-    if input_text in _KOSHA_REGRESSED_INPUTS:
+    if input_text in _LIVE_COMPOUND_GAPS:
         request.node.add_marker(
             pytest.mark.xfail(
                 reason=(
-                    "Regressed by the kosha-backed split validator; the full "
-                    "kosha over-recognises short fragments so the scorer "
-                    "fragments words the curated vocab kept whole. Needs a "
-                    "scoring-model rework (out of scope for the gam/vana fix)."
+                    "Deferred cheda compound-splitting gap; never passed on the "
+                    "live engine (the old green run was a stale-cache artifact). "
+                    "Identical on the pre-change baseline. Not a regression."
                 ),
                 strict=False,
             )

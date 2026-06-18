@@ -41,8 +41,21 @@ def detect_script(text: str) -> Script:
     # Check for SLP1-specific patterns (uppercase vowels, specific consonants)
     # SLP1 uses: A I U R L M H for long vowels/anusvara/visarga
     # and specific letters like: w (ṭ), W (ṭh), q (ḍ), Q (ḍh), N (ṇ), S (ṣ), z (ś)
-    slp1_markers = re.compile(r"[wWqQzSN]|[AIURLMH](?![a-z])")
+    # plus vocalic-liquid lowercase letters f (ṛ), F (ṝ), x (ḷ), X (ḹ) that
+    # romanized IAST never uses as bare ASCII (IAST writes ṛ/ṝ/ḷ/ḹ). These let
+    # SLP1 like "cittavftti" be recognised instead of corrupted as IAST.
+    slp1_markers = re.compile(r"[wWqQzSNfFxX]|[AIURLMH](?![a-z])")
     if slp1_markers.search(text):
+        return Script.SLP1
+
+    # SLP1 also encodes aspirate/special consonants as capitals (K G C J T D
+    # P B = kh gh ch jh th dh ph bh, etc.). IAST never uses a bare capital
+    # consonant mid-word, so a capital in [KGCJWQTDPBYwq] preceded by a
+    # lowercase letter is an unambiguous SLP1 marker. This is what lets
+    # "gacCati" (gaccha-) be recognised as SLP1 rather than mangled as IAST
+    # (which would lowercase the aspirate C -> c, corrupting छ into च).
+    slp1_aspirate = re.compile(r"[a-z][KGCJTDPBY]")
+    if slp1_aspirate.search(text):
         return Script.SLP1
 
     # Default to IAST for plain ASCII that might be simplified transliteration

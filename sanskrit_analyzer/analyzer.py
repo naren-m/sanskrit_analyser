@@ -153,27 +153,38 @@ class Analyzer:
         # Initialize tree builder
         self._tree_builder = TreeBuilder(TreeBuilderConfig())
 
-        # Initialize split validator. Prefer the full kosha-backed vocabulary
-        # (millions of forms) so real lemmas score positively and correct
-        # segmentations win; fall back to the curated vocabulary if the kosha
-        # is unavailable.
+        # Initialize the split validator.
+        #
+        # Architecture: cheda (vidyut) is authoritative. The curated
+        # ``Vocabulary`` is the *scorer* — it is hand-tuned and was the only
+        # vocab that passed every golden split. The full kosha is used only as
+        # a *real-word veto* (``word_guard``): the validator may merge
+        # fragments and split non-words, but must NEVER split a token that is a
+        # valid whole kosha word (which is what fragmented "gacCati" -> "gat" +
+        # "cati" and over-split the golden cases when the kosha was the scorer).
         try:
+            vocab = Vocabulary.load_default()
+
+            word_guard = None
             try:
                 from sanskrit_analyzer.validation.kosha_vocabulary import (
                     KoshaVocabulary,
                 )
 
-                vocab = KoshaVocabulary()
-                logger.info("Split validator using kosha-backed vocabulary")
+                word_guard = KoshaVocabulary()
+                logger.info("Split validator real-word veto enabled (kosha)")
             except Exception as e:
-                vocab = Vocabulary.load_default()
                 logger.warning(
-                    "Kosha vocabulary unavailable (%s); falling back to "
-                    "curated vocabulary with %d entries",
+                    "Kosha word-guard unavailable (%s); split validator will "
+                    "run without the real-word veto",
                     e,
-                    len(vocab),
                 )
-            self._split_validator = SplitValidator(vocab)
+
+            self._split_validator = SplitValidator(vocab, word_guard=word_guard)
+            logger.info(
+                "Split validator loaded with %d curated vocabulary entries",
+                len(vocab),
+            )
         except Exception as e:
             logger.warning("Split validator not available: %s", e)
             self._split_validator = None
@@ -559,16 +570,31 @@ class Analyzer:
                             raw_tag=morph_dict.get("raw_tag"),
                         )
 
-                    # Rebuild dhatu
+                    # Rebuild dhatu. The serialized form (DhatuInfo.to_dict)
+                    # drops the required ``scripts`` field, so reconstruct via
+                    # the canonical COMMON_DHATUS entry when possible; otherwise
+                    # build a minimal valid DhatuInfo (matching the real
+                    # dataclass signature, which takes ``meanings``/``scripts``,
+                    # not a singular ``meaning``).
                     dhatu = None
                     dhatu_dict = bw_dict.get("dhatu")
                     if dhatu_dict:
-                        dhatu = DhatuInfo(
-                            dhatu=dhatu_dict.get("dhatu", ""),
-                            meaning=dhatu_dict.get("meaning"),
-                            gana=dhatu_dict.get("gana"),
-                            pada=dhatu_dict.get("pada"),
-                        )
+                        from sanskrit_analyzer.models.dhatu import COMMON_DHATUS
+
+                        root = dhatu_dict.get("dhatu", "")
+                        dhatu = COMMON_DHATUS.get(root)
+                        if dhatu is None:
+                            meaning = dhatu_dict.get("meaning")
+                            dhatu = DhatuInfo(
+                                dhatu=root,
+                                scripts=ScriptVariants.from_text(
+                                    root, Script.SLP1
+                                ),
+                                gana=dhatu_dict.get("gana") or 0,
+                                pada=dhatu_dict.get("pada") or "",
+                                meanings=dhatu_dict.get("meanings")
+                                or ([meaning] if meaning else []),
+                            )
 
                     # Rebuild meanings
                     meanings = [
