@@ -13,6 +13,7 @@ __author__ = "Naren Mudivarthy"
 
 from sanskrit_analyzer.analyzer import Analyzer
 from sanskrit_analyzer.config import AnalysisMode, Config, ConfigError
+from sanskrit_analyzer.deep_read import DeepRead, DeepReadResult
 
 __all__ = [
     "__version__",
@@ -20,4 +21,6 @@ __all__ = [
     "AnalysisMode",
     "Config",
     "ConfigError",
+    "DeepRead",
+    "DeepReadResult",
 ]
