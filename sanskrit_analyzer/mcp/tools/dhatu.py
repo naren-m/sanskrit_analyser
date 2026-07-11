@@ -1,12 +1,14 @@
 """Dhatu tools for MCP server."""
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from mcp.server import Server
 from mcp.types import Tool, TextContent
 
 from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry
 from sanskrit_analyzer.mcp.response import error_response, json_response, text_response
+
+ToolDispatcher = Callable[[str, dict[str, Any]], Awaitable[list[TextContent] | None]]
 
 
 def _dhatu_to_dict(entry: DhatuEntry) -> dict[str, Any]:
@@ -23,17 +25,11 @@ def _dhatu_to_dict(entry: DhatuEntry) -> dict[str, Any]:
     }
 
 
-def register_dhatu_tools(server: Server) -> None:
-    """Register dhatu tools with the MCP server.
-
-    Args:
-        server: MCP server instance.
-    """
+def build_dhatu_tools() -> tuple[list[Tool], ToolDispatcher]:
+    """Build the dhatu tool specs and their dispatcher (see build_analysis_tools)."""
     db = DhatuDB()
 
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
+    tools = [
             Tool(
                 name="lookup_dhatu",
                 description="Look up a dhatu (verbal root) by its root form",
@@ -109,8 +105,9 @@ def register_dhatu_tools(server: Server) -> None:
             ),
         ]
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    async def dispatch(
+        name: str, arguments: dict[str, Any]
+    ) -> list[TextContent] | None:
         if name == "lookup_dhatu":
             return _lookup_dhatu(db, arguments)
         elif name == "search_dhatu":
@@ -119,8 +116,9 @@ def register_dhatu_tools(server: Server) -> None:
             return _conjugate_verb(db, arguments)
         elif name == "list_gana":
             return _list_gana(db, arguments)
-        else:
-            return error_response(f"Unknown tool: {name}")
+        return None
+
+    return tools, dispatch
 
 
 def _lookup_dhatu(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
@@ -142,10 +140,23 @@ def _lookup_dhatu(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
         return error_response(f"looking up dhatu: {e}")
 
 
+def _clamp_limit(value: Any, default: int, maximum: int = 100) -> int:
+    """Coerce a client-supplied ``limit`` to an int in ``[1, maximum]``.
+
+    The low-level MCP server does not enforce the JSON-schema ``minimum``/
+    ``maximum``, so arguments arrive unvalidated (and possibly non-numeric).
+    """
+    try:
+        limit = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(limit, maximum))
+
+
 def _search_dhatu(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle search_dhatu tool call."""
     query = arguments.get("query", "")
-    limit = arguments.get("limit", 10)
+    limit = _clamp_limit(arguments.get("limit", 10), default=10)
 
     if not query:
         return error_response("query parameter is required")
@@ -196,10 +207,17 @@ def _conjugate_verb(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]
 def _list_gana(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle list_gana tool call."""
     gana = arguments.get("gana")
-    limit = arguments.get("limit", 20)
+    limit = _clamp_limit(arguments.get("limit", 20), default=20)
 
     if gana is None:
         return error_response("gana parameter is required")
+
+    # The low-level MCP server does not coerce/validate against the tool schema,
+    # so gana may arrive as a non-int (e.g. the string "3"); coerce before compare.
+    try:
+        gana = int(gana)
+    except (TypeError, ValueError):
+        return error_response("gana must be an integer between 1 and 10")
 
     if not 1 <= gana <= 10:
         return error_response("gana must be between 1 and 10")

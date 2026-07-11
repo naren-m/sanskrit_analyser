@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from sanskrit_analyzer.training.config import TrainingConfig
-from sanskrit_analyzer.training.corpus_loader import CorpusLoader
+from sanskrit_analyzer.training.corpus_loader import CorpusLoader, CorpusLoadError
 from sanskrit_analyzer.training.data_generator import BatchAnalyzer, DisambiguationGenerator
 
 
@@ -94,6 +94,25 @@ def _validate_corpus_path(corpus_path: Path) -> bool:
     return True
 
 
+def _coerce_confidence(value: object) -> float | None:
+    """Coerce a metadata confidence value to a float, or None if not numeric.
+
+    ``bool`` is rejected (it is an ``int`` subclass but never a valid
+    confidence), and ``None`` / non-numeric values are skipped so they do not
+    count as 0.0 in the average.
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
 def _print_summary(count: int, output_path: Path) -> None:
     """Print generation summary."""
     print(f"\nSummary:")
@@ -115,9 +134,13 @@ def cmd_generate_grammar(args: argparse.Namespace) -> int:
     logger.info(f"Generating grammar training data from {corpus_path}")
     logger.info(f"Output: {output_path}, Min confidence: {args.min_confidence}")
 
-    count = asyncio.run(
-        generate_grammar_data(corpus_path, output_path, args.min_confidence, args.max_examples)
-    )
+    try:
+        count = asyncio.run(
+            generate_grammar_data(corpus_path, output_path, args.min_confidence, args.max_examples)
+        )
+    except CorpusLoadError as exc:
+        logger.error(f"Failed to load corpus: {exc}")
+        return 1
 
     logger.info(f"Generated {count} grammar training examples")
     _print_summary(count, output_path)
@@ -138,7 +161,11 @@ def cmd_generate_disambig(args: argparse.Namespace) -> int:
     logger.info(f"Generating disambiguation training data from {corpus_path}")
     logger.info(f"Output: {output_path}")
 
-    count = asyncio.run(generate_disambig_data(corpus_path, output_path, args.max_examples))
+    try:
+        count = asyncio.run(generate_disambig_data(corpus_path, output_path, args.max_examples))
+    except CorpusLoadError as exc:
+        logger.error(f"Failed to load corpus: {exc}")
+        return 1
 
     logger.info(f"Generated {count} disambiguation training examples")
     _print_summary(count, output_path)
@@ -210,6 +237,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
     total = 0
     confidence_sum = 0.0
+    confidence_count = 0
     morphology_counter: Counter[str] = Counter()
 
     with open(input_path, encoding="utf-8") as f:
@@ -218,10 +246,13 @@ def cmd_stats(args: argparse.Namespace) -> int:
                 example = json.loads(line)
                 total += 1
 
-                # Extract confidence
+                # Extract confidence, skipping null / non-numeric values so a
+                # missing confidence does not deflate the average.
                 metadata = example.get("metadata", {})
-                conf = metadata.get("confidence", 0.0)
-                confidence_sum += conf
+                conf = _coerce_confidence(metadata.get("confidence"))
+                if conf is not None:
+                    confidence_sum += conf
+                    confidence_count += 1
 
                 # Count morphology types
                 output = example.get("output", {})
@@ -234,7 +265,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
             except json.JSONDecodeError:
                 continue
 
-    avg_confidence = confidence_sum / total if total > 0 else 0.0
+    avg_confidence = confidence_sum / confidence_count if confidence_count > 0 else 0.0
 
     stats = {
         "total_examples": total,

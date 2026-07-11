@@ -98,6 +98,42 @@ class TestPipelineResult:
         assert best is not None
         assert best.index == 1
 
+    def test_best_candidate_honours_llm_ranking(self) -> None:
+        """When resolved by the LLM, ranked top wins over max-confidence.
+
+        The LLM reorders candidates by semantic ranking without touching
+        confidence values, so ``candidates[0]`` (its chosen top) must be
+        returned even though it is not the highest-confidence candidate.
+        """
+        candidates = [
+            ParseCandidate(index=0, segments=[], confidence=0.6),  # LLM top
+            ParseCandidate(index=1, segments=[], confidence=0.7),  # higher conf
+        ]
+        result = PipelineResult(
+            candidates=candidates,
+            resolved_at=DisambiguationStage.LLM,
+            confidence=0.6,
+        )
+        best = result.best_candidate
+        assert best is not None
+        assert best.index == 0
+        assert best.confidence == 0.6
+
+    def test_best_candidate_non_llm_uses_max_confidence(self) -> None:
+        """Non-LLM resolution keeps the highest-confidence candidate."""
+        candidates = [
+            ParseCandidate(index=0, segments=[], confidence=0.6),
+            ParseCandidate(index=1, segments=[], confidence=0.7),
+        ]
+        result = PipelineResult(
+            candidates=candidates,
+            resolved_at=DisambiguationStage.RULES,
+            confidence=0.7,
+        )
+        best = result.best_candidate
+        assert best is not None
+        assert best.index == 1
+
     def test_best_candidate_empty(self) -> None:
         """Test best candidate with no candidates."""
         result = PipelineResult(

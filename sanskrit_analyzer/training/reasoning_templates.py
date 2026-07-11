@@ -157,14 +157,70 @@ def generate_semantic_reasoning(
     )
 
 
+# Morphological dimensions compared between parses, in priority order.  The
+# first dimension on which the selected and rejected parse disagree decides
+# which reasoning template applies.
+_MORPH_KEYS = ("case", "person", "number", "gender", "voice", "tense", "pos")
+
+
+def _collect_morphology(parse: dict[str, Any]) -> dict[str, str]:
+    """Flatten a parse's morphological features into a comparable dict.
+
+    Features are read from the parse's top-level keys and from any nested
+    word list (``words``/``base_words``/``segments``), so parses expressed
+    either as flat dicts or as ``{"words": [...]}`` are both comparable.
+    """
+    feats: dict[str, str] = {}
+    for key in _MORPH_KEYS:
+        value = parse.get(key)
+        if value is not None:
+            feats[key] = str(value)
+    for list_key in ("words", "base_words", "segments"):
+        for word in parse.get(list_key) or []:
+            if isinstance(word, dict):
+                for key in _MORPH_KEYS:
+                    value = word.get(key)
+                    if value is not None:
+                        feats.setdefault(key, str(value))
+    return feats
+
+
+def _split_signature(parse: dict[str, Any]) -> str:
+    """Return a string describing how a parse segments the surface text."""
+    for list_key in ("segments", "sandhi_groups", "words", "base_words"):
+        items = parse.get(list_key)
+        if items:
+            parts = [
+                str(it.get("surface_form") or it.get("surface") or it.get("lemma") or it)
+                if isinstance(it, dict)
+                else str(it)
+                for it in items
+            ]
+            return " + ".join(parts)
+    return str(parse.get("split", ""))
+
+
+def _first_other_index(selected_index: int, count: int) -> int:
+    """Return the index of a parse other than *selected_index*."""
+    for i in range(count):
+        if i != selected_index:
+            return i
+    return selected_index
+
+
 def detect_applicable_rule(
     parses: list[dict[str, Any]],
     selected_index: int,
 ) -> tuple[str, dict[str, str]]:
     """Detect which reasoning rule applies and extract parameters.
 
-    This is a heuristic function that examines parse differences
-    to determine the most applicable reasoning template.
+    Compares the selected parse against a rejected alternative and picks the
+    reasoning template for the first morphological dimension on which they
+    disagree (case -> verb agreement -> gender -> sandhi -> word order),
+    falling back to semantic coherence when no structural difference is
+    found.  This makes every template reachable and ties the generated
+    reasoning to the actual differences between the candidates rather than
+    always returning a single constant rule.
 
     Args:
         parses: List of parse candidate dictionaries.
@@ -181,12 +237,72 @@ def detect_applicable_rule(
         }
 
     selected = parses[selected_index]
-    rejected_index = 1 - selected_index if selected_index < 2 else 0
-    rejected = parses[rejected_index] if rejected_index < len(parses) else parses[0]
+    rejected_index = _first_other_index(selected_index, len(parses))
+    rejected = parses[rejected_index]
 
-    # Default to semantic coherence
+    sel = _collect_morphology(selected)
+    rej = _collect_morphology(rejected)
+
+    sel_interp = str(selected.get("interpretation") or f"Parse {selected_index}")
+    rej_interp = str(rejected.get("interpretation") or f"Parse {rejected_index}")
+
+    def _differs(key: str) -> bool:
+        return key in sel and key in rej and sel[key] != rej[key]
+
+    # 1. Case disagreement -> case agreement rule.
+    if _differs("case"):
+        return "case_agreement", {
+            "nominative": sel_interp,
+            "nom_case": sel["case"],
+            "verb": str(selected.get("verb") or "the verb"),
+            "alternative": rej_interp,
+            "wrong_case": rej["case"],
+        }
+
+    # 2. Verb person/number disagreement -> verb agreement rule.
+    if _differs("person") or _differs("number"):
+        mismatch = "person" if _differs("person") else "number"
+        return "verb_agreement", {
+            "verb": str(selected.get("verb") or sel_interp),
+            "person": sel.get("person", "third"),
+            "number": sel.get("number", "singular"),
+            "expected_subject": sel_interp,
+            "parse_issue": f"Parse {rejected_index} disagrees in {mismatch}",
+        }
+
+    # 3. Gender disagreement -> gender agreement rule.
+    if _differs("gender"):
+        return "gender_agreement", {
+            "adjective": sel_interp,
+            "adj_gender": sel["gender"],
+            "noun": str(selected.get("noun") or "the noun"),
+            "noun_gender": sel["gender"],
+            "rejected_index": str(rejected_index),
+        }
+
+    # 4. Different segmentation -> sandhi preference rule.
+    sel_split = _split_signature(selected)
+    rej_split = _split_signature(rejected)
+    if sel_split and rej_split and sel_split != rej_split:
+        return "sandhi_preference", {
+            "preferred_split": sel_split,
+            "sandhi_type": str(selected.get("sandhi_type") or "vowel"),
+            "alternative_split": rej_split,
+        }
+
+    # 5. Same features but a different reading -> word order rule.
+    if sel_interp != rej_interp and (sel or rej):
+        return "word_order", {
+            "selected_parse": sel_interp,
+            "alternative_parse": rej_interp,
+            "construction_type": str(
+                selected.get("construction_type") or "subject-object-verb"
+            ),
+        }
+
+    # 6. Fallback: semantic coherence, using the real interpretations.
     return "semantic_coherence", {
-        "selected_meaning": f"Parse {selected_index}",
-        "context": "grammatical analysis",
-        "alternative_meaning": f"Parse {rejected_index}",
+        "selected_meaning": sel_interp,
+        "context": str(selected.get("context") or "grammatical analysis"),
+        "alternative_meaning": rej_interp,
     }

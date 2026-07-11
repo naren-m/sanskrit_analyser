@@ -1,6 +1,7 @@
 """Sanskrit Heritage Engine client for lexicon-based analysis."""
 
 import asyncio
+import logging
 from urllib.parse import quote
 
 import aiohttp
@@ -9,6 +10,8 @@ from sanskrit_analyzer.engines.base import EngineBase, EngineResult, Segment
 from sanskrit_analyzer.models.scripts import Script
 from sanskrit_analyzer.utils.normalize import detect_script
 from sanskrit_analyzer.utils.transliterate import transliterate
+
+logger = logging.getLogger(__name__)
 
 # Sanskrit Heritage Engine URLs
 PUBLIC_HERITAGE_URL = "https://sanskrit.inria.fr/cgi-bin/SKT/sktgraph"

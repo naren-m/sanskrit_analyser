@@ -277,6 +277,23 @@ class TestLLMDisambiguator:
         assert isinstance(result, bool)
 
     @pytest.mark.asyncio
+    async def test_health_check_logs_on_exception(
+        self, disambiguator: LLMDisambiguator, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A failed Ollama health check logs a warning before returning False."""
+        with patch(
+            "aiohttp.ClientSession.get", side_effect=RuntimeError("boom")
+        ):
+            with caplog.at_level("WARNING"):
+                result = await disambiguator.health_check()
+
+        assert result is False
+        assert any(
+            "health check failed" in record.message.lower()
+            for record in caplog.records
+        )
+
+    @pytest.mark.asyncio
     async def test_health_check_openai_no_key(self) -> None:
         """Test OpenAI health check without API key."""
         config = LLMConfig(provider=LLMProvider.OPENAI)

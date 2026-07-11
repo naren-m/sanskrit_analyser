@@ -9,16 +9,18 @@ from typing import Any
 
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
+from mcp.types import Resource, TextContent, Tool
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from sanskrit_analyzer.mcp.tools.analysis import register_analysis_tools
-from sanskrit_analyzer.mcp.tools.dhatu import register_dhatu_tools
-from sanskrit_analyzer.mcp.tools.grammar import register_grammar_tools
-from sanskrit_analyzer.mcp.resources.dhatus import register_dhatu_resources
-from sanskrit_analyzer.mcp.resources.grammar import register_grammar_resources
+from sanskrit_analyzer.mcp.response import error_response
+from sanskrit_analyzer.mcp.tools.analysis import build_analysis_tools
+from sanskrit_analyzer.mcp.tools.dhatu import build_dhatu_tools
+from sanskrit_analyzer.mcp.tools.grammar import build_grammar_tools
+from sanskrit_analyzer.mcp.resources.dhatus import build_dhatu_resources
+from sanskrit_analyzer.mcp.resources.grammar import build_grammar_resources
 
 # Server start time for uptime calculation
 _start_time: float = 0.0
@@ -51,16 +53,70 @@ def create_server() -> Server:
     """
     server = Server("sanskrit-analyzer")
 
-    # Register tools
-    register_analysis_tools(server)
-    register_dhatu_tools(server)
-    register_grammar_tools(server)
+    # The MCP low-level Server stores exactly one handler per request type, so
+    # every tool/resource group must be aggregated into a single handler.
+    # Registering each group's own @server.list_tools()/@server.call_tool()
+    # (etc.) would silently overwrite all but the last group.
+    tool_specs: list[Tool] = []
+    tool_dispatchers = []
+    for build in (build_analysis_tools, build_dhatu_tools, build_grammar_tools):
+        specs, dispatch = build()
+        tool_specs.extend(specs)
+        tool_dispatchers.append(dispatch)
 
-    # Register resources
-    register_dhatu_resources(server)
-    register_grammar_resources(server)
+    resource_specs: list[Resource] = []
+    resource_readers = []
+    for build in (build_dhatu_resources, build_grammar_resources):
+        specs, reader = build()
+        resource_specs.extend(specs)
+        resource_readers.append(reader)
+
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        return tool_specs
+
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+        for dispatch in tool_dispatchers:
+            result = await dispatch(name, arguments)
+            if result is not None:
+                return result
+        return error_response(f"Unknown tool: {name}")
+
+    @server.list_resources()
+    async def list_resources() -> list[Resource]:
+        return resource_specs
+
+    @server.read_resource()
+    async def read_resource(uri: str) -> str:
+        for reader in resource_readers:
+            result = await reader(str(uri))
+            if result is not None:
+                return result
+        return json.dumps({"error": f"Unknown resource: {uri}"})
 
     return server
+
+
+# Health-probe objects are cached so a monitoring poll doesn't rebuild a DhatuDB
+# and Analyzer (an expensive load) on every request.
+_health_db: Any = None
+_health_analyzer: Any = None
+
+
+def _get_health_probes() -> tuple[Any, Any]:
+    """Lazily build and cache the DhatuDB/Analyzer used by the health check."""
+    global _health_db, _health_analyzer
+    if _health_db is None:
+        from sanskrit_analyzer.data.dhatu_db import DhatuDB
+
+        _health_db = DhatuDB()
+    if _health_analyzer is None:
+        from sanskrit_analyzer import Analyzer
+        from sanskrit_analyzer.config import Config
+
+        _health_analyzer = Analyzer(Config())
+    return _health_db, _health_analyzer
 
 
 async def health_check(request: Request) -> JSONResponse:
@@ -69,14 +125,12 @@ async def health_check(request: Request) -> JSONResponse:
     Returns:
         JSON response with server health status.
     """
-    from sanskrit_analyzer.data.dhatu_db import DhatuDB
-
     # Check component health
     components: dict[str, dict[str, Any]] = {}
 
     # Check DhatuDB
     try:
-        db = DhatuDB()
+        db, _ = _get_health_probes()
         # Quick test query
         _ = db.get_by_gana(1, limit=1)
         components["dhatu_db"] = {"status": "healthy"}
@@ -85,10 +139,7 @@ async def health_check(request: Request) -> JSONResponse:
 
     # Check Analyzer
     try:
-        from sanskrit_analyzer import Analyzer
-        from sanskrit_analyzer.config import Config
-
-        _ = Analyzer(Config())
+        _get_health_probes()
         components["analyzer"] = {"status": "healthy"}
     except Exception as e:
         components["analyzer"] = {"status": "unhealthy", "error": str(e)}

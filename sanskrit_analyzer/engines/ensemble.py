@@ -240,6 +240,7 @@ class EnsembleAnalyzer:
 
         # Build merged segments
         merged: list[MergedSegment] = []
+        total_engines = len(engine_results)
 
         for i, seg in enumerate(primary_result.segments):
             # Collect votes from all engines for this segment
@@ -250,8 +251,11 @@ class EnsembleAnalyzer:
             all_pos: list[str] = []
 
             for engine_name, result in engine_results.items():
-                if i < len(result.segments):
-                    other_seg = result.segments[i]
+                # Align by surface span rather than raw list index: engines that
+                # split sandhi into a different number of segments would otherwise
+                # be compared position-for-position and read as disagreements.
+                other_seg = self._find_matching_segment(seg, result.segments, i)
+                if other_seg is not None:
                     weight = self._weights.get(engine_name, 0.33)
                     votes[engine_name] = other_seg.confidence * weight
 
@@ -278,8 +282,9 @@ class EnsembleAnalyzer:
                     lemma_counts[lemma] = lemma_counts.get(lemma, 0) + 1
                 best_lemma = max(lemma_counts.keys(), key=lambda x: lemma_counts[x])
 
-            # Calculate agreement score
-            agreement = self._calculate_lemma_agreement(all_lemmas)
+            # Calculate agreement score (weighted by how many engines covered this
+            # position, so a lone contributor never scores as full agreement)
+            agreement = self._calculate_lemma_agreement(all_lemmas, total_engines)
 
             merged_segment = MergedSegment(
                 surface=seg.surface,
@@ -296,34 +301,75 @@ class EnsembleAnalyzer:
 
         return merged
 
-    def _calculate_lemma_agreement(self, lemmas: list[str]) -> float:
-        """Calculate agreement score for a list of lemmas.
+    def _find_matching_segment(
+        self, target: Segment, segments: list[Segment], fallback_index: int
+    ) -> Segment | None:
+        """Find the segment in ``segments`` that aligns with ``target``.
+
+        Alignment is by surface span, not list position: engines that split
+        sandhi differently produce different segment counts, so matching by
+        index alone compares unrelated words. We match on identical or
+        overlapping surface strings and only fall back to ``fallback_index``
+        when no surface overlap can be found.
 
         Args:
-            lemmas: List of lemmas from different engines.
+            target: The primary segment to align against.
+            segments: Candidate segments from another engine.
+            fallback_index: Positional index to use when spans don't match.
+
+        Returns:
+            The matching Segment, or None if there is nothing to align.
+        """
+        if not segments:
+            return None
+
+        # 1. Exact surface match.
+        for seg in segments:
+            if seg.surface == target.surface:
+                return seg
+
+        # 2. Overlapping surface span (one contains the other).
+        target_surface = target.surface.lower()
+        for seg in segments:
+            surface = seg.surface.lower()
+            if surface and target_surface and (
+                surface in target_surface or target_surface in surface
+            ):
+                return seg
+
+        # 3. Fall back to positional index when spans are unavailable.
+        if 0 <= fallback_index < len(segments):
+            return segments[fallback_index]
+
+        return None
+
+    def _calculate_lemma_agreement(
+        self, lemmas: list[str], total_engines: int
+    ) -> float:
+        """Calculate agreement score for a list of lemmas.
+
+        The score is the share of *all* participating engines that produced the
+        most common lemma at this position. A single engine contributing a lemma
+        where others produced nothing therefore does NOT score as full
+        agreement — it is diluted by the engines that did not corroborate it.
+
+        Args:
+            lemmas: Lemmas produced by engines that covered this position.
+            total_engines: Total number of engines that returned a result.
 
         Returns:
             Agreement score (0.0 to 1.0).
         """
-        if not lemmas:
+        if not lemmas or total_engines <= 0:
             return 0.0
-        if len(lemmas) == 1:
-            return 1.0
 
-        # Count unique lemmas
-        unique = set(lemmas)
-
-        # Perfect agreement if all the same
-        if len(unique) == 1:
-            return 1.0
-
-        # Partial agreement based on most common
+        # Count lemmas and take the most common.
         counts: dict[str, int] = {}
         for lemma in lemmas:
             counts[lemma] = counts.get(lemma, 0) + 1
 
         max_count = max(counts.values())
-        return float(max_count) / len(lemmas)
+        return min(1.0, float(max_count) / total_engines)
 
     def _calculate_agreement(
         self,

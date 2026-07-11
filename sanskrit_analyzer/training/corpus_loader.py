@@ -1,8 +1,20 @@
 """Corpus loading utilities for Sanskrit text data."""
 
+import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
+
+logger = logging.getLogger(__name__)
+
+
+class CorpusLoadError(Exception):
+    """Raised when a corpus file cannot be read or parsed.
+
+    Callers (e.g. the CLI) can catch this to fail with a clean exit code
+    instead of surfacing a raw ``JSONDecodeError`` / ``OSError`` traceback.
+    """
 
 
 @dataclass
@@ -86,11 +98,25 @@ class CorpusLoader:
                 self._entries.append(CorpusEntry(text=line, metadata=metadata))
 
     def _load_json_file(self) -> None:
-        """Load entries from a JSON file with verse structure."""
-        import json
+        """Load entries from a JSON file with verse structure.
 
-        with open(self.path, encoding="utf-8") as f:
-            data = json.load(f)
+        Raises:
+            CorpusLoadError: If the file cannot be read or contains
+                malformed JSON.
+        """
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                data = json.load(f)
+        except json.JSONDecodeError as exc:
+            logger.error("Malformed JSON in corpus file %s: %s", self.path, exc)
+            raise CorpusLoadError(
+                f"Malformed JSON in corpus file {self.path}: {exc}"
+            ) from exc
+        except OSError as exc:
+            logger.error("Could not read corpus file %s: %s", self.path, exc)
+            raise CorpusLoadError(
+                f"Could not read corpus file {self.path}: {exc}"
+            ) from exc
 
         # Support various JSON structures
         if isinstance(data, list):

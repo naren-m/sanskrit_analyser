@@ -1,5 +1,6 @@
 """FastAPI application factory and configuration."""
 
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -10,6 +11,29 @@ from sanskrit_analyzer import __version__
 from sanskrit_analyzer.analyzer import Analyzer
 from sanskrit_analyzer.config import Config
 
+# Localhost dev origins used when no explicit allowlist is configured.
+_DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+]
+
+
+def _resolve_cors_origins() -> list[str]:
+    """Resolve CORS origins from the ``SANSKRIT_CORS_ORIGINS`` env var.
+
+    The value is a comma-separated list of origins. When unset, a safe set of
+    localhost development origins is used instead of a wildcard so that
+    credentialed cross-origin requests remain restricted to known hosts.
+    """
+    raw = os.environ.get("SANSKRIT_CORS_ORIGINS")
+    if raw:
+        origins = [o.strip() for o in raw.split(",") if o.strip()]
+        if origins:
+            return origins
+    return list(_DEFAULT_CORS_ORIGINS)
+
 
 def create_app(
     config: Config | None = None,
@@ -19,7 +43,9 @@ def create_app(
 
     Args:
         config: Application configuration. If None, loads from default location.
-        cors_origins: List of allowed CORS origins. Defaults to ["*"] in development.
+        cors_origins: List of allowed CORS origins. When None, origins are read
+            from the ``SANSKRIT_CORS_ORIGINS`` env var, defaulting to localhost
+            dev origins.
 
     Returns:
         Configured FastAPI application instance.
@@ -28,7 +54,7 @@ def create_app(
         config = Config.load()
 
     if cors_origins is None:
-        cors_origins = ["*"]  # Permissive for development
+        cors_origins = _resolve_cors_origins()
 
     # Create analyzer instance to be shared across requests
     analyzer = Analyzer(config)
@@ -59,11 +85,14 @@ def create_app(
         lifespan=lifespan,
     )
 
-    # Add CORS middleware
+    # Add CORS middleware. Credentials are only permitted with an explicit
+    # origin allowlist; combining a "*" wildcard with credentials is unsafe
+    # (and rejected by browsers), so credentials are disabled in that case.
+    allow_credentials = "*" not in cors_origins
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_credentials=True,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )

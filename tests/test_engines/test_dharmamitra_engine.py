@@ -1,8 +1,26 @@
 """Tests for Dharmamitra engine wrapper."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from sanskrit_analyzer.engines.dharmamitra_engine import DharmamitraEngine
+
+# Deterministic offline stand-in for the Dharmamitra processor's response.
+# Shape mirrors the live API: results[0]["grammatical_analysis"] is a list of
+# per-word dicts with unsandhied/lemma/tag/meanings keys.
+MOCK_PROCESSOR_RESULT = [
+    {
+        "grammatical_analysis": [
+            {
+                "unsandhied": "gacchati",
+                "lemma": "gam",
+                "tag": "Tense=Present, Mood=Indicative, Person=3, Number=Singular",
+                "meanings": ["to go", "to move"],
+            }
+        ]
+    }
+]
 
 
 class TestDharmamitraEngine:
@@ -10,8 +28,17 @@ class TestDharmamitraEngine:
 
     @pytest.fixture
     def engine(self) -> DharmamitraEngine:
-        """Create a DharmamitraEngine instance."""
-        return DharmamitraEngine()
+        """Create a DharmamitraEngine with a mocked (offline) processor.
+
+        All ``analyze`` tests run against this mock so they are deterministic
+        and never touch the live ``dharmamitra.org`` service.
+        """
+        engine = DharmamitraEngine()
+        mock_processor = MagicMock()
+        mock_processor.process_batch.return_value = MOCK_PROCESSOR_RESULT
+        engine._processor = mock_processor
+        engine._available = True
+        return engine
 
     def test_engine_name(self, engine: DharmamitraEngine) -> None:
         """Test engine name property."""
@@ -38,9 +65,6 @@ class TestDharmamitraEngine:
     @pytest.mark.asyncio
     async def test_analyze_simple_verb(self, engine: DharmamitraEngine) -> None:
         """Test analysis of a simple verb form."""
-        if not engine.is_available:
-            pytest.skip("Dharmamitra not available")
-
         result = await engine.analyze("gacchati")
 
         assert result.success
@@ -54,9 +78,6 @@ class TestDharmamitraEngine:
     @pytest.mark.asyncio
     async def test_analyze_with_meanings(self, engine: DharmamitraEngine) -> None:
         """Test that meanings are returned."""
-        if not engine.is_available:
-            pytest.skip("Dharmamitra not available")
-
         result = await engine.analyze("gacchati")
 
         assert result.success
@@ -67,9 +88,6 @@ class TestDharmamitraEngine:
     @pytest.mark.asyncio
     async def test_analyze_devanagari_input(self, engine: DharmamitraEngine) -> None:
         """Test analysis of Devanagari input."""
-        if not engine.is_available:
-            pytest.skip("Dharmamitra not available")
-
         result = await engine.analyze("गच्छति")
 
         assert result.success
@@ -78,9 +96,6 @@ class TestDharmamitraEngine:
     @pytest.mark.asyncio
     async def test_analyze_slp1_input(self, engine: DharmamitraEngine) -> None:
         """Test analysis of SLP1 input."""
-        if not engine.is_available:
-            pytest.skip("Dharmamitra not available")
-
         result = await engine.analyze("gacCati")
 
         assert result.success
@@ -89,9 +104,6 @@ class TestDharmamitraEngine:
     @pytest.mark.asyncio
     async def test_analyze_empty_input(self, engine: DharmamitraEngine) -> None:
         """Test analysis of empty input."""
-        if not engine.is_available:
-            pytest.skip("Dharmamitra not available")
-
         result = await engine.analyze("")
 
         # Empty input should not crash
@@ -101,9 +113,6 @@ class TestDharmamitraEngine:
     @pytest.mark.asyncio
     async def test_morphology_tag_parsing(self, engine: DharmamitraEngine) -> None:
         """Test that morphology tags are parsed correctly."""
-        if not engine.is_available:
-            pytest.skip("Dharmamitra not available")
-
         result = await engine.analyze("gacchati")
 
         assert result.success
@@ -115,12 +124,62 @@ class TestDharmamitraEngine:
     @pytest.mark.asyncio
     async def test_confidence_returned(self, engine: DharmamitraEngine) -> None:
         """Test that confidence is returned."""
-        if not engine.is_available:
-            pytest.skip("Dharmamitra not available")
-
         result = await engine.analyze("gacchati")
 
         assert result.success
         assert result.confidence > 0
         for seg in result.segments:
             assert seg.confidence > 0
+
+    @pytest.mark.asyncio
+    async def test_processor_failure_handled_gracefully(
+        self, engine: DharmamitraEngine
+    ) -> None:
+        """A 422/exception from the processor yields an unsuccessful result.
+
+        The engine must not let a processor exception (e.g. the live API now
+        returning HTTP 422) propagate; it should return an empty, unsuccessful
+        EngineResult instead.
+        """
+        engine._processor.process_batch.side_effect = RuntimeError(
+            "422 Client Error: Unprocessable Entity"
+        )
+
+        result = await engine.analyze("gacchati")
+
+        assert not result.success
+        assert result.segments == []
+        assert result.confidence == 0.0
+        assert result.error is not None
+        assert "422" in result.error
+
+    @pytest.mark.asyncio
+    async def test_processor_empty_results_handled(
+        self, engine: DharmamitraEngine
+    ) -> None:
+        """An empty result list from the processor is handled gracefully."""
+        engine._processor.process_batch.return_value = []
+
+        result = await engine.analyze("gacchati")
+
+        assert not result.success
+        assert result.segments == []
+        assert result.error is not None
+
+
+class TestDharmamitraEngineNetwork:
+    """Live-network smoke test. Skipped by default (requires the public API)."""
+
+    @pytest.mark.network
+    @pytest.mark.skip(reason="Hits live dharmamitra.org API; run explicitly with -m network")
+    @pytest.mark.asyncio
+    async def test_analyze_real_network(self) -> None:
+        """Analyze against the real Dharmamitra service (opt-in only)."""
+        engine = DharmamitraEngine()
+        if not engine.is_available:
+            pytest.skip("Dharmamitra not available")
+
+        result = await engine.analyze("gacchati")
+
+        # Whatever the live API returns, the engine must not raise.
+        assert result.engine == "dharmamitra"

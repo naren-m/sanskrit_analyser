@@ -1,15 +1,30 @@
 """Dhatu (verbal root) API endpoints."""
 
 from enum import Enum
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 if TYPE_CHECKING:
-    from sanskrit_analyzer.data.dhatu_db import DhatuEntry
+    from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry
 
 router = APIRouter(prefix="/api/v1/dhatu", tags=["Dhatu"])
+
+
+@lru_cache(maxsize=1)
+def _get_db() -> "DhatuDB":
+    """Return the process-wide shared DhatuDB instance.
+
+    DhatuDB manages one SQLite connection per thread, so a single shared
+    instance is safe to reuse across requests and threadpool workers. This
+    avoids re-opening the database on every request.
+    """
+    from sanskrit_analyzer.data.dhatu_db import DhatuDB
+
+    return DhatuDB()
 
 
 class SearchType(str, Enum):
@@ -111,15 +126,10 @@ async def get_dhatu_stats(request: Request) -> GanaStatsResponse:
 
     Returns total count and breakdown by gana (verb class).
     """
-    from sanskrit_analyzer.data.dhatu_db import DhatuDB
-
-    db = DhatuDB()
-    try:
-        total = db.count()
-        gana_counts = db.get_gana_stats()
-        return GanaStatsResponse(total_dhatus=total, gana_counts=gana_counts)
-    finally:
-        db.close()
+    db = _get_db()
+    total = await run_in_threadpool(db.count)
+    gana_counts = await run_in_threadpool(db.get_gana_stats)
+    return GanaStatsResponse(total_dhatus=total, gana_counts=gana_counts)
 
 
 @router.get("/gana/{gana}", response_model=DhatuListResponse)
@@ -135,15 +145,10 @@ async def get_dhatus_by_gana(
     if not 1 <= gana <= 10:
         raise HTTPException(status_code=400, detail="Gana must be between 1 and 10")
 
-    from sanskrit_analyzer.data.dhatu_db import DhatuDB
-
-    db = DhatuDB()
-    try:
-        entries = db.get_by_gana(gana, limit=limit)
-        dhatus = [_entry_to_response(e) for e in entries]
-        return DhatuListResponse(count=len(dhatus), dhatus=dhatus)
-    finally:
-        db.close()
+    db = _get_db()
+    entries = await run_in_threadpool(db.get_by_gana, gana, limit=limit)
+    dhatus = [_entry_to_response(e) for e in entries]
+    return DhatuListResponse(count=len(dhatus), dhatus=dhatus)
 
 
 @router.post("/search", response_model=DhatuListResponse)
@@ -158,26 +163,21 @@ async def search_dhatus(
     - meaning: Match English meaning
     - all: Search all fields
     """
-    from sanskrit_analyzer.data.dhatu_db import DhatuDB
+    db = _get_db()
+    if body.search_type == SearchType.DHATU:
+        # Try exact lookup first
+        entry = await run_in_threadpool(db.lookup_by_dhatu, body.query)
+        if entry:
+            return DhatuListResponse(count=1, dhatus=[_entry_to_response(entry)])
+        # Fall back to search
+        entries = await run_in_threadpool(db.search, body.query, limit=body.limit)
+    elif body.search_type == SearchType.MEANING:
+        entries = await run_in_threadpool(db.lookup_by_meaning, body.query, limit=body.limit)
+    else:  # ALL
+        entries = await run_in_threadpool(db.search, body.query, limit=body.limit)
 
-    db = DhatuDB()
-    try:
-        if body.search_type == SearchType.DHATU:
-            # Try exact lookup first
-            entry = db.lookup_by_dhatu(body.query)
-            if entry:
-                return DhatuListResponse(count=1, dhatus=[_entry_to_response(entry)])
-            # Fall back to search
-            entries = db.search(body.query, limit=body.limit)
-        elif body.search_type == SearchType.MEANING:
-            entries = db.lookup_by_meaning(body.query, limit=body.limit)
-        else:  # ALL
-            entries = db.search(body.query, limit=body.limit)
-
-        dhatus = [_entry_to_response(e) for e in entries]
-        return DhatuListResponse(count=len(dhatus), dhatus=dhatus)
-    finally:
-        db.close()
+    dhatus = [_entry_to_response(e) for e in entries]
+    return DhatuListResponse(count=len(dhatus), dhatus=dhatus)
 
 
 @router.get("/{dhatu}", response_model=DhatuResponse)
@@ -194,13 +194,10 @@ async def get_dhatu(
     Accepts dhatu in Devanagari (e.g., गम्), IAST (e.g., gam), or
     transliterated form.
     """
-    from sanskrit_analyzer.data.dhatu_db import DhatuDB
-
-    db = DhatuDB()
-    try:
-        entry = db.lookup_by_dhatu(dhatu, include_conjugations=include_conjugations)
-        if entry is None:
-            raise HTTPException(status_code=404, detail=f"Dhatu not found: {dhatu}")
-        return _entry_to_response(entry)
-    finally:
-        db.close()
+    db = _get_db()
+    entry = await run_in_threadpool(
+        db.lookup_by_dhatu, dhatu, include_conjugations=include_conjugations
+    )
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Dhatu not found: {dhatu}")
+    return _entry_to_response(entry)

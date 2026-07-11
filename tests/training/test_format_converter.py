@@ -2,7 +2,10 @@
 
 import pytest
 
-from sanskrit_analyzer.training.format_converter import GrammarFormatConverter
+from sanskrit_analyzer.training.format_converter import (
+    DisambiguationFormatConverter,
+    GrammarFormatConverter,
+)
 from sanskrit_analyzer.training.reasoning_templates import (
     REASONING_TEMPLATES,
     fill_template,
@@ -238,3 +241,107 @@ class TestReasoningTemplates:
 
         assert rule_name in REASONING_TEMPLATES
         assert isinstance(params, dict)
+
+    def test_detect_applicable_rule_case_disagreement(self) -> None:
+        """Differing case between parses selects the case_agreement rule."""
+        parses = [
+            {"interpretation": "Rama (subject)", "case": "nom", "verb": "gacchati"},
+            {"interpretation": "Rama (object)", "case": "acc"},
+        ]
+        rule_name, params = detect_applicable_rule(parses, 0)
+
+        assert rule_name == "case_agreement"
+        assert params["nom_case"] == "nom"
+        assert params["wrong_case"] == "acc"
+        # Params must actually fill the template without missing keys.
+        assert fill_template(rule_name, **params)
+
+    def test_detect_applicable_rule_verb_disagreement(self) -> None:
+        """Differing person/number selects the verb_agreement rule."""
+        parses = [
+            {"interpretation": "he goes", "person": "third", "number": "singular"},
+            {"interpretation": "they go", "person": "third", "number": "plural"},
+        ]
+        rule_name, params = detect_applicable_rule(parses, 0)
+
+        assert rule_name == "verb_agreement"
+        assert fill_template(rule_name, **params)
+
+    def test_detect_applicable_rule_gender_disagreement(self) -> None:
+        """Differing gender selects the gender_agreement rule."""
+        parses = [
+            {"interpretation": "beautiful (f)", "gender": "f"},
+            {"interpretation": "beautiful (m)", "gender": "m"},
+        ]
+        rule_name, params = detect_applicable_rule(parses, 0)
+
+        assert rule_name == "gender_agreement"
+        assert fill_template(rule_name, **params)
+
+    def test_detect_applicable_rule_sandhi_disagreement(self) -> None:
+        """Differing segmentation selects the sandhi_preference rule."""
+        parses = [
+            {"interpretation": "A", "segments": ["yoga", "sUtra"]},
+            {"interpretation": "B", "segments": ["yo", "gasUtra"]},
+        ]
+        rule_name, params = detect_applicable_rule(parses, 0)
+
+        assert rule_name == "sandhi_preference"
+        assert fill_template(rule_name, **params)
+
+    def test_detect_applicable_rule_varies_with_input(self) -> None:
+        """Different inputs must yield different rules (not one constant)."""
+        case_rule, _ = detect_applicable_rule(
+            [{"case": "nom"}, {"case": "acc"}], 0
+        )
+        verb_rule, _ = detect_applicable_rule(
+            [{"number": "singular"}, {"number": "plural"}], 0
+        )
+        gender_rule, _ = detect_applicable_rule(
+            [{"gender": "m"}, {"gender": "f"}], 0
+        )
+
+        assert len({case_rule, verb_rule, gender_rule}) == 3
+
+
+class TestDisambiguationFormatConverter:
+    """Tests for DisambiguationFormatConverter."""
+
+    def test_convert_produces_output_shape(self) -> None:
+        """convert() returns selected/reasoning/confidence."""
+        converter = DisambiguationFormatConverter()
+        parses = [
+            {"interpretation": "Rama (subject)", "case": "nom", "confidence": 0.9},
+            {"interpretation": "Rama (object)", "case": "acc", "confidence": 0.6},
+        ]
+
+        output = converter.convert(parses, 0)
+
+        assert output["selected"] == 0
+        assert isinstance(output["reasoning"], str) and output["reasoning"]
+        assert output["confidence"] == 0.9
+
+    def test_to_training_example(self) -> None:
+        """to_training_example() builds a full input/output example."""
+        converter = DisambiguationFormatConverter()
+        parses = [
+            {"interpretation": "he goes", "number": "singular", "confidence": 0.8},
+            {"interpretation": "they go", "number": "plural", "confidence": 0.5},
+        ]
+
+        example = converter.to_training_example(
+            "gacchati", parses, 0, context="narrative"
+        )
+
+        assert example["input"]["text"] == "gacchati"
+        assert len(example["input"]["parses"]) == 2
+        assert example["input"]["context"] == "narrative"
+        assert example["output"]["selected"] == 0
+        assert converter.validate_output(example["output"]) == []
+
+    def test_validate_output_catches_missing_fields(self) -> None:
+        """validate_output() flags missing required fields."""
+        converter = DisambiguationFormatConverter()
+        errors = converter.validate_output({"selected": 0})
+        assert any("reasoning" in e for e in errors)
+        assert any("confidence" in e for e in errors)

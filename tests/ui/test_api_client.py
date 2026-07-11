@@ -8,7 +8,74 @@ from sanskrit_analyzer.ui.api_client import (
     APIError,
     AnalysisResult,
     SanskritAPIClient,
+    _coerce_confidence,
+    _transform_api_response,
 )
+
+
+class TestConfidenceCoercion:
+    """Tests for _coerce_confidence and confidence handling in the transform."""
+
+    def test_coerce_none_defaults_to_zero(self) -> None:
+        """None confidence becomes 0.0."""
+        assert _coerce_confidence(None) == 0.0
+
+    def test_coerce_invalid_defaults_to_zero(self) -> None:
+        """Non-numeric confidence becomes 0.0."""
+        assert _coerce_confidence("not-a-number") == 0.0
+
+    def test_coerce_numeric_passthrough(self) -> None:
+        """Numeric confidence is preserved as a float."""
+        assert _coerce_confidence(0.75) == 0.75
+        assert _coerce_confidence(1) == 1.0
+
+    def test_transform_null_top_level_confidence(self) -> None:
+        """A JSON null overall confidence transforms to a float, not None."""
+        transformed = _transform_api_response({"confidence": None})
+        assert transformed["confidence"] == 0.0
+
+    def test_transform_null_parse_confidence(self) -> None:
+        """A null parse confidence is coerced to a float."""
+        transformed = _transform_api_response(
+            {"parse_forest": [{"parse_id": "p1", "confidence": None}]}
+        )
+        assert transformed["parses"][0]["confidence"] == 0.0
+
+
+class TestTransformPassThroughFields:
+    """Ensures parse-tree branch fields survive the transform."""
+
+    def test_engine_votes_carried_through(self) -> None:
+        """engine_votes is preserved on the parse."""
+        transformed = _transform_api_response(
+            {"parse_forest": [{"parse_id": "p1", "engine_votes": {"vidyut": 0.9}}]}
+        )
+        assert transformed["parses"][0]["engine_votes"] == {"vidyut": 0.9}
+
+    def test_sandhi_group_type_fields_carried_through(self) -> None:
+        """sandhi_type, is_compound and compound_type survive the transform."""
+        transformed = _transform_api_response(
+            {
+                "parse_forest": [
+                    {
+                        "parse_id": "p1",
+                        "sandhi_groups": [
+                            {
+                                "group_id": "g0",
+                                "surface_form": "x",
+                                "sandhi_type": "visarga",
+                                "is_compound": True,
+                                "compound_type": "tatpurusha",
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+        group = transformed["parses"][0]["sandhi_groups"][0]
+        assert group["sandhi_type"] == "visarga"
+        assert group["is_compound"] is True
+        assert group["compound_type"] == "tatpurusha"
 
 
 class TestAPIError:
@@ -146,6 +213,28 @@ class TestSanskritAPIClient:
 
             assert result.success is False
             assert "Server error" in result.error.message
+
+    @pytest.mark.asyncio
+    async def test_analyze_non_json_body(self) -> None:
+        """analyze() returns a structured error when a 200 body is not JSON."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.side_effect = ValueError("Expecting value")
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.post.return_value = mock_response
+            mock_instance.__aenter__.return_value = mock_instance
+            mock_instance.__aexit__.return_value = None
+            mock_client.return_value = mock_instance
+
+            client = SanskritAPIClient()
+            result = await client.analyze("test", "educational")
+
+            # No traceback: a structured APIError is returned instead.
+            assert result.success is False
+            assert result.error is not None
+            assert "Unexpected error" in result.error.message
 
     @pytest.mark.asyncio
     async def test_health_check_success(self) -> None:

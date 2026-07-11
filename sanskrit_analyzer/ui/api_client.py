@@ -17,6 +17,24 @@ def _slp1_to_devanagari(text: str) -> str:
     return transliterate(text, Script.SLP1, Script.DEVANAGARI)
 
 
+def _coerce_confidence(value: Any) -> float:
+    """Coerce a confidence value to a float, defaulting to 0.0.
+
+    The API may return ``null`` (Python ``None``) or a non-numeric value for
+    confidence; render sites multiply this by 100, so a safe float is required.
+
+    Args:
+        value: Raw confidence value from the API.
+
+    Returns:
+        The value as a float, or 0.0 when it cannot be converted.
+    """
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _transform_api_response(data: dict[str, Any]) -> dict[str, Any]:
     """Transform API response to UI-expected format.
 
@@ -31,13 +49,19 @@ def _transform_api_response(data: dict[str, Any]) -> dict[str, Any]:
     """
     # Extract confidence value (API returns nested object)
     confidence_data = data.get("confidence", {})
-    confidence = confidence_data.get("overall", 0) if isinstance(confidence_data, dict) else confidence_data
+    raw_confidence = (
+        confidence_data.get("overall", 0.0)
+        if isinstance(confidence_data, dict)
+        else confidence_data
+    )
+    confidence = _coerce_confidence(raw_confidence)
 
     # Transform parse_forest to parses with UI-expected structure
     parses = [
         {
             "parse_id": parse.get("parse_id", ""),
-            "confidence": parse.get("confidence", 0),
+            "confidence": _coerce_confidence(parse.get("confidence", 0.0)),
+            "engine_votes": parse.get("engine_votes", {}),
             "sandhi_groups": _transform_sandhi_groups(parse.get("sandhi_groups", [])),
         }
         for parse in data.get("parse_forest", [])
@@ -68,6 +92,9 @@ def _transform_sandhi_groups(groups: list[dict[str, Any]]) -> list[dict[str, Any
             "group_id": group.get("group_id", ""),
             "surface_form": group.get("surface_form", ""),
             "scripts": {"devanagari": _slp1_to_devanagari(group.get("surface_form", ""))},
+            "sandhi_type": group.get("sandhi_type"),
+            "is_compound": group.get("is_compound", False),
+            "compound_type": group.get("compound_type"),
             "base_words": _transform_base_words(group.get("base_words", [])),
         }
         for group in groups
@@ -92,7 +119,7 @@ def _transform_base_words(words: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "morphology": word.get("morphology", {}),
             "meanings": word.get("meanings", []),
             "dhatu": _transform_dhatu(word.get("dhatu")),
-            "confidence": word.get("confidence", 0),
+            "confidence": _coerce_confidence(word.get("confidence", 0.0)),
         }
         for word in words
     ]
@@ -198,6 +225,14 @@ class SanskritAPIClient:
             return AnalysisResult(
                 success=False,
                 error=APIError(message="HTTP error occurred", details=str(e)),
+            )
+        except Exception as e:  # noqa: BLE001 - guard against non-httpx failures (e.g. invalid JSON body)
+            return AnalysisResult(
+                success=False,
+                error=APIError(
+                    message="Unexpected error processing the server response",
+                    details=str(e),
+                ),
             )
 
     async def health_check(self) -> AnalysisResult:

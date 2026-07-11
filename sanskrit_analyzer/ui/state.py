@@ -22,6 +22,9 @@ def init_state() -> None:
     if "show_compare" not in st.session_state:
         st.session_state.show_compare = False
 
+    if "selected_parse_id" not in st.session_state:
+        st.session_state.selected_parse_id = None
+
     if "expanded_parses" not in st.session_state:
         st.session_state.expanded_parses = set()
 
@@ -89,6 +92,8 @@ def set_analysis_result(result: dict[str, Any] | None) -> None:
     """
     init_state()
     st.session_state.analysis_result = result
+    # A fresh result invalidates any previously selected parse.
+    st.session_state.selected_parse_id = None
 
 
 def get_analysis_result() -> dict[str, Any] | None:
@@ -99,6 +104,26 @@ def get_analysis_result() -> dict[str, Any] | None:
     """
     init_state()
     return st.session_state.analysis_result
+
+
+def set_selected_parse_id(parse_id: str | None) -> None:
+    """Store the currently selected parse id.
+
+    Args:
+        parse_id: The selected parse id, or None to clear the selection.
+    """
+    init_state()
+    st.session_state.selected_parse_id = parse_id
+
+
+def get_selected_parse_id() -> str | None:
+    """Get the currently selected parse id.
+
+    Returns:
+        The stored parse id, or None when nothing is selected.
+    """
+    init_state()
+    return st.session_state.selected_parse_id
 
 
 def _toggle_expanded(item_id: str, state_key: str) -> None:

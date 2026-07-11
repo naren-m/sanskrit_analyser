@@ -76,9 +76,18 @@ class PipelineResult:
 
     @property
     def best_candidate(self) -> ParseCandidate | None:
-        """Get the best candidate (highest confidence)."""
+        """Get the best candidate.
+
+        When the LLM stage resolved the ambiguity it reorders candidates by
+        semantic ranking without touching their confidence values, so the
+        LLM's chosen top candidate is ``candidates[0]`` rather than the
+        highest-confidence one. Honour that ranking; otherwise fall back to
+        the highest-confidence candidate.
+        """
         if not self.candidates:
             return None
+        if self.resolved_at == DisambiguationStage.LLM:
+            return self.candidates[0]
         return max(self.candidates, key=lambda c: c.confidence)
 
 

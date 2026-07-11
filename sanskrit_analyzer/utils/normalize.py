@@ -8,6 +8,8 @@ from sanskrit_analyzer.models.scripts import Script
 # Character ranges for script detection
 _DEVANAGARI_RANGE = re.compile(r"[\u0900-\u097F]")
 _IAST_DIACRITICS = re.compile(r"[āīūṛṝḷḹēōṃḥñṅṇṭḍśṣ]", re.IGNORECASE)
+# SLP1-exclusive lowercase letters, or any interior uppercase (see detect_script).
+_SLP1_MARKERS = re.compile(r"[fxzwq]|(?<=[A-Za-z])[A-Z]")
 
 
 def detect_script(text: str) -> Script:
@@ -38,11 +40,18 @@ def detect_script(text: str) -> Script:
     if _IAST_DIACRITICS.search(text):
         return Script.IAST
 
-    # Check for SLP1-specific patterns (uppercase vowels, specific consonants)
-    # SLP1 uses: A I U R L M H for long vowels/anusvara/visarga
-    # and specific letters like: w (ṭ), W (ṭh), q (ḍ), Q (ḍh), N (ṇ), S (ṣ), z (ś)
-    slp1_markers = re.compile(r"[wWqQzSN]|[AIURLMH](?![a-z])")
-    if slp1_markers.search(text):
+    # Check for SLP1-specific patterns. SLP1 encodes retroflexes, sibilants,
+    # aspirates, long vowels and anusvara/visarga with letters plain-ASCII IAST
+    # never uses:
+    #   - lowercase letters exclusive to SLP1: f (ṛ), x (ḷ), z (ś), w (ṭ), q (ḍ)
+    #   - interior uppercase: SLP1 uses capitals mid-word (A/I/U long vowels, M/H
+    #     anusvara/visarga, aspirate/retroflex/nasal consonants). IAST may
+    #     capitalize a word's first letter but never uses interior capitals, so
+    #     requiring the uppercase to be preceded by a letter avoids flagging IAST
+    #     proper nouns like "Rama". This is why the old `(?![a-z])` lookahead was
+    #     wrong: it rejected the common case of a marker followed by a lowercase
+    #     letter (e.g. "rAma", "gacCati"), silently misrouting SLP1 to IAST.
+    if _SLP1_MARKERS.search(text):
         return Script.SLP1
 
     # Default to IAST for plain ASCII that might be simplified transliteration

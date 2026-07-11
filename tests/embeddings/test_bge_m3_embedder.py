@@ -113,6 +113,12 @@ class TestBgeM3EmbedderConstruction:
         assert embedder.embedding_dim == 1024
         assert embedder._model is None  # still not loaded
 
+    def test_default_revision_is_pinned(self):
+        from sanskrit_analyzer.embeddings.bge_m3_embedder import _DEFAULT_REVISION
+
+        embedder = BgeM3Embedder(lazy=True)
+        assert embedder.revision == _DEFAULT_REVISION
+
 
 # ---------------------------------------------------------------------------
 # Empty-input edge case (no model load needed)

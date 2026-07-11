@@ -174,3 +174,37 @@ class TestCORSMiddleware:
         )
         assert response.status_code == 200
         assert "access-control-allow-origin" in response.headers
+
+    def test_explicit_origins_allow_credentials(self) -> None:
+        """Explicit origins enable credentialed CORS."""
+        from sanskrit_analyzer.api.app import _resolve_cors_origins  # noqa: F401
+
+        app = create_app(cors_origins=["http://localhost:3000"])
+        cors = next(m for m in app.user_middleware if "CORSMiddleware" in str(m))
+        assert cors.kwargs["allow_credentials"] is True
+
+    def test_wildcard_disables_credentials(self) -> None:
+        """A wildcard origin must not be combined with credentials."""
+        app = create_app(cors_origins=["*"])
+        cors = next(m for m in app.user_middleware if "CORSMiddleware" in str(m))
+        assert cors.kwargs["allow_credentials"] is False
+
+    def test_default_origins_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """SANSKRIT_CORS_ORIGINS drives the default allowlist."""
+        from sanskrit_analyzer.api.app import _resolve_cors_origins
+
+        monkeypatch.setenv(
+            "SANSKRIT_CORS_ORIGINS", "https://a.example, https://b.example"
+        )
+        assert _resolve_cors_origins() == ["https://a.example", "https://b.example"]
+
+    def test_default_origins_localhost_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Without the env var, default origins are localhost dev hosts."""
+        from sanskrit_analyzer.api.app import _resolve_cors_origins
+
+        monkeypatch.delenv("SANSKRIT_CORS_ORIGINS", raising=False)
+        origins = _resolve_cors_origins()
+        assert "*" not in origins
+        assert all(o.startswith("http://") for o in origins)

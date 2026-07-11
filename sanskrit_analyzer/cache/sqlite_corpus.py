@@ -54,11 +54,20 @@ class SQLiteCorpus:
         entry = corpus.get("key123")
     """
 
-    def __init__(self, db_path: str | None = None) -> None:
+    # Default cap on stored rows; the least-recently-accessed rows above this
+    # are evicted on ``set`` so the corpus cannot grow without bound.
+    DEFAULT_MAX_ROWS = 100_000
+
+    def __init__(
+        self, db_path: str | None = None, max_rows: int | None = DEFAULT_MAX_ROWS
+    ) -> None:
         """Initialize the SQLite corpus.
 
         Args:
             db_path: Path to SQLite database file. Defaults to ~/.sanskrit_analyzer/corpus.db
+            max_rows: Soft cap on stored rows. When exceeded on ``set``, the
+                least-recently-accessed rows are pruned. ``None`` or <= 0
+                disables pruning.
         """
         if db_path is None:
             config_dir = Path.home() / ".sanskrit_analyzer"
@@ -71,17 +80,30 @@ class SQLiteCorpus:
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
         self._db_path = db_path
+        self._max_rows = max_rows
         self._local = threading.local()
+        # Registry of every connection opened (across threads) so close() can
+        # release them all, not just the calling thread's handle.
+        self._connections: list[sqlite3.Connection] = []
+        self._connections_lock = threading.Lock()
         self._init_db()
 
     @property
     def _conn(self) -> sqlite3.Connection:
         """Get thread-local database connection."""
         if not hasattr(self._local, "conn"):
-            self._local.conn = sqlite3.connect(self._db_path)
-            self._local.conn.row_factory = sqlite3.Row
-        conn: sqlite3.Connection = self._local.conn
-        return conn
+            conn = sqlite3.connect(self._db_path)
+            conn.row_factory = sqlite3.Row
+            # Reduce "database is locked" errors under concurrency.
+            try:
+                conn.execute("PRAGMA busy_timeout=5000")
+                conn.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.Error:  # pragma: no cover - pragma best-effort
+                pass
+            self._local.conn = conn
+            with self._connections_lock:
+                self._connections.append(conn)
+        return self._local.conn
 
     def _init_db(self) -> None:
         """Initialize database schema."""
@@ -229,13 +251,51 @@ class SQLiteCorpus:
 
         result_json = json.dumps(result, ensure_ascii=False)
 
+        # Upsert (not INSERT OR REPLACE): on a repeat key we refresh the result
+        # but preserve created_at and, crucially, the user's disambiguation
+        # choice (disambiguated / selected_parse), and accumulate access_count.
         cursor.execute(
             """
-            INSERT OR REPLACE INTO analyses
-            (id, original_text, normalized_slp1, mode, result_json, created_at, accessed_at, access_count)
+            INSERT INTO analyses
+                (id, original_text, normalized_slp1, mode, result_json,
+                 created_at, accessed_at, access_count)
             VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)
+            ON CONFLICT(id) DO UPDATE SET
+                original_text = excluded.original_text,
+                normalized_slp1 = excluded.normalized_slp1,
+                mode = excluded.mode,
+                result_json = excluded.result_json,
+                accessed_at = CURRENT_TIMESTAMP,
+                access_count = access_count + 1
             """,
             (key, original_text, normalized_slp1, mode, result_json),
+        )
+        conn.commit()
+
+        self._prune()
+
+    def _prune(self) -> None:
+        """Evict least-recently-accessed rows above the ``max_rows`` cap."""
+        if not self._max_rows or self._max_rows <= 0:
+            return
+        conn = self._conn
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM analyses")
+        row = cursor.fetchone()
+        total = int(row[0]) if row else 0
+        if total <= self._max_rows:
+            return
+        excess = total - self._max_rows
+        cursor.execute(
+            """
+            DELETE FROM analyses
+            WHERE id IN (
+                SELECT id FROM analyses
+                ORDER BY accessed_at ASC, access_count ASC
+                LIMIT ?
+            )
+            """,
+            (excess,),
         )
         conn.commit()
 
@@ -465,7 +525,15 @@ class SQLiteCorpus:
         return count
 
     def close(self) -> None:
-        """Close the database connection."""
+        """Close every connection opened by this corpus, across all threads."""
+        with self._connections_lock:
+            conns = list(self._connections)
+            self._connections.clear()
+        for conn in conns:
+            try:
+                conn.close()
+            except sqlite3.Error:  # pragma: no cover - best-effort cleanup
+                pass
+        # Drop this thread's handle so a later call re-opens lazily.
         if hasattr(self._local, "conn"):
-            self._local.conn.close()
             del self._local.conn

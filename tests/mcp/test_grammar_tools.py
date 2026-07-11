@@ -1,18 +1,30 @@
 """Tests for MCP grammar tools."""
 
+import pytest
+
 from sanskrit_analyzer.mcp.response import error_response
-from sanskrit_analyzer.mcp.tools.grammar import register_grammar_tools
-from mcp.server import Server
+from sanskrit_analyzer.mcp.tools.grammar import build_grammar_tools
 
 
 class TestGrammarToolsRegistration:
     """Tests for grammar tools registration."""
 
-    def test_register_grammar_tools_succeeds(self) -> None:
-        """Test that grammar tools register without error."""
-        server = Server("test-server")
-        register_grammar_tools(server)
-        assert server.name == "test-server"
+    def test_build_exposes_expected_tools(self) -> None:
+        """build_grammar_tools returns the four grammar tool specs."""
+        tools, _dispatch = build_grammar_tools()
+        names = {t.name for t in tools}
+        assert names == {
+            "explain_parse",
+            "identify_compound",
+            "get_pratyaya",
+            "resolve_ambiguity",
+        }
+
+    @pytest.mark.asyncio
+    async def test_dispatch_returns_none_for_unknown_tool(self) -> None:
+        """The dispatcher returns None for tools it does not own."""
+        _tools, dispatch = build_grammar_tools()
+        assert await dispatch("not_a_tool", {}) is None
 
 
 class TestGrammarToolErrors:

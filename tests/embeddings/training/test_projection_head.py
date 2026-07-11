@@ -1,5 +1,6 @@
 """Tests for ProjectionHead."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -60,3 +61,27 @@ class TestProjectionHeadSaveLoad:
         assert loaded.input_dim == 11
         assert loaded.hidden_dim == 22
         assert loaded.output_dim == 7
+
+    def test_config_written_as_json_sidecar(self, tmp_path: Path):
+        head = ProjectionHead(input_dim=8, hidden_dim=16, output_dim=4)
+        ckpt = tmp_path / "head.pt"
+        head.save(ckpt)
+
+        sidecar = tmp_path / "head.pt.config.json"
+        assert sidecar.exists()
+        config = json.loads(sidecar.read_text())
+        assert config == {
+            "input_dim": 8,
+            "hidden_dim": 16,
+            "output_dim": 4,
+            "normalize": True,
+        }
+
+    def test_checkpoint_loads_with_weights_only(self, tmp_path: Path):
+        """Weights load under ``weights_only=True`` (no pickled config)."""
+        head = ProjectionHead(input_dim=8, hidden_dim=16, output_dim=4)
+        ckpt = tmp_path / "head.pt"
+        head.save(ckpt)
+
+        payload = torch.load(ckpt, map_location="cpu", weights_only=True)
+        assert "state_dict" in payload

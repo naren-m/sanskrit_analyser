@@ -1,12 +1,14 @@
 """Grammar resource providers for MCP server (sandhi-rules, pratyayas, sutras)."""
 
 import json
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
 import yaml
-from mcp.server import Server
 from mcp.types import Resource
+
+ResourceReader = Callable[[str], Awaitable[str | None]]
 
 
 def _load_yaml(filename: str) -> dict[str, Any]:
@@ -21,16 +23,10 @@ def _load_yaml(filename: str) -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
-def register_grammar_resources(server: Server) -> None:
-    """Register grammar resources with the MCP server.
+def build_grammar_resources() -> tuple[list[Resource], ResourceReader]:
+    """Build the grammar resource specs and their reader (see build_dhatu_resources)."""
 
-    Args:
-        server: MCP server instance.
-    """
-
-    @server.list_resources()
-    async def list_resources() -> list[Resource]:
-        return [
+    resources = [
             # Sandhi Rules Resources
             Resource(
                 uri="grammar://sandhi-rules",  # type: ignore[arg-type]
@@ -120,8 +116,8 @@ def register_grammar_resources(server: Server) -> None:
             ),
         ]
 
-    @server.read_resource()
-    async def read_resource(uri: str) -> str:
+    async def read_resource(uri: str) -> str | None:
+        uri = str(uri)
         # Sandhi rules
         if uri == "grammar://sandhi-rules":
             return _get_sandhi_rules_index()
@@ -160,7 +156,9 @@ def register_grammar_resources(server: Server) -> None:
                 query = uri.split("?q=")[1] if "?q=" in uri else ""
                 return _search_sutras(query)
 
-        return json.dumps({"error": f"Unknown resource: {uri}"})
+        return None
+
+    return resources, read_resource
 
 
 def _get_sandhi_rules_index() -> str:

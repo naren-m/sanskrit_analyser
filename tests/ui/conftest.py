@@ -12,6 +12,7 @@ class MockSessionState:
         self.analysis_result = None
         self.selected_mode = "educational"
         self.show_compare = False
+        self.selected_parse_id = None
         self.expanded_parses: set = set()
         self.expanded_words: set = set()
         self.sanskrit_input = ""

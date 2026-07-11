@@ -71,13 +71,19 @@ class DhatuDB:
     def _get_connection(self) -> sqlite3.Connection:
         """Get thread-local database connection."""
         if not hasattr(self._local, "conn") or self._local.conn is None:
-            self._local.conn = sqlite3.connect(
+            conn = sqlite3.connect(
                 self._db_path,
                 check_same_thread=False,
             )
-            self._local.conn.row_factory = sqlite3.Row
-        conn: sqlite3.Connection = self._local.conn
-        return conn
+            conn.row_factory = sqlite3.Row
+            # Reduce "database is locked" errors under concurrency.
+            try:
+                conn.execute("PRAGMA busy_timeout=5000")
+                conn.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.Error:  # pragma: no cover - pragma best-effort
+                pass
+            self._local.conn = conn
+        return self._local.conn
 
     def close(self) -> None:
         """Close the database connection for the current thread."""

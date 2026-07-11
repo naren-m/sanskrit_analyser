@@ -1,9 +1,13 @@
 """Dharmamitra ByT5 engine wrapper for neural Sanskrit analysis."""
 
+import logging
+
 from sanskrit_analyzer.engines.base import EngineBase, EngineResult, Segment
 from sanskrit_analyzer.models.scripts import Script
 from sanskrit_analyzer.utils.normalize import detect_script
 from sanskrit_analyzer.utils.transliterate import transliterate
+
+logger = logging.getLogger(__name__)
 
 
 class DharmamitraEngine(EngineBase):
@@ -216,6 +220,10 @@ class DharmamitraEngine(EngineBase):
             )
 
         except Exception as e:
+            # A 422/non-200/JSON/network failure from the processor must be
+            # treated as "unavailable" — return an empty, unsuccessful result
+            # rather than letting the exception propagate to the caller.
+            logger.warning("Dharmamitra analysis unavailable: %s", e)
             return EngineResult(
                 engine=self.name,
                 segments=[],

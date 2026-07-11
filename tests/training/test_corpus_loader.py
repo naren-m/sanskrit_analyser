@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from sanskrit_analyzer.training.corpus_loader import CorpusLoader, CorpusEntry, VerseMetadata
+from sanskrit_analyzer.training.corpus_loader import (
+    CorpusEntry,
+    CorpusLoader,
+    CorpusLoadError,
+    VerseMetadata,
+)
 
 
 class TestCorpusLoaderText:
@@ -110,6 +115,18 @@ class TestCorpusLoaderJSON:
 
         assert len(entries) == 2
         assert entries[0].metadata.corpus == "Gita"
+
+    def test_malformed_json_raises_corpus_load_error(self, tmp_path: Path) -> None:
+        """A malformed JSON corpus raises CorpusLoadError, not JSONDecodeError."""
+        corpus_file = tmp_path / "bad.json"
+        corpus_file.write_text('{"verses": [', encoding="utf-8")
+
+        loader = CorpusLoader(corpus_file)
+        with pytest.raises(CorpusLoadError) as exc_info:
+            list(loader)
+
+        # The error message must name the offending file.
+        assert str(corpus_file) in str(exc_info.value)
 
 
 class TestCorpusLoaderIterator:

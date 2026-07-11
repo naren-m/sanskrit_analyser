@@ -263,15 +263,36 @@ async def analyze_text(request: Request, body: AnalyzeRequest) -> AnalysisTreeRe
             detail=f"Invalid mode: {body.mode}. Must be one of: production, educational, academic",
         )
 
+    # Validate requested engines against the available engine set
+    if body.engines:
+        available = set(analyzer.get_available_engines())
+        unknown = [e for e in body.engines if e not in available]
+        if unknown:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Unknown engine(s): {', '.join(unknown)}. "
+                    f"Available engines: {', '.join(sorted(available))}"
+                ),
+            )
+
     # Perform analysis
-    tree = await analyzer.analyze(
-        text=body.text,
-        mode=mode,
-        return_all_parses=body.return_all_parses,
-        context=body.context,
-        engines=body.engines,
-        bypass_cache=body.bypass_cache,
-    )
+    try:
+        tree = await analyzer.analyze(
+            text=body.text,
+            mode=mode,
+            return_all_parses=body.return_all_parses,
+            context=body.context,
+            engines=body.engines,
+            bypass_cache=body.bypass_cache,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {exc}",
+        ) from exc
 
     return _tree_to_response(tree)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import torch
@@ -40,23 +41,36 @@ class ProjectionHead(nn.Module):
         return out
 
     def save(self, path: Path) -> None:
-        torch.save(
-            {
-                "state_dict": self.state_dict(),
-                "config": {
+        """Save weights to ``path`` and config to a ``.config.json`` sidecar.
+
+        The config is stored as JSON (not pickled alongside the tensors) so the
+        checkpoint can be reloaded with ``weights_only=True``, which forbids
+        arbitrary-code execution during unpickling.
+        """
+        path = Path(path)
+        torch.save({"state_dict": self.state_dict()}, path)
+        self._config_path(path).write_text(
+            json.dumps(
+                {
                     "input_dim": self.input_dim,
                     "hidden_dim": self.hidden_dim,
                     "output_dim": self.output_dim,
                     "normalize": self.normalize,
-                },
-            },
-            path,
+                }
+            )
         )
 
     @classmethod
     def load(cls, path: Path) -> "ProjectionHead":
-        payload = torch.load(path, map_location="cpu", weights_only=False)
-        head = cls(**payload["config"])
+        path = Path(path)
+        config = json.loads(cls._config_path(path).read_text())
+        payload = torch.load(path, map_location="cpu", weights_only=True)
+        head = cls(**config)
         head.load_state_dict(payload["state_dict"])
         head.train(False)
         return head
+
+    @staticmethod
+    def _config_path(path: Path) -> Path:
+        """Sidecar JSON path for a checkpoint (``foo.pt`` -> ``foo.config.json``)."""
+        return path.with_suffix(path.suffix + ".config.json")

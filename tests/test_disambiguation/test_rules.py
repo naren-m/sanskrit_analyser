@@ -403,3 +403,51 @@ class TestRuleBasedDisambiguator:
             r for r in disambiguator.rules if r.name == "frequency_preference"
         )
         assert freq_rule.weight == 0.8
+
+
+class TestDisambiguationIdempotency:
+    """Confidence-mutating rules must not mutate the caller's candidates."""
+
+    def _candidates(self) -> list[ParseCandidate]:
+        return [
+            ParseCandidate(
+                index=0,
+                segments=[{"lemma": "gam", "sandhi_info": {"type": "vowel"}}],
+                confidence=0.8,
+            ),
+            ParseCandidate(
+                index=1,
+                segments=[{"lemma": "xyz_rare", "sandhi_info": {"type": "exotic"}}],
+                confidence=0.8,
+            ),
+        ]
+
+    def test_frequency_rule_does_not_mutate_input(self) -> None:
+        rule = FrequencyPreferenceRule()
+        candidates = self._candidates()
+        originals = [c.confidence for c in candidates]
+
+        rule.apply(candidates)
+
+        assert [c.confidence for c in candidates] == originals
+
+    def test_sandhi_rule_does_not_mutate_input(self) -> None:
+        rule = SandhiPreferenceRule()
+        candidates = self._candidates()
+        originals = [c.confidence for c in candidates]
+
+        rule.apply(candidates)
+
+        assert [c.confidence for c in candidates] == originals
+
+    def test_repeated_disambiguate_calls_are_identical(self) -> None:
+        """Two consecutive calls on the same list yield identical results."""
+        disambiguator = RuleBasedDisambiguator()
+        candidates = self._candidates()
+
+        first = disambiguator.disambiguate(candidates)
+        second = disambiguator.disambiguate(candidates)
+
+        assert [(c.index, c.confidence) for c in first] == [
+            (c.index, c.confidence) for c in second
+        ]

@@ -80,6 +80,9 @@ def mock_analyzer(mock_tree: AnalysisTree) -> MagicMock:
     """Create mock analyzer."""
     analyzer = MagicMock()
     analyzer.analyze = AsyncMock(return_value=mock_tree)
+    analyzer.get_available_engines = MagicMock(
+        return_value=["vidyut", "dharmamitra", "heritage"]
+    )
     analyzer._cache = None
     return analyzer
 
@@ -171,6 +174,29 @@ class TestAnalyzeEndpoint:
 
         call_kwargs = mock_analyzer.analyze.call_args[1]
         assert call_kwargs["engines"] == ["vidyut"]
+
+    def test_analyze_unknown_engine(self, client: TestClient) -> None:
+        """Test analysis with an unknown engine name returns 400."""
+        response = client.post(
+            "/api/v1/analyze",
+            json={"text": "test", "engines": ["bogus"]},
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert "Unknown engine" in detail
+        assert "bogus" in detail
+
+    def test_analyze_engine_failure(
+        self, client: TestClient, mock_analyzer: MagicMock
+    ) -> None:
+        """Test engine failure on valid input maps to a structured 500."""
+        mock_analyzer.analyze = AsyncMock(side_effect=RuntimeError("engine exploded"))
+        response = client.post(
+            "/api/v1/analyze",
+            json={"text": "test"},
+        )
+        assert response.status_code == 500
+        assert "Analysis failed" in response.json()["detail"]
 
     def test_analyze_bypass_cache(self, client: TestClient, mock_analyzer: MagicMock) -> None:
         """Test analysis bypassing cache."""

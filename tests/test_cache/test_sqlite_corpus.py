@@ -1,6 +1,7 @@
 """Tests for SQLite corpus storage."""
 
 import os
+import sqlite3
 import tempfile
 from datetime import datetime
 
@@ -250,6 +251,78 @@ class TestSQLiteCorpus:
         entry = corpus.get("key1")
         assert entry is not None
         assert entry.get_result() == result
+
+    def test_set_preserves_disambiguation(self, corpus: SQLiteCorpus) -> None:
+        """A repeat set() must not wipe the user's disambiguation choice."""
+        corpus.set("key1", "test", "test", "PRODUCTION", {"version": 1})
+        corpus.update_disambiguation("key1", 3)
+
+        # Re-analyzing the same key (e.g. cache refresh) must keep the choice.
+        corpus.set("key1", "test", "test", "PRODUCTION", {"version": 2})
+
+        entry = corpus.get("key1")
+        assert entry is not None
+        assert entry.get_result() == {"version": 2}
+        assert entry.disambiguated is True
+        assert entry.selected_parse == 3
+
+    def test_set_preserves_created_at(self, corpus: SQLiteCorpus) -> None:
+        """A repeat set() must preserve the original created_at timestamp."""
+        corpus.set("key1", "test", "test", "PRODUCTION", {"version": 1})
+        first = corpus.get("key1")
+        assert first is not None
+
+        corpus.set("key1", "test", "test", "PRODUCTION", {"version": 2})
+        second = corpus.get("key1")
+        assert second is not None
+        assert second.created_at == first.created_at
+
+    def test_max_rows_prune(self, temp_db: str) -> None:
+        """set() evicts least-recently-accessed rows above max_rows."""
+        corpus = SQLiteCorpus(db_path=temp_db, max_rows=3)
+        for i in range(3):
+            corpus.set(f"key{i}", f"t{i}", f"t{i}", "PRODUCTION", {})
+        assert corpus.count() == 3
+
+        # Touch key1/key2 so key0 is the least-recently-accessed.
+        corpus.get("key1")
+        corpus.get("key2")
+
+        corpus.set("key3", "t3", "t3", "PRODUCTION", {})
+        assert corpus.count() == 3
+        assert corpus.get("key0") is None
+        assert corpus.get("key3") is not None
+
+    def test_max_rows_none_disables_prune(self, temp_db: str) -> None:
+        """max_rows=None keeps every row."""
+        corpus = SQLiteCorpus(db_path=temp_db, max_rows=None)
+        for i in range(10):
+            corpus.set(f"key{i}", f"t{i}", f"t{i}", "PRODUCTION", {})
+        assert corpus.count() == 10
+
+    def test_close_closes_all_thread_connections(self, temp_db: str) -> None:
+        """close() releases connections opened on other threads too."""
+        import threading
+
+        corpus = SQLiteCorpus(db_path=temp_db)
+        corpus.set("key1", "t", "t", "PRODUCTION", {})  # opens main-thread conn
+
+        opened: list = []
+
+        def worker() -> None:
+            corpus.set("key2", "t", "t", "PRODUCTION", {})  # opens worker conn
+            opened.append(corpus._conn)
+
+        t = threading.Thread(target=worker)
+        t.start()
+        t.join()
+
+        assert len(corpus._connections) == 2
+        corpus.close()
+        assert corpus._connections == []
+        # The worker's connection is closed even though close() ran on main thread.
+        with pytest.raises(sqlite3.ProgrammingError):
+            opened[0].execute("SELECT 1")
 
     def test_default_path(self) -> None:
         """Test default database path creation."""

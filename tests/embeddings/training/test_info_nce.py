@@ -50,6 +50,20 @@ class TestInfoNCELoss:
         loss = info_nce_loss(a, b, labels, temperature=0.05)
         assert loss.item() == 0.0
 
+    def test_zero_temperature_raises(self):
+        a = torch.eye(3)
+        b = torch.eye(3)
+        labels = torch.tensor([1, 1, 1])
+        with pytest.raises(ValueError, match="temperature must be > 0"):
+            info_nce_loss(a, b, labels, temperature=0.0)
+
+    def test_negative_temperature_raises(self):
+        a = torch.eye(3)
+        b = torch.eye(3)
+        labels = torch.tensor([1, 1, 1])
+        with pytest.raises(ValueError, match="temperature must be > 0"):
+            info_nce_loss(a, b, labels, temperature=-0.1)
+
     def test_loss_is_differentiable(self):
         a = torch.eye(3, requires_grad=True)
         b = torch.eye(3, requires_grad=True)

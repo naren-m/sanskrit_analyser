@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 
 import requests
 
@@ -33,7 +34,25 @@ logger = logging.getLogger(__name__)
 DHARMAMITRA_API_URL = os.environ.get(
     "DHARMAMITRA_API_URL", "https://dharmamitra.org/api/tagging/"
 )
-_TIMEOUT = float(os.environ.get("DHARMAMITRA_TIMEOUT", "30"))
+
+
+def _env_timeout(default: float = 30.0) -> float:
+    """Parse ``DHARMAMITRA_TIMEOUT`` defensively (bad value → default)."""
+    raw = os.environ.get("DHARMAMITRA_TIMEOUT", str(default))
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        logger.warning(
+            "invalid DHARMAMITRA_TIMEOUT=%r; using default %s", raw, default
+        )
+        return default
+
+
+_TIMEOUT = _env_timeout()
+
+# Bounded retries on transient (connection / timeout / 5xx) failures.
+_MAX_RETRIES = 2
+_RETRY_BACKOFF = 0.5
 
 # Strip dandas, verse numbers, and punctuation before romanizing — otherwise
 # "।।1.1.8।।" leaks into the IAST and the ByT5 model drops surrounding words.
@@ -67,6 +86,45 @@ def _parse_results(raw: str) -> list[str]:
     return [w for w in raw.split("_") if w]
 
 
+def _is_transient(exc: Exception) -> bool:
+    """Whether ``exc`` is a retryable connection/timeout/5xx failure."""
+    if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+        return True
+    if isinstance(exc, requests.exceptions.HTTPError):
+        status = getattr(exc.response, "status_code", None)
+        return status is not None and 500 <= status < 600
+    return False
+
+
+def _post_with_retries(iast: str) -> list | None:
+    """POST to the dharmamitra API with bounded retries; ``None`` on failure.
+
+    Retries transient (connection/timeout/5xx) errors up to ``_MAX_RETRIES``
+    times with a small linear backoff. Non-transient errors (4xx, bad JSON)
+    fail fast. Never raises.
+    """
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            resp = requests.post(
+                DHARMAMITRA_API_URL,
+                json={
+                    "texts": [iast],
+                    "mode": "unsandhied",
+                    "human_readable_tags": True,
+                },
+                timeout=_TIMEOUT,
+            )
+            resp.raise_for_status()
+            return resp.json().get("results") or []
+        except Exception as exc:  # network/HTTP/JSON — treat as unavailable
+            if _is_transient(exc) and attempt < _MAX_RETRIES:
+                time.sleep(_RETRY_BACKOFF * (attempt + 1))
+                continue
+            logger.warning("dharmamitra segmentation unavailable: %s", exc)
+            return None
+    return None
+
+
 def segment(text_devanagari: str) -> list[str] | None:
     """Return unsandhied words (in IAST) for a Devanagari line via dharmamitra.
 
@@ -81,17 +139,7 @@ def segment(text_devanagari: str) -> list[str] | None:
     except Exception as exc:  # transliteration failure → let caller fall back
         logger.warning("dev->iast failed for deep-read segmentation: %s", exc)
         return None
-    try:
-        resp = requests.post(
-            DHARMAMITRA_API_URL,
-            json={"texts": [iast], "mode": "unsandhied", "human_readable_tags": True},
-            timeout=_TIMEOUT,
-        )
-        resp.raise_for_status()
-        results = resp.json().get("results") or []
-    except Exception as exc:  # network/HTTP/JSON — treat as unavailable
-        logger.warning("dharmamitra segmentation unavailable: %s", exc)
-        return None
+    results = _post_with_retries(iast)
     if not results:
         return None
     words = _parse_results(results[0])

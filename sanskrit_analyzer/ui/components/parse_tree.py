@@ -72,6 +72,7 @@ def _render_parse_row(
             st.rerun()
 
     with col_label:
+        confidence = confidence or 0
         percentage = int(confidence * 100)
         css_class = confidence_class(confidence)
         st.markdown(

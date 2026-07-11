@@ -359,6 +359,47 @@ class TestTieredCache:
         result = await cache.get("key")
         assert result is None
 
+    def test_make_key_folds_schema_version(self, cache: TieredCache) -> None:
+        """Key changes when the schema version constant changes."""
+        from sanskrit_analyzer.cache import tiered as tiered_mod
+
+        key_v1 = cache.make_key("gacchati", "PRODUCTION")
+        original = tiered_mod.CACHE_SCHEMA_VERSION
+        try:
+            tiered_mod.CACHE_SCHEMA_VERSION = original + 1
+            key_v2 = cache.make_key("gacchati", "PRODUCTION")
+        finally:
+            tiered_mod.CACHE_SCHEMA_VERSION = original
+        assert key_v1 != key_v2
+
+    @pytest.mark.asyncio
+    async def test_sqlite_read_error_is_a_miss(self, config: TieredCacheConfig) -> None:
+        """A corrupt SQLite row is treated as a miss, not a crash."""
+        cache = TieredCache(config)
+        key = cache.make_key("test", "PRODUCTION")
+        cache._sqlite.set(key, "test", "test", "PRODUCTION", {"ok": 1})  # type: ignore
+        cache._memory.clear()  # type: ignore
+
+        with patch.object(
+            cache._sqlite, "get", side_effect=ValueError("corrupt row")
+        ):
+            result = await cache.get(key)
+
+        assert result is None
+        assert cache.stats.sqlite.errors == 1
+
+    @pytest.mark.asyncio
+    async def test_memory_set_stores_copy(self, cache: TieredCache) -> None:
+        """Mutating the result after set() must not corrupt the cached value."""
+        result: dict = {"segments": [{"surface": "test"}]}
+        key = cache.make_key("test", "PRODUCTION")
+
+        await cache.set(key, "test", "test", "PRODUCTION", result)
+        result["segments"][0]["surface"] = "MUTATED"
+
+        retrieved = await cache.get(key)
+        assert retrieved == {"segments": [{"surface": "test"}]}
+
     def test_get_tier_status(self, cache: TieredCache) -> None:
         """Test tier status reporting."""
         status = cache.get_tier_status()

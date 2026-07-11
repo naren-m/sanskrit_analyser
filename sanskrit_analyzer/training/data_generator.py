@@ -87,7 +87,15 @@ class BatchAnalyzer:
             raw_confidence = result.confidence if hasattr(result, "confidence") else 0.0
             confidence = _extract_confidence(raw_confidence)
             num_parses = len(result.parse_forest) if hasattr(result, "parse_forest") else 1
-            parse_dict = result.model_dump() if hasattr(result, "model_dump") else {}
+            # Analyzer returns an AnalysisTree dataclass (to_dict), not a pydantic
+            # model (model_dump); check to_dict first so the serialized parse is
+            # never silently empty. Fall back to model_dump for pydantic results.
+            if hasattr(result, "to_dict"):
+                parse_dict = result.to_dict()
+            elif hasattr(result, "model_dump"):
+                parse_dict = result.model_dump()
+            else:
+                parse_dict = {}
 
             return AnalysisResult(
                 entry=entry,
@@ -110,6 +118,10 @@ class BatchAnalyzer:
         Yields:
             AnalysisResult for each successfully analyzed entry.
         """
+        # Note: max_examples caps the number of examples *written*, not the
+        # number analyzed. Consumers enforce it on their kept count (after the
+        # min_confidence filter) and stop iterating this generator; capping here
+        # on analyzed entries would under-produce whenever any entry is filtered.
         processed = 0
         for entry in corpus:
             result = await self.analyze_entry(entry)
@@ -118,11 +130,6 @@ class BatchAnalyzer:
                 if processed % 100 == 0:
                     logger.info(f"Processed {processed} entries")
                 yield result
-
-            # Check max examples limit
-            if self.config.max_examples > 0 and processed >= self.config.max_examples:
-                logger.info(f"Reached max examples limit: {self.config.max_examples}")
-                break
 
     async def generate_training_data(
         self,
@@ -157,6 +164,9 @@ class BatchAnalyzer:
                     }
                     f.write(json.dumps(example, ensure_ascii=False) + "\n")
                     count += 1
+                    if self.config.max_examples > 0 and count >= self.config.max_examples:
+                        logger.info(f"Reached max examples limit: {self.config.max_examples}")
+                        break
 
         logger.info(f"Generated {count} training examples to {output_path}")
         return count

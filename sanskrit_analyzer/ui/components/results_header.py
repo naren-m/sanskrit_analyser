@@ -1,5 +1,6 @@
 """Results header component showing sentence info and script variants."""
 
+import html
 from typing import Any, Callable
 
 import streamlit as st
@@ -50,6 +51,7 @@ def _render_confidence_badge(confidence: float) -> None:
     Args:
         confidence: Confidence value between 0 and 1.
     """
+    confidence = confidence or 0
     percentage = int(confidence * 100)
     css_class = confidence_class(confidence)
 
@@ -75,14 +77,14 @@ def _render_script_variants(scripts: dict[str, str]) -> None:
         if script in scripts:
             label = script.upper() if script != "devanagari" else "देवनागरी"
             variants_html.append(
-                f'<span class="script-variant">{label}: {scripts[script]}</span>'
+                f'<span class="script-variant">{label}: {html.escape(str(scripts[script]))}</span>'
             )
 
     # Any remaining scripts not in the order
     for script, text in scripts.items():
         if script not in script_order:
             variants_html.append(
-                f'<span class="script-variant">{script}: {text}</span>'
+                f'<span class="script-variant">{html.escape(str(script))}: {html.escape(str(text))}</span>'
             )
 
     st.markdown(

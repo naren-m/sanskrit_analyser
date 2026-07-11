@@ -18,6 +18,15 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_MODEL = "chronbmm/sanskrit5-multitask"
 
+# Pinned so an upstream re-upload cannot silently change the produced vectors.
+# TODO: replace this tag with a specific commit SHA once one is confirmed.
+_DEFAULT_REVISION = "main"
+
+# Native ``d_model`` of the default model (ByT5-small backbone). Used only for
+# the empty-input fast path so it can return a correctly-shaped ``(0, d)``
+# array without forcing a full model load.
+_DEFAULT_D_MODEL = 1472
+
 
 def _masked_mean_pool(
     hidden_states: torch.Tensor, attention_mask: torch.Tensor
@@ -59,11 +68,13 @@ class ByT5SanskritEmbedder:
         max_length: int = 1024,
         normalize: bool = True,
         lazy: bool = False,
+        revision: str = _DEFAULT_REVISION,
     ) -> None:
         self.model_name = model_name
         self.device = device or _auto_device()
         self.max_length = max_length
         self.normalize = normalize
+        self.revision = revision
         self._model: Optional[T5ForConditionalGeneration] = None
         self._tokenizer: Optional[ByT5Tokenizer] = None
         if not lazy:
@@ -79,8 +90,12 @@ class ByT5SanskritEmbedder:
         if self._model is not None:
             return
         logger.info("Loading ByT5 model %s on %s", self.model_name, self.device)
-        self._tokenizer = ByT5Tokenizer.from_pretrained(self.model_name)
-        model = T5ForConditionalGeneration.from_pretrained(self.model_name)
+        self._tokenizer = ByT5Tokenizer.from_pretrained(
+            self.model_name, revision=self.revision
+        )
+        model = T5ForConditionalGeneration.from_pretrained(
+            self.model_name, revision=self.revision
+        )
         # Disable dropout/batchnorm at inference time
         model.train(False)
         model.to(self.device)
@@ -89,7 +104,15 @@ class ByT5SanskritEmbedder:
     def encode(self, texts: list[str], batch_size: int = 8) -> np.ndarray:
         """Devanagari or IAST → (N, d_model) embeddings, optionally L2-normalized."""
         if len(texts) == 0:
-            return np.zeros((0, self.embedding_dim), dtype=np.float32)
+            # Short-circuit before touching ``embedding_dim`` so an empty batch
+            # never forces a full model load. Use the loaded model's dim if
+            # available, else the known default-model constant.
+            dim = (
+                int(self._model.config.d_model)
+                if self._model is not None
+                else _DEFAULT_D_MODEL
+            )
+            return np.zeros((0, dim), dtype=np.float32)
         if self._model is None:
             self._load()
 

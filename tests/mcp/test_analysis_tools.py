@@ -3,25 +3,28 @@
 import pytest
 
 from sanskrit_analyzer.mcp.response import error_response, json_response, text_response
-from sanskrit_analyzer.mcp.tools.analysis import register_analysis_tools
-from mcp.server import Server
-
-
-@pytest.fixture
-def server() -> Server:
-    """Create a test server with analysis tools registered."""
-    server = Server("test-server")
-    register_analysis_tools(server)
-    return server
+from sanskrit_analyzer.mcp.tools.analysis import build_analysis_tools
 
 
 class TestAnalyzeSentence:
     """Tests for analyze_sentence tool."""
 
+    def test_build_exposes_expected_tools(self) -> None:
+        """build_analysis_tools returns the four analysis tool specs."""
+        tools, _dispatch = build_analysis_tools()
+        names = {t.name for t in tools}
+        assert names == {
+            "analyze_sentence",
+            "split_sandhi",
+            "get_morphology",
+            "transliterate",
+        }
+
     @pytest.mark.asyncio
-    async def test_server_configured_correctly(self, server: Server) -> None:
-        """Test server is configured with analysis tools."""
-        assert server.name == "test-server"
+    async def test_dispatch_returns_none_for_unknown_tool(self) -> None:
+        """The dispatcher returns None for tools it does not own."""
+        _tools, dispatch = build_analysis_tools()
+        assert await dispatch("not_a_tool", {}) is None
 
 
 class TestResponseHelpers:

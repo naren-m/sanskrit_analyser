@@ -1,8 +1,8 @@
 """Analysis tools for MCP server."""
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from mcp.server import Server
 from mcp.types import Tool, TextContent
 
 from sanskrit_analyzer import Analyzer
@@ -11,18 +11,22 @@ from sanskrit_analyzer.mcp.response import error_response, json_response, text_r
 from sanskrit_analyzer.utils.normalize import detect_script
 from sanskrit_analyzer.utils.transliterate import transliterate, Script
 
+# A dispatcher returns the tool's result, or None if it does not own ``name``
+# (so the server can try the next tool group).
+ToolDispatcher = Callable[[str, dict[str, Any]], Awaitable[list[TextContent] | None]]
 
-def register_analysis_tools(server: Server) -> None:
-    """Register analysis tools with the MCP server.
 
-    Args:
-        server: MCP server instance.
+def build_analysis_tools() -> tuple[list[Tool], ToolDispatcher]:
+    """Build the analysis tool specs and their dispatcher.
+
+    Returns the list of :class:`Tool` specs plus an async dispatcher. The MCP
+    ``Server`` keeps only one handler per request type, so each tool group must
+    expose its specs/dispatcher for the server to aggregate into a single
+    ``list_tools``/``call_tool`` handler rather than registering its own.
     """
     analyzer = Analyzer(Config())
 
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
+    tools = [
             Tool(
                 name="analyze_sentence",
                 description="Analyze a Sanskrit sentence and get full morphological breakdown",
@@ -86,8 +90,9 @@ def register_analysis_tools(server: Server) -> None:
             ),
         ]
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    async def dispatch(
+        name: str, arguments: dict[str, Any]
+    ) -> list[TextContent] | None:
         if name == "analyze_sentence":
             return await _analyze_sentence(analyzer, arguments)
         elif name == "split_sandhi":
@@ -96,8 +101,9 @@ def register_analysis_tools(server: Server) -> None:
             return await _get_morphology(analyzer, arguments)
         elif name == "transliterate":
             return _transliterate(arguments)
-        else:
-            return error_response(f"Unknown tool: {name}")
+        return None
+
+    return tools, dispatch
 
 
 async def _analyze_sentence(

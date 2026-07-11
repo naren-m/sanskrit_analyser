@@ -17,4 +17,5 @@ Always run tests after changes:
 uv run pytest
 ```
 
-All 380 tests must pass before committing.
+The full suite (~755 tests) must pass before committing. Some tests depend on
+the live Dharmamitra API and skip automatically when it is unreachable.

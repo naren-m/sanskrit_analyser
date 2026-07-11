@@ -48,6 +48,79 @@ def test_segment_empty_returns_empty_list_without_network():
     assert dseg.segment("   ॥  ") == []
 
 
+def test_env_timeout_defaults_on_bad_value(monkeypatch):
+    # A malformed env value must not raise at import/parse time.
+    monkeypatch.setenv("DHARMAMITRA_TIMEOUT", "not-a-number")
+    assert dseg._env_timeout() == 30.0
+
+
+def test_env_timeout_parses_valid_value(monkeypatch):
+    monkeypatch.setenv("DHARMAMITRA_TIMEOUT", "12.5")
+    assert dseg._env_timeout() == 12.5
+
+
+def test_post_with_retries_retries_transient(monkeypatch):
+    # A transient ConnectionError is retried, then None is returned.
+    import requests
+
+    calls = {"n": 0}
+
+    def flaky_post(*args, **kwargs):
+        calls["n"] += 1
+        raise requests.exceptions.ConnectionError("refused")
+
+    monkeypatch.setattr(dseg.requests, "post", flaky_post)
+    monkeypatch.setattr(dseg.time, "sleep", lambda *_: None)
+
+    assert dseg._post_with_retries("rama") is None
+    assert calls["n"] == dseg._MAX_RETRIES + 1
+
+
+def test_post_with_retries_no_retry_on_4xx(monkeypatch):
+    # A non-transient HTTP 4xx fails fast (single attempt).
+    import requests
+
+    calls = {"n": 0}
+
+    def bad_request(*args, **kwargs):
+        calls["n"] += 1
+        resp = requests.Response()
+        resp.status_code = 400
+        raise requests.exceptions.HTTPError(response=resp)
+
+    monkeypatch.setattr(dseg.requests, "post", bad_request)
+    monkeypatch.setattr(dseg.time, "sleep", lambda *_: None)
+
+    assert dseg._post_with_retries("rama") is None
+    assert calls["n"] == 1
+
+
+def test_post_with_retries_succeeds_after_transient(monkeypatch):
+    # Recovers on a later attempt and returns the results payload.
+    import requests
+
+    calls = {"n": 0}
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"results": ["9 rama_nama_"]}
+
+    def eventually_ok(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise requests.exceptions.Timeout("slow")
+        return _Resp()
+
+    monkeypatch.setattr(dseg.requests, "post", eventually_ok)
+    monkeypatch.setattr(dseg.time, "sleep", lambda *_: None)
+
+    assert dseg._post_with_retries("rama") == ["9 rama_nama_"]
+    assert calls["n"] == 2
+
+
 requires_dharmamitra = pytest.mark.skipif(
     not os.environ.get("DEEPREAD_DHARMAMITRA_TESTS"),
     reason="set DEEPREAD_DHARMAMITRA_TESTS=1 to run the live dharmamitra API test",

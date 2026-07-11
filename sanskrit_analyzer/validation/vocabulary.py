@@ -1,8 +1,21 @@
 """Vocabulary loader for curated Sanskrit wordlists.
 
 Provides a lookup table of known Sanskrit lemmas (in SLP1 encoding) used to
-score and validate sandhi split candidates. The default vocabulary is curated
-from the 196 Yoga Sutras of Patanjali.
+score and validate sandhi split candidates.
+
+.. warning::
+
+    **Evaluation leakage risk.** The *default* vocabulary
+    (:meth:`Vocabulary.load_default`) is curated from the same 196 Yoga Sutras
+    of Patanjali that the split validator is typically evaluated against.
+    Scoring Yoga Sutra splits with this vocabulary therefore measures
+    *in-sample* performance and will overstate accuracy on held-out text.
+
+    The default is intended for development and demos only. For any honest
+    evaluation, inject an **independent, held-out** vocabulary via
+    :meth:`Vocabulary.from_file` (or construct one directly and pass it to
+    ``SplitValidator(vocabulary=...)``), sourced from text disjoint from the
+    evaluation set.
 """
 
 from __future__ import annotations
@@ -102,7 +115,15 @@ class Vocabulary:
 
     @classmethod
     def load_default(cls) -> Vocabulary:
-        """Load the default Yoga Sutra vocabulary shipped with the package."""
+        """Load the default Yoga Sutra vocabulary shipped with the package.
+
+        .. warning::
+
+            This vocabulary is curated from the Yoga Sutras and is therefore
+            **in-sample / dev-only** for Yoga Sutra evaluation (see the module
+            docstring). Use :meth:`from_file` with a held-out wordlist for any
+            honest, leakage-free evaluation.
+        """
         return cls.from_file(_DEFAULT_VOCAB_PATH)
 
     @classmethod

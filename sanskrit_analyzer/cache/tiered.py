@@ -1,5 +1,6 @@
 """Tiered cache coordinator with Memory -> Redis -> SQLite fallback."""
 
+import copy
 import logging
 from dataclasses import dataclass, field
 from typing import Any
@@ -9,6 +10,11 @@ from sanskrit_analyzer.cache.redis_cache import RedisCache
 from sanskrit_analyzer.cache.sqlite_corpus import SQLiteCorpus
 
 logger = logging.getLogger(__name__)
+
+# Bump when the analyzer/model/result schema changes so that stale cached
+# results from an older build are not served after an upgrade. Folded into
+# every cache key by ``make_key``.
+CACHE_SCHEMA_VERSION = 1
 
 
 @dataclass
@@ -169,12 +175,18 @@ class TieredCache:
                 return value
             self._stats.redis.misses += 1
 
-        # Try SQLite tier
+        # Try SQLite tier. A corrupt row (bad JSON / timestamp) must not crash
+        # an ordinary request: log, count an error, and fall through to a miss.
         if self._sqlite is not None:
-            entry = self._sqlite.get(key)
-            if entry is not None:
+            try:
+                entry = self._sqlite.get(key)
+                value = entry.get_result() if entry is not None else None
+            except Exception as e:
+                logger.debug("SQLite get error: %s", e)
+                self._stats.sqlite.errors += 1
+                return None
+            if value is not None:
                 self._stats.sqlite.hits += 1
-                value = entry.get_result()
                 # Promote to faster tiers
                 if self._memory is not None:
                     self._memory.set(key, value)
@@ -204,9 +216,11 @@ class TieredCache:
             mode: Analysis mode.
             result: Analysis result dictionary.
         """
-        # Store in memory tier
+        # Store in memory tier. Other tiers serialize a copy; the memory tier
+        # must too, otherwise a caller mutating ``result`` after set() would
+        # corrupt the cached value (mutation-inconsistent reads).
         if self._memory is not None:
-            self._memory.set(key, result)
+            self._memory.set(key, copy.deepcopy(result))
 
         # Store in Redis tier
         if self._redis is not None:
@@ -295,12 +309,15 @@ class TieredCache:
         Returns:
             Cache key.
         """
+        # Fold in the schema version so a model/analyzer/schema upgrade
+        # (bump CACHE_SCHEMA_VERSION) invalidates stale cached results.
+        versioned_mode = f"v{CACHE_SCHEMA_VERSION}:{mode}"
         if self._memory is not None:
-            return self._memory.make_key(text, mode)
+            return self._memory.make_key(text, versioned_mode)
         # Fallback key generation
         import hashlib
 
-        content = f"{mode}:{text}"
+        content = f"{versioned_mode}:{text}"
         return hashlib.sha256(content.encode("utf-8")).hexdigest()[:32]
 
     def get_tier_status(self) -> dict[str, bool]:

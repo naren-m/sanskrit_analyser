@@ -1,5 +1,6 @@
 """Rule-based disambiguation for Sanskrit parse filtering."""
 
+import copy
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -286,9 +287,13 @@ class FrequencyPreferenceRule(DisambiguationRule):
                 reason="Rule disabled or single candidate",
             )
 
+        # Deep-copy so the caller's ParseCandidate objects are never mutated
+        # (keeps this rule idempotent across repeated calls).
+        working = copy.deepcopy(candidates)
+
         # Score each candidate by frequency
         scored: list[tuple[ParseCandidate, float]] = []
-        for candidate in candidates:
+        for candidate in working:
             score = self._calculate_frequency_score(candidate)
             scored.append((candidate, score))
 
@@ -367,15 +372,19 @@ class SandhiPreferenceRule(DisambiguationRule):
                 reason="Rule disabled or single candidate",
             )
 
+        # Deep-copy so the caller's ParseCandidate objects are never mutated
+        # (keeps this rule idempotent across repeated calls).
+        working = copy.deepcopy(candidates)
+
         # Score each candidate by sandhi preference
-        for candidate in candidates:
+        for candidate in working:
             adjustment = self._calculate_sandhi_preference(candidate)
             candidate.confidence = min(1.0, candidate.confidence + adjustment)
 
         # Sort by adjusted confidence
-        candidates.sort(key=lambda c: c.confidence, reverse=True)
+        working.sort(key=lambda c: c.confidence, reverse=True)
 
-        return candidates, RuleResult(
+        return working, RuleResult(
             rule_name=self.name,
             applied=True,
             confidence_adjustment=0.05 * self.weight,

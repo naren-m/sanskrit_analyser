@@ -1,5 +1,6 @@
 """Diff view component for comparing parse candidates."""
 
+import html
 from typing import Any, Callable
 
 import streamlit as st
@@ -31,7 +32,7 @@ def render_diff_view(
     col_left, col_right = st.columns(2)
 
     parse_options = {
-        f"Parse {i+1} ({int(p.get('confidence', 0) * 100)}%)": i
+        f"Parse {i+1} ({int((p.get('confidence', 0) or 0) * 100)}%)": i
         for i, p in enumerate(parses)
     }
 
@@ -90,7 +91,7 @@ def _render_parse_column(parse: dict[str, Any]) -> None:
     Args:
         parse: Parse data.
     """
-    confidence = parse.get("confidence", 0)
+    confidence = parse.get("confidence", 0) or 0
     css_class = confidence_class(confidence)
     sandhi_groups = parse.get("sandhi_groups", [])
 
@@ -106,13 +107,13 @@ def _render_parse_column(parse: dict[str, Any]) -> None:
         word_parts = []
         for word in base_words:
             ws = word.get("scripts", {})
-            dev = ws.get("devanagari", word.get("lemma", ""))
+            dev = html.escape(ws.get("devanagari", word.get("lemma", "")))
             morph = word.get("morphology", {})
-            pos = morph.get("pos", "") if morph else ""
+            pos = html.escape(morph.get("pos", "") if morph else "")
             word_parts.append(f"{dev} ({pos})" if pos else dev)
 
         breakdown = " + ".join(word_parts) if word_parts else "—"
-        lines.append(f"<b>{surface}</b> → {breakdown}")
+        lines.append(f"<b>{html.escape(surface)}</b> → {breakdown}")
 
     st.markdown(
         f'<div class="diff-column">{"<br>".join(lines)}</div>',

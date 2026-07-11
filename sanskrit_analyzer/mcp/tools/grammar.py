@@ -1,26 +1,22 @@
 """Grammar tools for MCP server."""
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from mcp.server import Server
 from mcp.types import Tool, TextContent
 
 from sanskrit_analyzer import Analyzer
 from sanskrit_analyzer.config import Config
 from sanskrit_analyzer.mcp.response import error_response, json_response, text_response
 
+ToolDispatcher = Callable[[str, dict[str, Any]], Awaitable[list[TextContent] | None]]
 
-def register_grammar_tools(server: Server) -> None:
-    """Register grammar tools with the MCP server.
 
-    Args:
-        server: MCP server instance.
-    """
+def build_grammar_tools() -> tuple[list[Tool], ToolDispatcher]:
+    """Build the grammar tool specs and their dispatcher (see build_analysis_tools)."""
     analyzer = Analyzer(Config())
 
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
+    tools = [
             Tool(
                 name="explain_parse",
                 description="Compare multiple parse interpretations of ambiguous text",
@@ -79,8 +75,9 @@ def register_grammar_tools(server: Server) -> None:
             ),
         ]
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    async def dispatch(
+        name: str, arguments: dict[str, Any]
+    ) -> list[TextContent] | None:
         if name == "explain_parse":
             return await _explain_parse(analyzer, arguments)
         elif name == "identify_compound":
@@ -89,8 +86,9 @@ def register_grammar_tools(server: Server) -> None:
             return await _get_pratyaya(analyzer, arguments)
         elif name == "resolve_ambiguity":
             return await _resolve_ambiguity(analyzer, arguments)
-        else:
-            return error_response(f"Unknown tool: {name}")
+        return None
+
+    return tools, dispatch
 
 
 async def _explain_parse(

@@ -80,3 +80,37 @@ def test_via_analyzer_typed_or_none():
     # assert the contract, not quality (quality is tracked, not gated).
     res = DeepRead().analyze_via_analyzer("रामः")
     assert res is None or isinstance(res, DeepReadResult)
+
+
+def test_analyze_degrades_when_vidyut_unavailable(monkeypatch):
+    # Dharmamitra disabled AND the vidyut bundle absent: analyze() must degrade
+    # to unknown-token output instead of raising VidyutUnavailable.
+    def boom(word):
+        raise engine.VidyutUnavailable("vidyut data bundle not present")
+
+    monkeypatch.setattr(engine, "analyze_word", boom)
+
+    out = DeepRead().analyze("रामो नाम", use_dharmamitra=False).to_dict()
+    assert out["engine"] == "unavailable"
+    assert out["tokens"]  # segmentation still produced tokens
+    assert all(t["resolved"] is False for t in out["tokens"])
+    assert all(t["analyses"][0]["kind"] == "unknown" for t in out["tokens"])
+    assert out["notes"]
+
+
+def test_analyze_sloka_sync_works_in_running_loop():
+    # Inside a running event loop, _analyze_sloka_sync must not raise the
+    # "asyncio.run() cannot be called from a running event loop" error.
+    import asyncio
+
+    class _FakeAnalyzer:
+        async def analyze(self, text, mode=None):
+            return f"analyzed:{text}"
+
+    dr = DeepRead()
+    dr._analyzer = _FakeAnalyzer()
+
+    async def driver():
+        return dr._analyze_sloka_sync("रामः", mode=None)
+
+    assert asyncio.run(driver()) == "analyzed:रामः"

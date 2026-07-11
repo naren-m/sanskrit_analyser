@@ -5,6 +5,8 @@ import pytest
 import torch
 
 from sanskrit_analyzer.embeddings.byt5_embedder import (
+    _DEFAULT_D_MODEL,
+    _DEFAULT_REVISION,
     ByT5SanskritEmbedder,
     _masked_mean_pool,
 )
@@ -69,6 +71,19 @@ class TestByT5SanskritEmbedderConstruction:
         )
         # byt5-small has d_model=1472
         assert embedder.embedding_dim == 1472
+
+    def test_default_revision_is_pinned(self):
+        embedder = ByT5SanskritEmbedder(lazy=True)
+        assert embedder.revision == _DEFAULT_REVISION
+
+    def test_encode_empty_does_not_load_model(self):
+        """Empty input returns a (0, d) array without forcing a model load."""
+        embedder = ByT5SanskritEmbedder(lazy=True)
+        vectors = embedder.encode([])
+        assert vectors.shape == (0, _DEFAULT_D_MODEL)
+        assert vectors.dtype == np.float32
+        # Model must still be unloaded — the fast path never touched it.
+        assert embedder._model is None
 
 
 class TestByT5SanskritEmbedderEncode:

@@ -1,5 +1,6 @@
 """Word card component with minimal and expanded views."""
 
+import html
 from typing import Any
 
 import streamlit as st
@@ -145,13 +146,36 @@ def _render_scripts_section(scripts: dict[str, str]) -> None:
     )
 
 
-def _render_meanings_section(meanings: list[str]) -> None:
+def _meaning_to_str(meaning: Any) -> str:
+    """Normalize a meaning entry to a display string.
+
+    Backend meanings may be plain strings or dicts (e.g. ``{'text': ...}``).
+
+    Args:
+        meaning: A meaning entry from the analysis result.
+
+    Returns:
+        A human-readable string for the meaning.
+    """
+    if isinstance(meaning, dict):
+        for key in ("text", "meaning", "definition", "gloss"):
+            value = meaning.get(key)
+            if value:
+                return str(value)
+        return ""
+    return str(meaning)
+
+
+def _render_meanings_section(meanings: list[Any]) -> None:
     """Render the meanings section of the card.
 
     Args:
-        meanings: List of dictionary meanings.
+        meanings: List of dictionary meanings (strings or dicts).
     """
-    items = "<br>".join(f"{i}. {m}" for i, m in enumerate(meanings[:5], 1))
+    items = "<br>".join(
+        f"{i}. {html.escape(_meaning_to_str(m))}"
+        for i, m in enumerate(meanings[:5], 1)
+    )
     st.markdown(
         f'<div class="word-card-section">'
         f'<div class="word-card-section-title">MEANINGS</div>'
@@ -193,6 +217,7 @@ def _render_confidence_footer(confidence: float) -> None:
     Args:
         confidence: Confidence value between 0 and 1.
     """
+    confidence = confidence or 0
     percentage = int(confidence * 100)
     css_class = confidence_class(confidence)
 

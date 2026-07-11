@@ -389,7 +389,8 @@ The ranking should list candidate indices from most likely to least likely."""
                         f"{self._config.ollama_url}/api/tags"
                     ) as response:
                         return response.status == 200
-            except Exception:
+            except Exception as e:
+                logger.warning("LLM health check failed: %s", e)
                 return False
         elif self._config.provider == LLMProvider.OPENAI:
             # For OpenAI, just check if API key is configured

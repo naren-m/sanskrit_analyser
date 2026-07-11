@@ -1,12 +1,16 @@
 """Dhatu resource provider for MCP server."""
 
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from mcp.server import Server
 from mcp.types import Resource
 
 from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry
+
+# A reader returns the resource body, or None if it does not own ``uri``
+# (so the server can try the next resource group).
+ResourceReader = Callable[[str], Awaitable[str | None]]
 
 
 def _dhatu_to_dict(entry: DhatuEntry) -> dict[str, Any]:
@@ -23,17 +27,16 @@ def _dhatu_to_dict(entry: DhatuEntry) -> dict[str, Any]:
     }
 
 
-def register_dhatu_resources(server: Server) -> None:
-    """Register dhatu resources with the MCP server.
+def build_dhatu_resources() -> tuple[list[Resource], ResourceReader]:
+    """Build the dhatu resource specs and their reader.
 
-    Args:
-        server: MCP server instance.
+    The MCP ``Server`` keeps only one ``list_resources``/``read_resource``
+    handler, so each resource group exposes its specs/reader for the server to
+    aggregate rather than registering its own (which would overwrite the others).
     """
     db = DhatuDB()
 
-    @server.list_resources()
-    async def list_resources() -> list[Resource]:
-        return [
+    resources = [
             Resource(
                 uri="dhatu://overview",  # type: ignore[arg-type]
                 name="Dhatu Overview",
@@ -102,8 +105,8 @@ def register_dhatu_resources(server: Server) -> None:
             ),
         ]
 
-    @server.read_resource()
-    async def read_resource(uri: str) -> str:
+    async def read_resource(uri: str) -> str | None:
+        uri = str(uri)
         if uri == "dhatu://overview":
             return _get_overview(db)
         elif uri.startswith("dhatu://gana/"):
@@ -120,8 +123,9 @@ def register_dhatu_resources(server: Server) -> None:
                 return _get_dhatu_conjugations(db, dhatu_name)
             else:
                 return _get_dhatu_entry(db, dhatu_name)
-        else:
-            return json.dumps({"error": f"Unknown resource: {uri}"})
+        return None
+
+    return resources, read_resource
 
 
 def _get_overview(db: DhatuDB) -> str:

@@ -115,7 +115,34 @@ class DeepRead:
             if via_dm is not None and via_dm.get("tokens"):
                 return via_dm
 
-        tokens = [engine.analyze_word(tok) for tok in engine.tokenize(text)]
+        pieces = engine.tokenize(text)
+        try:
+            tokens = [engine.analyze_word(tok) for tok in pieces]
+        except engine.VidyutUnavailable as exc:
+            # Dharmamitra unreachable AND the vidyut bundle absent: degrade to
+            # segmentation-only unknown tokens instead of crashing the request.
+            logger.warning(
+                "vidyut kosha unavailable; degrading to unknown tokens: %s", exc
+            )
+            return {
+                "input": text,
+                "slp1": None,
+                "engine": "unavailable",
+                "tokens": [
+                    {
+                        "surface": piece,
+                        "slp1": None,
+                        "resolved": False,
+                        "analyses": [{"kind": "unknown", "lemma": None,
+                                      "dhatu": None, "morphology": {}}],
+                    }
+                    for piece in pieces
+                ],
+                "notes": [
+                    "vidyut.kosha is unavailable, so words could not be analyzed; "
+                    "only whitespace/danda segmentation is shown.",
+                ],
+            }
         slp1 = None
         try:
             slp1 = engine.slp(text) if text else ""
@@ -246,9 +273,27 @@ class DeepRead:
         return self._analyzer
 
     def _analyze_sloka_sync(self, text: str, mode: Any):
-        """Synchronous wrapper around ``Analyzer.analyze`` (POC/offline use)."""
+        """Synchronous wrapper around ``Analyzer.analyze`` (POC/offline use).
+
+        ``asyncio.run`` raises if called from within a running event loop (e.g.
+        an async server). When a loop is already running we run the coroutine on
+        a dedicated worker thread so the analyzer path still works there.
+        """
         analyzer = self._get_analyzer()
-        return asyncio.run(analyzer.analyze(text, mode=mode))
+
+        def _run() -> Any:
+            return asyncio.run(analyzer.analyze(text, mode=mode))
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop in this thread — safe to drive one directly.
+            return _run()
+
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(_run).result()
 
 
 # --------------------------------------------------------------------------

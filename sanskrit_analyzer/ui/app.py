@@ -12,8 +12,10 @@ from sanskrit_analyzer.ui.components.results_header import render_results_header
 from sanskrit_analyzer.ui.state import (
     add_to_history,
     get_analysis_result,
+    get_selected_parse_id,
     init_state,
     set_analysis_result,
+    set_selected_parse_id,
 )
 from sanskrit_analyzer.ui.styles import inject_css
 
@@ -57,7 +59,13 @@ def handle_analyze(text: str, mode: str) -> None:
     """
     with st.spinner("Analyzing..."):
         client = SanskritAPIClient()
-        result = asyncio.run(client.analyze(text, mode))
+        try:
+            result = asyncio.run(client.analyze(text, mode))
+        except Exception as exc:  # noqa: BLE001 - surface failures as UI errors, not tracebacks
+            st.error("An unexpected error occurred during analysis.")
+            with st.expander("Details"):
+                st.code(str(exc))
+            return
 
     if result.success and result.data:
         set_analysis_result(result.data)
@@ -105,7 +113,9 @@ def _render_results(result: dict) -> None:
     # Parse tree
     parses = result.get("parses", [])
     if parses:
-        selected_id = parses[0].get("parse_id")
+        # Honor the user's selection without reordering the backend ranking;
+        # default to the top-ranked parse when nothing has been selected yet.
+        selected_id = get_selected_parse_id() or parses[0].get("parse_id")
         render_parse_list(
             parses=parses,
             selected_parse_id=selected_id,
@@ -133,16 +143,10 @@ def _handle_parse_select(parse_id: str) -> None:
     Args:
         parse_id: The selected parse ID.
     """
-    # For now, just reorder to put selected first
-    result = get_analysis_result()
-    if result:
-        parses = result.get("parses", [])
-        for i, p in enumerate(parses):
-            if p.get("parse_id") == parse_id:
-                # Move to front
-                parses.insert(0, parses.pop(i))
-                break
-        st.rerun()
+    # Track the selection in session state instead of mutating the parse order,
+    # which would discard the backend confidence ranking and desync the diff view.
+    set_selected_parse_id(parse_id)
+    st.rerun()
 
 
 if __name__ == "__main__":

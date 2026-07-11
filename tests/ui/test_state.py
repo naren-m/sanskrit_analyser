@@ -121,6 +121,36 @@ class TestStateManagement:
 
         assert result == {"parses": []}
 
+    def test_set_and_get_selected_parse_id(
+        self, mock_streamlit: MagicMock
+    ) -> None:
+        """Selected parse id round-trips through session state."""
+        from sanskrit_analyzer.ui.state import (
+            get_selected_parse_id,
+            set_selected_parse_id,
+        )
+
+        assert get_selected_parse_id() is None
+
+        set_selected_parse_id("parse_2")
+
+        assert get_selected_parse_id() == "parse_2"
+
+    def test_set_analysis_result_resets_selection(
+        self, mock_streamlit: MagicMock
+    ) -> None:
+        """Storing a new result clears any previous parse selection."""
+        from sanskrit_analyzer.ui.state import (
+            get_selected_parse_id,
+            set_analysis_result,
+            set_selected_parse_id,
+        )
+
+        set_selected_parse_id("parse_2")
+        set_analysis_result({"parses": []})
+
+        assert get_selected_parse_id() is None
+
     def test_toggle_parse_expanded_adds_id(
         self, mock_streamlit: MagicMock
     ) -> None:
