@@ -1,1 +1,9 @@
 *.pyc
+__pycache__/
+
+# Local tooling / agent scratch
+.claude/
+.worktrees/
+
+# Generated artifacts
+graphify-out/
