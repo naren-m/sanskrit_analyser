@@ -55,7 +55,7 @@ class ProjectionHead(nn.Module):
 
     @classmethod
     def load(cls, path: Path) -> "ProjectionHead":
-        payload = torch.load(path, map_location="cpu", weights_only=False)
+        payload = torch.load(path, map_location="cpu", weights_only=True)
         head = cls(**payload["config"])
         head.load_state_dict(payload["state_dict"])
         head.train(False)
