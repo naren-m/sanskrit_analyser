@@ -35,8 +35,6 @@ class ProjectionHeadTrainer:
         learning_rate: float = 1e-4,
         device: Optional[str] = None,
     ) -> None:
-        if temperature <= 0:
-            raise ValueError(f"temperature must be > 0, got {temperature}")
         self.embedder = embedder
         self.temperature = temperature
         self.device = device or "cpu"

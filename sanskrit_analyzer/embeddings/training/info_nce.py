@@ -22,14 +22,7 @@ def info_nce_loss(
 
     Returns a 0-dim loss tensor. If fewer than 2 positives exist,
     returns 0.0 (no in-batch negatives possible).
-
-    Raises:
-        ValueError: if ``temperature`` is not strictly positive (a zero or
-            negative divisor yields NaN/degenerate loss).
     """
-    if temperature <= 0:
-        raise ValueError(f"temperature must be > 0, got {temperature}")
-
     pos_mask = labels == 1
     a_pos = a[pos_mask]
     b_pos = b[pos_mask]
