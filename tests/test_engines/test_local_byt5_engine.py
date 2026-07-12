@@ -72,6 +72,41 @@ class TestLocalByT5Engine:
             assert result[1]["lemma"] == "vana"
             assert result[2]["tags"] == "VP3S"
 
+    def test_parse_combined_compound_member_tokens(self) -> None:
+        """Compound members come back as `__lemma_U` — lemma must not be dropped.
+
+        For a compound like cittavṛttinirodhaḥ the model emits member tokens
+        with an EMPTY surface slot: `__citta_U __vṛtti_U nirodhaḥ_nirodha_SNM`.
+        Naive positional splitting yields surface='' lemma='' tags='citta',
+        losing the lemma into the tags field (observed live, exp5 2026-07).
+        """
+        with patch.object(LocalByT5Engine, "_load_model"):
+            engine = LocalByT5Engine(load_on_init=False)
+
+            result = engine._parse_combined("__citta_U __vṛtti_U nirodhaḥ_nirodha_SNM")
+            assert len(result) == 3
+            assert result[0]["lemma"] == "citta"
+            assert result[0]["surface"] == "citta"  # no surface given; fall back to lemma
+            assert result[0]["tags"] == "U"
+            assert result[1]["lemma"] == "vṛtti"
+            assert result[1]["tags"] == "U"
+            assert result[2]["surface"] == "nirodhaḥ"
+            assert result[2]["lemma"] == "nirodha"
+            assert result[2]["tags"] == "SNM"
+            # no segment may end up with an empty lemma
+            assert all(item["lemma"] for item in result)
+
+    def test_parse_combined_empty_lemma_slot_falls_back_to_surface(self) -> None:
+        """Token with an empty lemma slot (`surface__TAG`) uses surface as lemma."""
+        with patch.object(LocalByT5Engine, "_load_model"):
+            engine = LocalByT5Engine(load_on_init=False)
+
+            result = engine._parse_combined("iti__Cp")
+            assert len(result) == 1
+            assert result[0]["surface"] == "iti"
+            assert result[0]["lemma"] == "iti"
+            assert result[0]["tags"] == "Cp"
+
     def test_decode_tags_verb(self) -> None:
         """Test tag decoding for verbs."""
         with patch.object(LocalByT5Engine, "_load_model"):
@@ -156,6 +191,19 @@ class TestLocalByT5Engine:
             result = engine._normalize_to_iast("राम")
             # Should be transliterated to IAST
             assert result is not None
+
+    def test_normalize_to_iast_word_initial_slp1_capital(self) -> None:
+        """SLP1 with a word-initial capital must reach the model as real IAST.
+
+        The pipeline hands engines normalized SLP1. 'Bavati' (bhavati) has its
+        only SLP1 marker at position 0, where the interior-capital heuristic
+        cannot see it; misdetected as IAST it passed through unchanged and the
+        model saw 'Bavati' -> lemma 'bav' instead of 'bhū' (observed live).
+        """
+        with patch.object(LocalByT5Engine, "_load_model"):
+            engine = LocalByT5Engine(load_on_init=False)
+
+            assert engine._normalize_to_iast("Bavati") == "bhavati"
 
     def test_get_device_auto_cpu_fallback(self) -> None:
         """Test device selection falls back to CPU."""

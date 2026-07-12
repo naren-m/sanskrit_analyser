@@ -24,7 +24,10 @@ class TestEngineConfig:
         config = EngineConfig()
         assert config.vidyut is True
         assert config.vidyut_weight == 0.35
-        assert config.dharmamitra is True
+        # Disabled by default: the remote Dharmamitra client is broken against
+        # the live API (schema drift -> HTTP 422). Opt in explicitly if the
+        # endpoint is fixed or a local model is wired up.
+        assert config.dharmamitra is False
         assert config.heritage is True
 
     def test_validate_success(self) -> None:

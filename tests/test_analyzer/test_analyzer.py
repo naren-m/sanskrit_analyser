@@ -137,6 +137,89 @@ class TestAnalyzerAnalyze:
         assert result.original_text == "rāmaḥ gacchati"
         analyzer._ensemble.analyze.assert_called_once()
 
+    def _make_mock_tree(self) -> AnalysisTree:
+        from sanskrit_analyzer.models.tree import ConfidenceMetrics, ParseTree
+
+        return AnalysisTree(
+            sentence_id="test",
+            original_text="rāmaḥ gacchati",
+            normalized_slp1="rAmaH gacCati",
+            scripts=MagicMock(),
+            parse_forest=[ParseTree(parse_id="p1", confidence=0.9)],
+            confidence=ConfidenceMetrics(overall=0.9, engine_agreement=0.9),
+        )
+
+    @pytest.mark.asyncio
+    async def test_split_validator_skipped_for_non_vidyut_segments(
+        self,
+        analyzer: Analyzer,
+        mock_ensemble_result: EnsembleResult,
+    ) -> None:
+        """Validator must not override segmentation from non-vidyut engines.
+
+        The split validator rescores *vidyut* splits against a small curated
+        vocabulary. When segments come from another engine (e.g. local ByT5,
+        whose neural segmentation is already high quality), re-splitting them
+        against the 99-word vocab corrupts correct lemmas (observed live:
+        'yatna' -> 'yat'+'na'). mock_ensemble_result's engine_results only
+        contain the key "test" — no vidyut — so the ensemble path must be used.
+        """
+        analyzer._initialized = True
+        analyzer._ensemble = MagicMock()
+        analyzer._ensemble.analyze = AsyncMock(return_value=mock_ensemble_result)
+        analyzer._tree_builder = MagicMock()
+        analyzer._cache = None
+        analyzer._disambiguation = None
+        analyzer._split_validator = MagicMock()
+
+        mock_tree = self._make_mock_tree()
+        analyzer._tree_builder.build = MagicMock(return_value=mock_tree)
+        analyzer._tree_builder.build_from_segments = MagicMock(return_value=mock_tree)
+
+        await analyzer.analyze("rāmaḥ gacchati")
+
+        analyzer._split_validator.validate_and_rescore.assert_not_called()
+        analyzer._tree_builder.build_from_segments.assert_not_called()
+        analyzer._tree_builder.build.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_split_validator_used_for_vidyut_segments(
+        self,
+        analyzer: Analyzer,
+        mock_ensemble_result: EnsembleResult,
+    ) -> None:
+        """Validator path stays active when vidyut produced the segments."""
+        vidyut_segments = [
+            Segment(surface="rAmaH", lemma="rAma", confidence=0.9, pos="noun"),
+            Segment(surface="gacCati", lemma="gam", confidence=0.95, pos="verb"),
+        ]
+        mock_ensemble_result.engine_results["vidyut"] = EngineResult(
+            engine="vidyut",
+            segments=vidyut_segments,
+            confidence=0.9,
+        )
+
+        analyzer._initialized = True
+        analyzer._ensemble = MagicMock()
+        analyzer._ensemble.analyze = AsyncMock(return_value=mock_ensemble_result)
+        analyzer._tree_builder = MagicMock()
+        analyzer._cache = None
+        analyzer._disambiguation = None
+        analyzer._split_validator = MagicMock()
+        analyzer._split_validator.validate_and_rescore = MagicMock(
+            return_value=vidyut_segments
+        )
+
+        mock_tree = self._make_mock_tree()
+        analyzer._tree_builder.build = MagicMock(return_value=mock_tree)
+        analyzer._tree_builder.build_from_segments = MagicMock(return_value=mock_tree)
+
+        await analyzer.analyze("rāmaḥ gacchati")
+
+        analyzer._split_validator.validate_and_rescore.assert_called_once()
+        analyzer._tree_builder.build_from_segments.assert_called_once()
+        analyzer._tree_builder.build.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_analyze_devanagari_input(
         self,

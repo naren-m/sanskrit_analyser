@@ -45,7 +45,11 @@ class EngineConfig:
 
     vidyut: bool = True
     vidyut_weight: float = 0.35
-    dharmamitra: bool = True
+    # Off by default: the remote Dharmamitra client is broken against the live
+    # dharmamitra.org API (request/response schema drift -> HTTP 422 on every
+    # call, and the endpoint now does segmentation only). Opt in explicitly
+    # once the client is realigned or a local model is wired up.
+    dharmamitra: bool = False
     dharmamitra_weight: float = 0.40
     dharmamitra_model: str = "buddhist-nlp/byt5-sanskrit"
     dharmamitra_device: str = "auto"

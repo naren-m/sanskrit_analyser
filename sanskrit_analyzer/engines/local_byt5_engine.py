@@ -150,8 +150,11 @@ class LocalByT5Engine(EngineBase):
         """Normalize input text to IAST for the model.
 
         ByT5-Sanskrit works best with IAST/romanized input.
+
+        The pipeline hands engines normalized SLP1, so ambiguous plain ASCII
+        (e.g. word-initial-capital SLP1 like "Bavati") is read as SLP1.
         """
-        script = detect_script(text)
+        script = detect_script(text, plain_ascii_default=Script.SLP1)
         if script == Script.IAST:
             return text
         return transliterate(text, script, Script.IAST)
@@ -255,11 +258,22 @@ class LocalByT5Engine(EngineBase):
 
         # Format: "surface_lemma_TAGS surface_lemma_TAGS ..."
         # Example: "rāma_rāma_SNM vanam_vana_SANe gacchati_gam_VP3S"
+        # Compound members have an EMPTY surface slot: "__citta_U __vṛtti_U"
         for token in clean_output.split():
             parts = token.split("_")
-            if len(parts) >= 2:
+            if len(parts) >= 3 and parts[0] == "" and parts[1] == "":
+                # Compound-member token "__lemma_TAGS": no surface form given
+                lemma = parts[2]
+                tags = parts[3] if len(parts) > 3 else ""
+                results.append({
+                    "surface": lemma,
+                    "lemma": lemma,
+                    "tags": tags,
+                })
+            elif len(parts) >= 2:
                 surface = parts[0]
-                lemma = parts[1]
+                # Empty lemma slot ("surface__TAGS"): fall back to surface
+                lemma = parts[1] or parts[0]
                 tags = parts[2] if len(parts) > 2 else ""
                 results.append({
                     "surface": surface,
