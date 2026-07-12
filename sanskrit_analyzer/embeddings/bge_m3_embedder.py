@@ -24,10 +24,6 @@ logger = logging.getLogger(__name__)
 _DEFAULT_MODEL = "BAAI/bge-m3"
 _EMBEDDING_DIM = 1024
 
-# Pinned so an upstream re-upload cannot silently change the produced vectors.
-# TODO: replace this tag with a specific commit SHA once one is confirmed.
-_DEFAULT_REVISION = "main"
-
 
 def _auto_device() -> str:
     """Pick the best available torch backend (mirrors ByT5SanskritEmbedder)."""
@@ -74,12 +70,10 @@ class BgeM3Embedder:
         device: Optional[str] = None,
         normalize: bool = True,
         lazy: bool = False,
-        revision: str = _DEFAULT_REVISION,
     ) -> None:
         self.model_name = model_name
         self.device = device or _auto_device()
         self.normalize = normalize
-        self.revision = revision
         self._model = None  # SentenceTransformer, loaded on demand
         if not lazy:
             self._load()
@@ -133,6 +127,5 @@ class BgeM3Embedder:
         self._model = SentenceTransformer(
             self.model_name,
             device=self.device,
-            revision=self.revision,
         )
         self._model.eval()
