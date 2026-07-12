@@ -4,6 +4,21 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 
+def _tag_value(value):
+    """Normalize a morphology field to its serialized value.
+
+    Field annotations on :class:`MorphologicalTag` (``pos: PartOfSpeech`` …) are
+    type hints, not runtime constraints, so an upstream analyzer can populate a
+    field with a plain ``str`` instead of the enum member.  Accessing ``.value``
+    on such a value would raise ``AttributeError`` (issue #349).  This helper
+    returns ``.value`` for enum members and passes ``str``/``None`` through
+    unchanged, so serialization is robust to either representation.
+    """
+    if value is None:
+        return None
+    return value.value if isinstance(value, Enum) else value
+
+
 class PartOfSpeech(Enum):
     """Part of speech classification."""
 
@@ -111,31 +126,31 @@ class MorphologicalTag:
 
     def to_string(self) -> str:
         """Convert to human-readable string representation."""
-        parts = [self.pos.value]
+        parts = [_tag_value(self.pos) or ""]
         if self.gender:
-            parts.append(self.gender.value[:3])
+            parts.append(_tag_value(self.gender)[:3])
         if self.number:
-            parts.append(self.number.value[:2])
+            parts.append(_tag_value(self.number)[:2])
         if self.case:
-            parts.append(self.case.value[:3])
+            parts.append(_tag_value(self.case)[:3])
         if self.person:
-            parts.append(f"{self.person.value[0]}p")
+            parts.append(f"{_tag_value(self.person)[0]}p")
         if self.tense:
-            parts.append(self.tense.value[:4])
+            parts.append(_tag_value(self.tense)[:4])
         if self.voice:
-            parts.append(self.voice.value[:3])
+            parts.append(_tag_value(self.voice)[:3])
         return ".".join(parts)
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
         return {
-            "pos": self.pos.value if self.pos else None,
-            "gender": self.gender.value if self.gender else None,
-            "number": self.number.value if self.number else None,
-            "case": self.case.value if self.case else None,
-            "person": self.person.value if self.person else None,
-            "tense": self.tense.value if self.tense else None,
-            "voice": self.voice.value if self.voice else None,
+            "pos": _tag_value(self.pos),
+            "gender": _tag_value(self.gender),
+            "number": _tag_value(self.number),
+            "case": _tag_value(self.case),
+            "person": _tag_value(self.person),
+            "tense": _tag_value(self.tense),
+            "voice": _tag_value(self.voice),
             "raw_tag": self.raw_tag,
         }
 
