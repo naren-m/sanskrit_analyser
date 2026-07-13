@@ -8,14 +8,11 @@ coverage is sparse by design, so ``kashika`` is Optional.
 from __future__ import annotations
 
 import csv
-import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 from sanskrit_analyzer.deep_read.kosha_engine import VidyutUnavailable, resolve_data_dir
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
