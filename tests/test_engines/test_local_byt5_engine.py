@@ -245,3 +245,31 @@ class TestLocalByT5EngineIntegration:
         # This test is slow and downloads ~1GB model
         # Only run explicitly with: pytest -m slow
         pytest.skip("Slow test - run explicitly with pytest -m slow")
+
+    @pytest.mark.asyncio
+    async def test_greedy_decode_splits_full_compound(
+        self, skip_if_no_transformers: None
+    ) -> None:
+        """Greedy decoding must segment the whole compound, not truncate it.
+
+        Regression for the beam-search + early_stopping bug that halted the beam
+        at the first EOS and collapsed इक्ष्वाकुवंशप्रभवो to "ik". Runs offline
+        against the cached model; skips if the model can't be loaded so CI
+        without the weights still passes.
+        """
+        try:
+            engine = LocalByT5Engine()
+        except Exception as exc:  # model not cached / load failure
+            pytest.skip(f"ByT5 model unavailable: {exc}")
+
+        if not engine.is_available:
+            pytest.skip("ByT5 model failed to load")
+
+        verse = "इक्ष्वाकुवंशप्रभवो रामो नाम जनैः श्रुतः"
+        output = engine._generate(engine._normalize_to_iast(verse), "S")
+        members = engine._parse_segmentation(output)
+
+        assert len(members) > 1, f"compound not split: {output!r}"
+        joined = " ".join(members)
+        assert "ikṣvāku" in joined, f"missing ikṣvāku in: {output!r}"
+        assert "vaṃśa" in joined, f"missing vaṃśa in: {output!r}"

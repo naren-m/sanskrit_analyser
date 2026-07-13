@@ -57,7 +57,7 @@ class Analyzer:
 
     1. Normalize input text to SLP1
     2. Check tiered cache (Memory -> Redis -> SQLite)
-    3. If cache miss, run ensemble analysis (Vidyut + Dharmamitra + Heritage)
+    3. If cache miss, run ensemble analysis (Vidyut + Heritage)
     4. Build 4-level parse tree from engine results
     5. Run disambiguation pipeline (Rules -> LLM -> Human flag)
     6. Store result in tiered cache
@@ -177,16 +177,6 @@ class Analyzer:
             except ImportError:
                 logger.warning("Vidyut engine not available")
 
-        if self._config.engines.dharmamitra:
-            try:
-                from sanskrit_analyzer.engines.dharmamitra_engine import DharmamitraEngine
-                engines.append(DharmamitraEngine(
-                    device=self._config.engines.dharmamitra_device,
-                ))
-                logger.debug("Dharmamitra engine loaded")
-            except ImportError:
-                logger.warning("Dharmamitra engine not available")
-
         if self._config.engines.heritage:
             try:
                 from sanskrit_analyzer.engines.heritage_engine import HeritageEngine
@@ -213,7 +203,6 @@ class Analyzer:
 
         ensemble_config = EnsembleConfig(
             vidyut_weight=self._config.engines.vidyut_weight,
-            dharmamitra_weight=self._config.engines.dharmamitra_weight,
             heritage_weight=self._config.engines.heritage_weight,
             local_byt5_weight=self._config.engines.local_byt5_weight,
         )

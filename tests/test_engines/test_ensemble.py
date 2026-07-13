@@ -227,9 +227,8 @@ class TestEnsembleAnalyzer:
         # This tests the factory method
         try:
             analyzer = EnsembleAnalyzer.create_default()
-            assert len(analyzer.engine_names) == 3
+            assert len(analyzer.engine_names) == 2
             assert "vidyut" in analyzer.engine_names
-            assert "dharmamitra" in analyzer.engine_names
             assert "heritage" in analyzer.engine_names
         except ImportError:
             pytest.skip("Default engines not available")

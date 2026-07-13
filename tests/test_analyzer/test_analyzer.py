@@ -40,11 +40,9 @@ class TestAnalyzerInit:
 default_mode: educational
 engines:
   vidyut: true
-  dharmamitra: false
 """)
         analyzer = Analyzer.from_config(config_file)
         assert analyzer.config.default_mode == AnalysisMode.EDUCATIONAL
-        assert analyzer.config.engines.dharmamitra is False
 
 
 class TestAnalyzerAnalyze:
@@ -56,7 +54,6 @@ class TestAnalyzerAnalyze:
         config = Config()
         # Disable all engines to speed up tests
         config.engines.vidyut = False
-        config.engines.dharmamitra = False
         config.engines.heritage = False
         config.cache.redis_enabled = False
         config.cache.sqlite_enabled = False
@@ -358,7 +355,6 @@ class TestAnalyzerBatch:
         """Create analyzer with minimal config."""
         config = Config()
         config.engines.vidyut = False
-        config.engines.dharmamitra = False
         config.engines.heritage = False
         config.cache.redis_enabled = False
         config.cache.sqlite_enabled = False
@@ -406,7 +402,6 @@ class TestAnalyzerHealthCheck:
         """Create analyzer."""
         config = Config()
         config.engines.vidyut = False
-        config.engines.dharmamitra = False
         config.engines.heritage = False
         return Analyzer(config)
 
@@ -499,11 +494,11 @@ class TestAnalyzerEngines:
         """Test getting available engines."""
         analyzer = Analyzer()
         analyzer._ensemble = MagicMock()
-        analyzer._ensemble.available_engines = ["vidyut", "dharmamitra"]
+        analyzer._ensemble.available_engines = ["vidyut", "heritage"]
 
         engines = analyzer.get_available_engines()
 
-        assert engines == ["vidyut", "dharmamitra"]
+        assert engines == ["vidyut", "heritage"]
 
 
 class TestAnalyzerClearCache:

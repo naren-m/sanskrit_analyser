@@ -11,7 +11,6 @@ class EnsembleConfig:
     """Configuration for the ensemble analyzer."""
 
     vidyut_weight: float = 0.35
-    dharmamitra_weight: float = 0.40
     heritage_weight: float = 0.25
     local_byt5_weight: float = 0.45
     min_agreement_for_high_confidence: float = 0.95
@@ -70,12 +69,12 @@ class EnsembleAnalyzer:
     The ensemble analyzer runs multiple engines in parallel and combines
     their results using configurable weights:
     - Vidyut (Paninian rules): 0.35
-    - Dharmamitra (Neural): 0.40
     - Heritage (Lexicon): 0.25
+    - Local ByT5 (Neural): 0.45
 
     Agreement scoring:
-    - All 3 agree: High confidence (0.95+)
-    - 2 of 3 agree: Medium confidence (0.70-0.95)
+    - All engines agree: High confidence (0.95+)
+    - Majority agree: Medium confidence (0.70-0.95)
     - All differ: Low confidence (<0.70)
     """
 
@@ -97,7 +96,6 @@ class EnsembleAnalyzer:
         # Set up weights
         self._weights = {
             "vidyut": self._config.vidyut_weight,
-            "dharmamitra": self._config.dharmamitra_weight,
             "heritage": self._config.heritage_weight,
             "local_byt5": self._config.local_byt5_weight,
         }
@@ -411,16 +409,14 @@ class EnsembleAnalyzer:
         """Create an ensemble with all default engines.
 
         Returns:
-            EnsembleAnalyzer with Vidyut, Dharmamitra, and Heritage engines.
+            EnsembleAnalyzer with Vidyut and Heritage engines.
         """
-        from sanskrit_analyzer.engines.dharmamitra_engine import DharmamitraEngine
         from sanskrit_analyzer.engines.heritage_engine import HeritageEngine
         from sanskrit_analyzer.engines.vidyut_engine import VidyutEngine
 
         return cls(
             engines=[
                 VidyutEngine(),
-                DharmamitraEngine(),
                 HeritageEngine(),
             ]
         )
