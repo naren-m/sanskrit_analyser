@@ -22,6 +22,13 @@ def test_avagraha_preserved():
     assert n.words == ["rAmo", "'sti"]
 
 
+def test_leading_capital_slp1_not_lowercased():
+    # "Bavati" is SLP1 (word-initial aspirate Ba), not an IAST proper noun.
+    n = normalize("Bavati")
+    assert n.script == "slp1"
+    assert n.words == ["Bavati"]
+
+
 def test_empty_input():
     n = normalize("   ")
     assert n.words == [] and n.slp1 == ""
