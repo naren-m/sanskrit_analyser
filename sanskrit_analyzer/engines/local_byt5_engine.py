@@ -151,7 +151,10 @@ class LocalByT5Engine(EngineBase):
 
         ByT5-Sanskrit works best with IAST/romanized input.
         """
-        script = detect_script(text)
+        # The ensemble feeds engines already-normalized SLP1; plain ASCII
+        # with no script markers (e.g. title-case "Bavati") must therefore
+        # be treated as SLP1, not passed through as IAST.
+        script = detect_script(text, plain_ascii_default=Script.SLP1)
         if script == Script.IAST:
             return text
         return transliterate(text, script, Script.IAST)

@@ -64,7 +64,10 @@ class HeritageEngine(EngineBase):
 
     def _normalize_to_slp1(self, text: str) -> str:
         """Normalize input text to SLP1 for Heritage Engine."""
-        script = detect_script(text)
+        # The ensemble feeds engines already-normalized SLP1; plain ASCII
+        # with no script markers (e.g. title-case "Bavati") must therefore
+        # be treated as SLP1, not re-transliterated as IAST.
+        script = detect_script(text, plain_ascii_default=Script.SLP1)
         if script == Script.SLP1:
             return text
         return transliterate(text, script, Script.SLP1)
