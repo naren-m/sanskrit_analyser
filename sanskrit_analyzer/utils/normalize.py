@@ -12,17 +12,18 @@ _IAST_DIACRITICS = re.compile(r"[āīūṛṝḷḹēōṃḥñṅṇṭḍśṣ
 _SLP1_MARKERS = re.compile(r"[fxzwq]|(?<=[A-Za-z])[A-Z]")
 
 
-def detect_script(text: str, plain_ascii_default: Script = Script.IAST) -> Script:
+def detect_script(text: str, plain_ascii_default: Script | None = None) -> Script:
     """Detect the script of Sanskrit text.
 
     Args:
         text: The Sanskrit text to analyze.
-        plain_ascii_default: Script to report for genuinely ambiguous plain
-            ASCII — no diacritics and no interior SLP1 markers ("Bavati",
-            "Rama", "gamana"), which could be simplified IAST or SLP1 whose
-            only marker is word-initial. Callers that know their input is
-            pipeline-normalized SLP1 should pass Script.SLP1; the default
-            preserves the historical reading of such text as IAST.
+        plain_ascii_default: Script to assume when the text is plain ASCII
+            with no unambiguous markers (no Devanagari, no IAST diacritics,
+            no SLP1-exclusive letters or interior capitals). Title-case SLP1
+            like "Bavati" is indistinguishable from an IAST proper noun like
+            "Rama"; callers that know their input's script (e.g. engines fed
+            already-normalized SLP1 by the ensemble) use this to resolve the
+            ambiguity. None keeps the historical IAST fallback.
 
     Returns:
         The detected Script type.
@@ -60,8 +61,12 @@ def detect_script(text: str, plain_ascii_default: Script = Script.IAST) -> Scrip
     if _SLP1_MARKERS.search(text):
         return Script.SLP1
 
-    # Ambiguous plain ASCII: simplified IAST or word-initial-marker-only SLP1
-    return plain_ascii_default
+    # Plain ASCII with no script markers is ambiguous; honor the caller's hint.
+    if plain_ascii_default is not None:
+        return plain_ascii_default
+
+    # Default to IAST for plain ASCII that might be simplified transliteration
+    return Script.IAST
 
 
 def normalize_slp1(text: str, source_script: Script | None = None) -> str:

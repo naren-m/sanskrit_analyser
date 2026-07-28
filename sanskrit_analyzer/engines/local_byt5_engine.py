@@ -163,6 +163,9 @@ class LocalByT5Engine(EngineBase):
         The pipeline hands engines normalized SLP1, so ambiguous plain ASCII
         (e.g. word-initial-capital SLP1 like "Bavati") is read as SLP1.
         """
+        # The ensemble feeds engines already-normalized SLP1; plain ASCII
+        # with no script markers (e.g. title-case "Bavati") must therefore
+        # be treated as SLP1, not passed through as IAST.
         script = detect_script(text, plain_ascii_default=Script.SLP1)
         if script == Script.IAST:
             return text
