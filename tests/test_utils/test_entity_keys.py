@@ -53,6 +53,24 @@ def test_keys_match_collapses_single_char_misspelling():
     assert keys_match(a, b)
 
 
+def test_canonical_key_folds_mixed_brahmic_spelling():
+    """A name with sibling-script characters spliced in keys identically.
+
+    Without Brahmic normalisation the Gujarati ``વ``/``ા`` are dropped by the
+    Devanagari→IAST transliteration, shortening the key to ``visamitra`` — a
+    different length, so :func:`is_near_spelling_variant`'s equal-length guard
+    can never rescue it (ramayanam#419).
+    """
+    assert canonical_key("विश્વामित्र") == canonical_key("विश्वामित्र")
+
+
+def test_keys_match_collapses_all_vishvamitra_corruptions():
+    """The three corrupted spellings that reached the Ramayanam KG index."""
+    real = canonical_key("विश्वामित्र")
+    for corrupted in ("विश्रामित्र", "विश્વामित्र", "Vइस्टमित्र"):
+        assert keys_match(real, canonical_key(corrupted)), corrupted
+
+
 def test_keys_match_is_conservative_for_short_and_distinct_names():
     assert not keys_match(canonical_key("राम"), canonical_key("रावण"))
     assert not keys_match(canonical_key("नारद"), canonical_key("राम"))

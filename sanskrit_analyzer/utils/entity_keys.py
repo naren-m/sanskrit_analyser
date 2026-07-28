@@ -15,13 +15,16 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from sanskrit_analyzer.utils.script_routing import to_iast
+from sanskrit_analyzer.utils.script_routing import normalize_brahmic, to_iast
 
 
 def canonical_key(name: str) -> str:
     """A script- and case-folded key for entity de-duplication.
 
     Folds ``राम`` / ``रामः`` / ``रामं`` / ``Rama`` to the same key by:
+      0. folding sibling Brahmic scripts onto Devanagari, so a name with (say)
+         Gujarati characters spliced into Devanagari is not silently truncated
+         by the whole-string transliteration in step 1,
       1. normalising to IAST,
       2. stripping combining diacritics (ā→a, ḥ→h, ṃ→m),
       3. lower-casing and keeping only ASCII letters,
@@ -29,7 +32,7 @@ def canonical_key(name: str) -> str:
     """
     if not name:
         return ""
-    s = to_iast(name)
+    s = to_iast(normalize_brahmic(name))
     s = unicodedata.normalize("NFKD", s)
     s = "".join(c for c in s if not unicodedata.combining(c))
     s = re.sub(r"[^a-z]", "", s.lower())
