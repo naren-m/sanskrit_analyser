@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 
 from sanskrit_analyzer.models.scripts import Script
+from sanskrit_analyzer.utils.normalize import detect_script
 from sanskrit_analyzer.utils.transliterate import transliterate
 
 # Any character in the Devanagari Unicode block.
@@ -36,23 +37,31 @@ def is_devanagari(text: str) -> bool:
 def to_devanagari(text: str) -> str:
     """Return *text* in Devanagari, auto-detecting the source script.
 
-    Already-Devanagari text is returned unchanged; otherwise the text is treated
-    as SLP1 and transliterated. This is the script most Sanskrit analyzers
-    segment reliably.
+    The source script (Devanagari / IAST / SLP1) is detected per
+    :func:`detect_script` rather than assumed. The previous "everything
+    non-Devanagari is SLP1" shortcut mangled IAST input — feeding "yogaḥ"
+    through an SLP1->Devanagari pass left the visarga untranslated
+    ("योगḥ" instead of "योगः").
     """
-    if not text or is_devanagari(text):
+    if not text:
         return text
-    return transliterate(text, Script.SLP1, Script.DEVANAGARI)
+    source = detect_script(text)
+    if source == Script.DEVANAGARI:
+        return text
+    return transliterate(text, source, Script.DEVANAGARI)
 
 
 def to_iast(text: str) -> str:
     """Return *text* in IAST, auto-detecting the source script.
 
-    Devanagari is transliterated; Latin text (already IAST, or a plain-English
-    spelling) is returned unchanged.
+    Devanagari and SLP1 are transliterated; text already in IAST (or a plain
+    Latin spelling) is returned unchanged. SLP1 shares the Latin range, so the
+    old is-it-Devanagari check let SLP1 pass through undecoded ("yogaH" stayed
+    "yogaH" instead of becoming "yogaḥ").
     """
     if not text:
         return text
-    if is_devanagari(text):
-        return transliterate(text, Script.DEVANAGARI, Script.IAST)
-    return text
+    source = detect_script(text)
+    if source == Script.IAST:
+        return text
+    return transliterate(text, source, Script.IAST)

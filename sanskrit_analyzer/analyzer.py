@@ -57,7 +57,7 @@ class Analyzer:
 
     1. Normalize input text to SLP1
     2. Check tiered cache (Memory -> Redis -> SQLite)
-    3. If cache miss, run ensemble analysis (Vidyut + Dharmamitra + Heritage)
+    3. If cache miss, run ensemble analysis (Vidyut + Heritage)
     4. Build 4-level parse tree from engine results
     5. Run disambiguation pipeline (Rules -> LLM -> Human flag)
     6. Store result in tiered cache
@@ -177,16 +177,6 @@ class Analyzer:
             except ImportError:
                 logger.warning("Vidyut engine not available")
 
-        if self._config.engines.dharmamitra:
-            try:
-                from sanskrit_analyzer.engines.dharmamitra_engine import DharmamitraEngine
-                engines.append(DharmamitraEngine(
-                    device=self._config.engines.dharmamitra_device,
-                ))
-                logger.debug("Dharmamitra engine loaded")
-            except ImportError:
-                logger.warning("Dharmamitra engine not available")
-
         if self._config.engines.heritage:
             try:
                 from sanskrit_analyzer.engines.heritage_engine import HeritageEngine
@@ -213,7 +203,6 @@ class Analyzer:
 
         ensemble_config = EnsembleConfig(
             vidyut_weight=self._config.engines.vidyut_weight,
-            dharmamitra_weight=self._config.engines.dharmamitra_weight,
             heritage_weight=self._config.engines.heritage_weight,
             local_byt5_weight=self._config.engines.local_byt5_weight,
         )
@@ -343,28 +332,25 @@ class Analyzer:
         if engines:
             self._ensemble._engines = original_engines
 
-        # Validate and re-score splits if validator is available
+        # Validate and re-score splits if validator is available.
+        # The validator rescores VIDYUT splits against a small curated
+        # vocabulary; applying it to segments from other engines (e.g. the
+        # neural ByT5 segmenter) overrides higher-quality segmentation with
+        # vocabulary-driven re-splits, so it only runs on vidyut's raw output.
         assert self._tree_builder is not None
-        if self._split_validator:
-            # Extract raw Segment objects for the validator.
-            # Prefer vidyut engine's raw segments if available; otherwise
-            # convert MergedSegments via to_segment().
-            raw_segments = None
-            if ensemble_result.segments:
-                for ename in ("vidyut",):
-                    engine_result = ensemble_result.engine_results.get(ename)
-                    if engine_result and engine_result.segments:
-                        raw_segments = engine_result.segments
-                        break
+        raw_vidyut_segments = None
+        if ensemble_result.segments:
+            engine_result = ensemble_result.engine_results.get("vidyut")
+            if engine_result and engine_result.segments:
+                raw_vidyut_segments = engine_result.segments
 
-                if raw_segments is None:
-                    # Fallback: convert MergedSegments to Segments
-                    raw_segments = [ms.to_segment() for ms in ensemble_result.segments]
-
+        if self._split_validator and (
+            raw_vidyut_segments is not None or not ensemble_result.segments
+        ):
             # Pass empty list when no engine produced segments; the
             # validator can still split using vocabulary alone.
             validated_segments = self._split_validator.validate_and_rescore(
-                raw_segments or [],
+                raw_vidyut_segments or [],
                 normalized_slp1,
             )
             # Build tree from validated segments

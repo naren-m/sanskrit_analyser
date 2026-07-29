@@ -5,8 +5,10 @@ same fallthrough order the facility shipped with:
 
 1. ``prefer_analyzer`` → the high-level :class:`sanskrit_analyzer.Analyzer`
    (real word splitting; opt-in, currently degrades on long verses).
-2. ``use_dharmamitra`` → Dharmamitra ByT5 segmentation + per-word kosha
-   enrichment (the hybrid: ByT5 segments, kosha enriches).
+2. ``use_segmenter`` → the local sandhi-aware DP segmenter
+   (:mod:`sanskrit_analyzer.dhatu.segmenter`) + per-word kosha enrichment. This
+   replaces the removed remote Dharmamitra API and runs fully offline.
+   (``use_dharmamitra`` is a deprecated back-compat alias for this flag.)
 3. fallback → the local :mod:`~sanskrit_analyzer.deep_read.kosha_engine`
    (whitespace/danda tokenization + de-sandhi kosha lookup).
 
@@ -23,16 +25,18 @@ import asyncio
 import logging
 from typing import Any
 
-from sanskrit_analyzer.deep_read import dharmamitra_segmenter as dseg
 from sanskrit_analyzer.deep_read import kosha_engine as engine
 from sanskrit_analyzer.deep_read.models import DeepReadResult
+from sanskrit_analyzer.dhatu import segmenter as local_segmenter
+from sanskrit_analyzer.dhatu.identifier import rank_analyses
 
 logger = logging.getLogger(__name__)
 
-_DHARMAMITRA_NOTES = [
-    "Segmentation by the Dharmamitra ByT5 model (real sandhi/compound splitting, "
-    "e.g. इक्ष्वाकुवंशप्रभवो → ikṣvāku · vaṃśa · prabhava); per-word dhatu/meaning "
-    "by vidyut.kosha. Hybrid: ByT5 segments, kosha enriches.",
+_SEGMENTER_NOTES = [
+    "Segmentation by the local sandhi-aware DP splitter over the vidyut.kosha "
+    "lexicon (real sandhi/compound splitting, e.g. इक्ष्वाकुवंशप्रभवो → "
+    "ikṣvāku · vaṃśa · prabhava); per-word dhatu/meaning by vidyut.kosha. Fully "
+    "offline — no network.",
     "Dhatu meaning artha_sa is authoritative (Sanskrit); english is best-effort.",
 ]
 
@@ -59,7 +63,7 @@ class DeepRead:
     config:
         Optional :class:`sanskrit_analyzer.Config`. Only consulted for the
         ``prefer_analyzer`` path, where a :class:`sanskrit_analyzer.Analyzer` is
-        built lazily. The local kosha + Dharmamitra paths need no config and
+        built lazily. The local kosha + segmenter paths need no config and
         preserve the facility's current defaults.
     """
 
@@ -69,27 +73,44 @@ class DeepRead:
 
     # ------------------------------------------------------------------ public
     def analyze(
-        self, text: str, prefer_analyzer: bool = False, use_dharmamitra: bool = True
+        self,
+        text: str,
+        prefer_analyzer: bool = False,
+        use_segmenter: bool = True,
+        use_byt5: bool = True,
+        use_dharmamitra: bool | None = None,
     ) -> DeepReadResult:
         """Analyze a raw Sanskrit line into typed tokens with candidate dhātus.
 
-        Uses the local ``vidyut.kosha`` + de-sandhi engine by default: on real
-        running-text verses it keeps padas whole (रामो→राम, नियतात्मा→niyatAtman)
-        and labels true compounds honestly. The upstream ``Analyzer`` path
-        (``prefer_analyzer=True``) currently degrades long verses — its cheda
-        fallback fragments and transliteration-corrupts sandhi'd padas — so it
-        stays opt-in until that is fixed (see issues #328–331). It is ready to
-        become the default once it beats the local engine on the Rāmāyaṇa gold
-        eval.
+        Primary path: the local sandhi-aware DP segmenter (real compound
+        splitting) + ``vidyut.kosha`` dhatu enrichment — fully offline. Falls
+        through to the local kosha-only engine when the segmenter data is absent.
+        The upstream ``Analyzer`` path (``prefer_analyzer=True``) currently
+        degrades long verses, so it stays opt-in (see issues #328–331).
+
+        ``use_byt5`` (default on) uses the locally-cached ByT5 model for
+        segmentation + POS-based candidate ranking (higher recall/disambiguation
+        at ~2 s/verse and a ~2 GB resident model, loaded once per process). Set
+        ``use_byt5=False`` for the fast, dependency-free rule path; either way it
+        degrades to the rule path automatically when ByT5 is unavailable.
+
+        ``use_dharmamitra`` is a deprecated back-compat alias for
+        ``use_segmenter`` (the remote Dharmamitra API has been removed; the
+        segmenter is now local). When given, it overrides ``use_segmenter``.
         """
+        if use_dharmamitra is not None:
+            use_segmenter = use_dharmamitra
         return DeepReadResult.from_legacy(
-            self._analyze_text(text, prefer_analyzer, use_dharmamitra)
+            self._analyze_text(text, prefer_analyzer, use_segmenter, use_byt5)
         )
 
-    def analyze_via_dharmamitra(self, text: str) -> DeepReadResult | None:
-        """Dharmamitra ByT5 segmentation + kosha enrichment, or ``None``."""
-        d = self._analyze_via_dharmamitra(text)
+    def analyze_via_segmenter(self, text: str) -> DeepReadResult | None:
+        """Local DP segmentation + kosha enrichment, or ``None``."""
+        d = self._analyze_via_segmenter(text)
         return DeepReadResult.from_legacy(d) if d is not None else None
+
+    # Deprecated: the remote Dharmamitra API is gone; kept for back-compat.
+    analyze_via_dharmamitra = analyze_via_segmenter
 
     def analyze_via_analyzer(self, text: str) -> DeepReadResult | None:
         """Upstream :class:`Analyzer` segmentation path, or ``None``."""
@@ -98,7 +119,11 @@ class DeepRead:
 
     # ------------------------------------------------------- dict-shaped core
     def _analyze_text(
-        self, text: str, prefer_analyzer: bool = False, use_dharmamitra: bool = True
+        self,
+        text: str,
+        prefer_analyzer: bool = False,
+        use_segmenter: bool = True,
+        use_byt5: bool = True,
     ) -> dict[str, Any]:
         text = (text or "").strip()
 
@@ -107,20 +132,20 @@ class DeepRead:
             if via_analyzer is not None and via_analyzer.get("tokens"):
                 return via_analyzer
 
-        # Primary: Dharmamitra ByT5 segmentation + kosha dhatu enrichment. Falls
-        # through to the local kosha-only engine if the service is unreachable
-        # (or when disabled, e.g. in offline unit tests).
-        if use_dharmamitra:
-            via_dm = self._analyze_via_dharmamitra(text)
-            if via_dm is not None and via_dm.get("tokens"):
-                return via_dm
+        # Primary: local DP segmentation + kosha dhatu enrichment. Falls through
+        # to the kosha-only engine if the segmenter data is absent (or when
+        # disabled, e.g. in offline unit tests).
+        if use_segmenter:
+            via_seg = self._analyze_via_segmenter(text, use_byt5=use_byt5)
+            if via_seg is not None and via_seg.get("tokens"):
+                return via_seg
 
         pieces = engine.tokenize(text)
         try:
             tokens = [engine.analyze_word(tok) for tok in pieces]
         except engine.VidyutUnavailable as exc:
-            # Dharmamitra unreachable AND the vidyut bundle absent: degrade to
-            # segmentation-only unknown tokens instead of crashing the request.
+            # The vidyut bundle is absent: degrade to segmentation-only unknown
+            # tokens instead of crashing the request.
             logger.warning(
                 "vidyut kosha unavailable; degrading to unknown tokens: %s", exc
             )
@@ -156,23 +181,29 @@ class DeepRead:
             "notes": _NOTES,
         }
 
-    def _analyze_via_dharmamitra(self, text: str) -> dict[str, Any] | None:
-        """Segment with Dharmamitra ByT5, enrich each word with vidyut.kosha.
+    def _analyze_via_segmenter(
+        self, text: str, use_byt5: bool = True
+    ) -> dict[str, Any] | None:
+        """Split the line, enrich each word with vidyut.kosha, rank candidates.
 
-        Returns the standard token shape, or ``None`` if the segmenter is
-        unavailable (so the caller falls back to the local engine).
+        Segments with the local DP splitter by default, or the ByT5 model when
+        ``use_byt5`` is set (falling back to the DP splitter if ByT5 is
+        unavailable). Returns the standard token shape, or ``None`` if no
+        segmenter is available (so the caller falls back to the kosha-only path).
         """
         text = (text or "").strip()
         if not text:
             return None
-        words_iast = dseg.segment(text)
+
+        segment_fn, pos_hint_fn, engine_label = self._segmentation_source(use_byt5)
+        words_iast = segment_fn(text)
         if not words_iast:
             return None
 
         tokens: list[dict[str, Any]] = []
         for w_iast in words_iast:
             try:
-                surface_dev = dseg.iast_to_devanagari(w_iast)
+                surface_dev = engine.to_devanagari(engine.slp(w_iast, "Iast"))
             except Exception:
                 surface_dev = w_iast
             try:
@@ -185,6 +216,10 @@ class DeepRead:
                     "analyses": [{"kind": "unknown", "lemma": None,
                                   "dhatu": None, "morphology": {}}],
                 }
+            # Re-rank so homographs (रामः → noun राम, not the short-root verb √rā)
+            # surface the plausible reading first; use the ByT5 POS when present.
+            pos = pos_hint_fn(w_iast) if pos_hint_fn else None
+            tok["analyses"] = rank_analyses(tok.get("analyses", []), pos_hint=pos)
             tokens.append(tok)
 
         try:
@@ -194,10 +229,22 @@ class DeepRead:
         return {
             "input": text,
             "slp1": slp1,
-            "engine": "dharmamitra+kosha",
+            "engine": engine_label,
             "tokens": tokens,
-            "notes": _DHARMAMITRA_NOTES,
+            "notes": _SEGMENTER_NOTES,
         }
+
+    @staticmethod
+    def _segmentation_source(use_byt5: bool):
+        """Return ``(segment_fn, pos_hint_fn, engine_label)`` for the request."""
+        if use_byt5:
+            from sanskrit_analyzer.dhatu.byt5_ranker import get_shared_adapter
+
+            adapter = get_shared_adapter()
+            if adapter.is_available():
+                return adapter.segment, adapter.pos_hint, "byt5+kosha"
+            logger.info("ByT5 requested but unavailable; using local DP segmenter.")
+        return local_segmenter.segment, None, "local-segmenter+kosha"
 
     def _analyze_via_analyzer(self, text: str) -> dict[str, Any] | None:
         """Analyze ``text`` with the upstream :class:`Analyzer`.

@@ -28,7 +28,7 @@ class AnalyzeRequest(BaseModel):
     )
     engines: list[str] | None = Field(
         default=None,
-        description="Optional list of engines to use (vidyut, dharmamitra, heritage)",
+        description="Optional list of engines to use (vidyut, heritage)",
     )
     bypass_cache: bool = Field(
         default=False,

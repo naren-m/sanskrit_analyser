@@ -1,11 +1,12 @@
 """Golden tests for sandhi split quality.
 
-These golden lemmas were calibrated with the Dharmamitra ByT5 segmenter (a live
-API) available. When that service is unreachable the analyzer degrades to the
-local Vidyut splitter, which produces different (lower-quality) splits — e.g.
-``nirodha`` → ``niruD`` instead of ``niroDa``. Asserting the golden values in
-that degraded state tests infrastructure availability, not our code, so the
-module skips when the Dharmamitra segmenter is unavailable.
+These golden lemmas were calibrated with a neural ByT5 segmenter available. The
+ensemble engine that provided it has since been removed, so the probe below
+always reports it unavailable and the module skips. When only the local Vidyut
+splitter is available the analyzer produces different (lower-quality) splits —
+e.g. ``nirodha`` → ``niruD`` instead of ``niroDa`` — so asserting the golden
+values would test infrastructure, not our code. The golden splits are revisited
+in a later phase.
 """
 
 import json
@@ -37,8 +38,8 @@ def _dharmamitra_available() -> bool:
 def analyzer():
     if not _dharmamitra_available():
         pytest.skip(
-            "Dharmamitra segmenter unavailable (live API); golden splits were "
-            "calibrated with it and degrade to Vidyut when it is down"
+            "Neural segmenter unavailable (ensemble engine removed); golden "
+            "splits were calibrated with it and degrade to Vidyut without it"
         )
     try:
         return Analyzer(Config())

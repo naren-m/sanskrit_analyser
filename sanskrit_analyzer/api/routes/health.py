@@ -59,7 +59,6 @@ async def detailed_health_check(request: Request) -> DetailedHealthResponse:
         version=__version__,
         engines={
             "vidyut": health.get("engine_vidyut", False),
-            "dharmamitra": health.get("engine_dharmamitra", False),
             "heritage": health.get("engine_heritage", False),
         },
         cache={

@@ -31,7 +31,7 @@ class LocalByT5Engine(EngineBase):
     - Lemmatization (finding root forms)
     - Morphosyntactic analysis (case, gender, number, etc.)
 
-    This provides the same capabilities as the Dharmamitra API but runs
+    This provides the same capabilities as a remote neural segmenter but runs
     entirely offline with no rate limits or network dependencies.
 
     Example:
@@ -53,6 +53,8 @@ class LocalByT5Engine(EngineBase):
         model_name: str = DEFAULT_MODEL,
         device: str = "auto",
         max_length: int = 512,
+        input_max_length: int = 1024,
+        max_new_tokens: int = 256,
         load_on_init: bool = True,
     ) -> None:
         """Initialize the local ByT5 engine.
@@ -60,12 +62,19 @@ class LocalByT5Engine(EngineBase):
         Args:
             model_name: HuggingFace model name or local path.
             device: Device to use ("auto", "cpu", "cuda", "mps").
-            max_length: Maximum sequence length for generation.
+            max_length: Legacy sequence-length hint (kept for callers; not used
+                to cap generation — see input_max_length / max_new_tokens).
+            input_max_length: Max byte-length window for tokenizing input. ByT5
+                is byte-level (~512 bytes ≈ 170 Devanagari chars), so a wider
+                window keeps long verses from being byte-truncated.
+            max_new_tokens: Max number of new tokens to generate (output budget).
             load_on_init: Whether to load model immediately or lazily.
         """
         self._model_name = model_name
         self._device_preference = device
         self._max_length = max_length
+        self._input_max_length = input_max_length
+        self._max_new_tokens = max_new_tokens
 
         self._model: Any = None
         self._tokenizer: Any = None
@@ -150,6 +159,9 @@ class LocalByT5Engine(EngineBase):
         """Normalize input text to IAST for the model.
 
         ByT5-Sanskrit works best with IAST/romanized input.
+
+        The pipeline hands engines normalized SLP1, so ambiguous plain ASCII
+        (e.g. word-initial-capital SLP1 like "Bavati") is read as SLP1.
         """
         # The ensemble feeds engines already-normalized SLP1; plain ASCII
         # with no script markers (e.g. title-case "Bavati") must therefore
@@ -174,22 +186,25 @@ class LocalByT5Engine(EngineBase):
         # Prepare input with task prefix
         input_text = f"{task_prefix} {text}"
 
-        # Tokenize
+        # Tokenize. ByT5 is byte-level, so use the wider input window to avoid
+        # byte-truncating long verses before the model ever sees them.
         inputs = self._tokenizer(
             input_text,
             return_tensors="pt",
-            max_length=self._max_length,
+            max_length=self._input_max_length,
             truncation=True,
         )
         inputs = {k: v.to(self._device) for k, v in inputs.items()}
 
-        # Generate
+        # Generate greedily. Beam search with early_stopping halts the beam at
+        # the first EOS and catastrophically truncates output (e.g. a whole
+        # compound collapsing to "ik"); greedy decoding runs to the real end.
+        # Cap by max_new_tokens (output budget), not the input window.
         with torch.no_grad():
             outputs = self._model.generate(
                 **inputs,
-                max_length=self._max_length,
-                num_beams=4,
-                early_stopping=True,
+                max_new_tokens=self._max_new_tokens,
+                num_beams=1,
             )
 
         # Decode
@@ -258,11 +273,22 @@ class LocalByT5Engine(EngineBase):
 
         # Format: "surface_lemma_TAGS surface_lemma_TAGS ..."
         # Example: "rāma_rāma_SNM vanam_vana_SANe gacchati_gam_VP3S"
+        # Compound members have an EMPTY surface slot: "__citta_U __vṛtti_U"
         for token in clean_output.split():
             parts = token.split("_")
-            if len(parts) >= 2:
+            if len(parts) >= 3 and parts[0] == "" and parts[1] == "":
+                # Compound-member token "__lemma_TAGS": no surface form given
+                lemma = parts[2]
+                tags = parts[3] if len(parts) > 3 else ""
+                results.append({
+                    "surface": lemma,
+                    "lemma": lemma,
+                    "tags": tags,
+                })
+            elif len(parts) >= 2:
                 surface = parts[0]
-                lemma = parts[1]
+                # Empty lemma slot ("surface__TAGS"): fall back to surface
+                lemma = parts[1] or parts[0]
                 tags = parts[2] if len(parts) > 2 else ""
                 results.append({
                     "surface": surface,

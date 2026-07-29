@@ -101,7 +101,6 @@ class TestHealthEndpoint:
         # Check structure
         assert isinstance(data["engines"], dict)
         assert "vidyut" in data["engines"]
-        assert "dharmamitra" in data["engines"]
         assert "heritage" in data["engines"]
 
         assert isinstance(data["cache"], dict)

@@ -45,10 +45,6 @@ class EngineConfig:
 
     vidyut: bool = True
     vidyut_weight: float = 0.35
-    dharmamitra: bool = True
-    dharmamitra_weight: float = 0.40
-    dharmamitra_model: str = "buddhist-nlp/byt5-sanskrit"
-    dharmamitra_device: str = "auto"
     heritage: bool = True
     heritage_weight: float = 0.25
     heritage_mode: str = "local"  # local | remote | fallback
@@ -69,7 +65,6 @@ class EngineConfig:
         # Validate weights
         for name, weight in [
             ("vidyut_weight", self.vidyut_weight),
-            ("dharmamitra_weight", self.dharmamitra_weight),
             ("heritage_weight", self.heritage_weight),
             ("local_byt5_weight", self.local_byt5_weight),
         ]:
@@ -85,10 +80,6 @@ class EngineConfig:
 
         # Validate device settings
         valid_devices = ("auto", "cpu", "cuda", "mps")
-        if self.dharmamitra_device not in valid_devices:
-            raise ConfigError(
-                f"dharmamitra_device must be one of {valid_devices}, got {self.dharmamitra_device}"
-            )
         if self.local_byt5_device not in valid_devices:
             raise ConfigError(
                 f"local_byt5_device must be one of {valid_devices}, got {self.local_byt5_device}"
@@ -487,10 +478,6 @@ log_level: INFO
 engines:
   vidyut: true
   vidyut_weight: 0.35
-  dharmamitra: true
-  dharmamitra_weight: 0.40
-  dharmamitra_model: buddhist-nlp/byt5-sanskrit
-  dharmamitra_device: auto
   heritage: true
   heritage_weight: 0.25
   heritage_mode: local  # local | remote | fallback
@@ -566,10 +553,6 @@ academic:
             "engines": {
                 "vidyut": self.engines.vidyut,
                 "vidyut_weight": self.engines.vidyut_weight,
-                "dharmamitra": self.engines.dharmamitra,
-                "dharmamitra_weight": self.engines.dharmamitra_weight,
-                "dharmamitra_model": self.engines.dharmamitra_model,
-                "dharmamitra_device": self.engines.dharmamitra_device,
                 "heritage": self.engines.heritage,
                 "heritage_weight": self.engines.heritage_weight,
                 "heritage_mode": self.engines.heritage_mode,

@@ -24,7 +24,6 @@ class TestEngineConfig:
         config = EngineConfig()
         assert config.vidyut is True
         assert config.vidyut_weight == 0.35
-        assert config.dharmamitra is True
         assert config.heritage is True
 
     def test_validate_success(self) -> None:
@@ -42,12 +41,6 @@ class TestEngineConfig:
         """Test validation with invalid heritage mode."""
         config = EngineConfig(heritage_mode="invalid")
         with pytest.raises(ConfigError, match="heritage_mode"):
-            config.validate()
-
-    def test_validate_invalid_device(self) -> None:
-        """Test validation with invalid device."""
-        config = EngineConfig(dharmamitra_device="tpu")
-        with pytest.raises(ConfigError, match="dharmamitra_device"):
             config.validate()
 
 
@@ -190,7 +183,6 @@ default_mode: educational
 log_level: DEBUG
 engines:
   vidyut: false
-  dharmamitra_weight: 0.5
 cache:
   memory_max_size: 500
 """)
@@ -199,7 +191,6 @@ cache:
         assert config.default_mode == AnalysisMode.EDUCATIONAL
         assert config.log_level == "DEBUG"
         assert config.engines.vidyut is False
-        assert config.engines.dharmamitra_weight == 0.5
         assert config.cache.memory_max_size == 500
 
     def test_from_file_invalid_yaml(self, tmp_path: Path) -> None:
