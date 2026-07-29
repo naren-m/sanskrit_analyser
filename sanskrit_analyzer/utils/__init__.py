@@ -13,7 +13,7 @@ from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1
 # ``transliterate`` functions below, so they are NOT re-exported under those names
 # — import them from ``sanskrit_analyzer.utils.script_routing`` when you want the
 # auto-detecting behaviour.
-from sanskrit_analyzer.utils.script_routing import is_devanagari
+from sanskrit_analyzer.utils.script_routing import is_devanagari, normalize_brahmic
 from sanskrit_analyzer.utils.transliterate import (
     to_devanagari,
     to_iast,
@@ -30,6 +30,7 @@ __all__ = [
     "normalize_slp1",
     # Auto-detecting script routing + entity-key folding (#393)
     "is_devanagari",
+    "normalize_brahmic",
     "canonical_key",
     "fold_virama",
     "is_near_spelling_variant",
