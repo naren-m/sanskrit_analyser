@@ -106,6 +106,10 @@ target-version = "py310"
 select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.pytest.ini_options]
+# NOTE: --strict-config cannot be set here. pytest validates ini keys while
+# loading the ini file, so a flag coming *from* addopts arrives too late to
+# govern that validation and `asyncio_mode` still degrades to a warning. The
+# equivalent guard lives in conftest.py instead.
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
