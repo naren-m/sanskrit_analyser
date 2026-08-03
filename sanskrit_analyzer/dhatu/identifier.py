@@ -21,6 +21,7 @@ from typing import Any, Callable
 
 from sanskrit_analyzer.deep_read import kosha_engine
 from sanskrit_analyzer.dhatu import segmenter
+from sanskrit_analyzer.dhatu.resolver import get_dhatu_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -104,15 +105,25 @@ class DhatuIdentifier:
     pos_hint_fn:
         Optional ``iast_member -> "noun"|"verb"|None`` used to rank candidates
         (e.g. the ByT5 SLM POS tag). Optional; ranking degrades gracefully.
+    preferred_root_fn:
+        Optional ``slp1_form -> root_slp1|None`` consulted before the
+        :class:`~sanskrit_analyzer.dhatu.resolver.DhatuResolver`'s own
+        heuristics settle a homographic stem (e.g. रागः could be rāj/rag/rañj).
+        Meant to be backed by a dictionary's own cited etymology (MW's "fr.
+        √rañj"), which this package does not carry — that lookup is the
+        consuming application's concern. Optional; resolution degrades
+        gracefully to the resolver's own ranking without it.
     """
 
     def __init__(
         self,
         segment_fn: Callable[[str], list[str] | None] | None = None,
         pos_hint_fn: Callable[[str], str | None] | None = None,
+        preferred_root_fn: Callable[[str], str | None] | None = None,
     ) -> None:
         self._segment = segment_fn or segmenter.segment
         self._pos_hint = pos_hint_fn
+        self._preferred_root = preferred_root_fn
 
     @classmethod
     def with_byt5(cls) -> "DhatuIdentifier":
@@ -149,6 +160,7 @@ class DhatuIdentifier:
             analysis = kosha_engine.analyze_word(dev)
             pos = self._pos_hint(member_iast) if self._pos_hint else None
             ranked = rank_analyses(analysis.get("analyses", []), pos_hint=pos)
+            self._resolve_roots(ranked, analysis.get("slp1"))
             results.append(
                 TokenResult(
                     surface=analysis.get("surface", dev),
@@ -158,6 +170,73 @@ class DhatuIdentifier:
                 )
             )
         return results
+
+    def _resolve_roots(self, ranked: list[dict[str, Any]], slp1: str | None) -> None:
+        """Overwrite the ranked analyses' root with the resolver's reading.
+
+        ``vidyut.kosha``'s own dhātu link is sometimes the wrong homograph
+        among several (vidyā reads as vi+√dā 'give', not √vid 'know') or
+        carries anubandha residue instead of the clean root (yogaḥ -> "yoji",
+        not "yuj"). It is also missing entirely for many upasarga-prefixed
+        nominals that the Kośa files as a plain, unlinked pratipadika
+        (anuśāsana carries no dhātu link even though its bare derivative
+        śāsana does). :class:`~sanskrit_analyzer.dhatu.resolver.DhatuResolver`
+        fixes all three, so the top dhātu-bearing analysis here gets its root
+        overwritten with the resolver's reading; when none of the ranked
+        analyses carries a dhātu at all, the resolver's own (possibly peeled)
+        reading is inserted as a new front-ranked analysis instead.
+
+        No-op when the vidyut data bundle is unavailable or nothing resolves,
+        so callers see exactly the pre-Task-4 behaviour in that case.
+        """
+        if not slp1:
+            return
+        resolver = get_dhatu_resolver()
+        if not resolver._ensure():
+            return
+
+        lemma = next((a.get("lemma") for a in ranked if a.get("lemma")), None)
+        preferred = self._preferred_root(slp1) if self._preferred_root else None
+        candidates = [c for c in (slp1, lemma) if c]
+        info = resolver.resolve(*candidates, preferred_root=preferred)
+        if not info:
+            return
+
+        for a in ranked:
+            dhatu = a.get("dhatu")
+            if dhatu:
+                dhatu["root"] = info["root_slp1"]
+                dhatu["root_dev"] = kosha_engine.to_devanagari(info["root_slp1"])
+                dhatu["gana_num"] = info["gana"]
+                dhatu["artha_sa"] = info["artha_slp1"]
+                dhatu["artha_iast"] = kosha_engine.to_iast(info["artha_slp1"])
+                dhatu["english"] = kosha_engine.english_for_root(info["root_slp1"])
+                dhatu["prefixes"] = info["prefixes_slp1"]
+                dhatu["verified"] = info["verified"]
+                break
+        else:
+            # No analysis carried a dhātu at all (the anuśāsana case): the
+            # resolver's own reading — possibly reached by peeling a canonical
+            # upasarga — is the only one available, so surface it directly.
+            ranked.insert(
+                0,
+                {
+                    "kind": "derived",
+                    "lemma": lemma,
+                    "dhatu": {
+                        "root": info["root_slp1"],
+                        "root_dev": kosha_engine.to_devanagari(info["root_slp1"]),
+                        "gana": None,
+                        "gana_num": info["gana"],
+                        "artha_sa": info["artha_slp1"],
+                        "artha_iast": kosha_engine.to_iast(info["artha_slp1"]),
+                        "english": kosha_engine.english_for_root(info["root_slp1"]),
+                        "prefixes": info["prefixes_slp1"],
+                        "verified": info["verified"],
+                    },
+                    "morphology": {},
+                },
+            )
 
     @staticmethod
     def _whitespace_members(text: str) -> list[str]:

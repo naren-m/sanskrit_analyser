@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from sanskrit_analyzer.deep_read import kosha_engine
 from sanskrit_analyzer.dhatu import DhatuIdentifier
 from sanskrit_analyzer.dhatu.identifier import rank_analyses
-from sanskrit_analyzer.deep_read import kosha_engine
-
+from sanskrit_analyzer.dhatu.resolver import get_dhatu_resolver
 
 # --- ranking: pure, no vidyut data needed --------------------------------------
 
@@ -87,3 +87,43 @@ def test_identify_rama_not_spurious_finite_verb():
     results = DhatuIdentifier().identify("रामः")
     top = results[0].analyses[0]
     assert top["kind"] != "verb" or len((top.get("dhatu") or {}).get("root") or "") > 2
+
+
+# --- identify: delegates to DhatuResolver for the actual root ------------------
+
+_needs_resolver = pytest.mark.skipif(
+    not get_dhatu_resolver()._ensure(),
+    reason="vidyut data bundle not available for DhatuResolver",
+)
+
+
+@_needs_resolver
+def test_identify_gives_clean_roots_not_anubandha_residue():
+    # योगः must resolve to the clean root yuj, not the Kośa's raw yoji residue.
+    results = DhatuIdentifier().identify("योगः")
+    roots = [r.dhatu["root"] for r in results if r.dhatu]
+    assert "yuj" in roots
+
+
+@_needs_resolver
+def test_identify_peels_upasarga():
+    # अनुशासनम् is filed by the Kośa as a plain, unlinked nominal; the resolver
+    # peels the anu- upasarga and resolves the remainder to √śās.
+    results = DhatuIdentifier().identify("अनुशासनम्")
+    assert any(r.dhatu and r.dhatu["root"] == "SAs" for r in results)
+
+
+@_needs_resolver
+def test_identify_prefers_ha_over_han_for_hanam():
+    """hānam is 'abandonment' (√hā), not 'killing' (√han)."""
+    results = DhatuIdentifier().identify("हानम्")
+    roots = [r.dhatu["root"] for r in results if r.dhatu]
+    assert "hA" in roots
+    assert roots[0] != "han"
+
+
+@_needs_resolver
+def test_preferred_root_hook_settles_a_homograph():
+    ident = DhatuIdentifier(preferred_root_fn=lambda w: "raYj")
+    results = ident.identify("रागः")
+    assert any(r.dhatu and r.dhatu["root"] == "raYj" for r in results)
