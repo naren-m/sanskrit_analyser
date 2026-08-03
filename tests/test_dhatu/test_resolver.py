@@ -134,11 +134,14 @@ class TestLeadingItMarkers:
 
 
 class TestImplausibleRoots:
-    """The Dhātupāṭha index reduces a few roots to a single consonant — it
-    reads the ghu- of ghuṇa/ghuṭa/ghuṣa as an it-marker and files √ghuṇ under
-    'ṇ'. No Sanskrit root is a bare consonant (single-*vowel* roots such as
-    √ṛ and √i are real and must survive), so such an entry is upstream damage
-    and is better shown as nothing than as a confident √n."""
+    """The Dhātupāṭha index used to reduce a few roots to a single consonant
+    — reading the ghu- of ghuṇa/ghuṭa/ghuṣa as an it-marker and filing √ghuṇ
+    under 'ṇ'. That specific case is now fixed at source (see
+    test_ghu_root_now_resolves_properly below). No Sanskrit root is a bare
+    consonant (single-*vowel* roots such as √ṛ and √i are real and must
+    survive), so the bare-consonant guard remains as defence in depth against
+    upstream damage of this kind more generally — better shown as nothing
+    than as a confident √n."""
 
     def test_ghu_root_now_resolves_properly(self, resolver):
         """Task 2 fixed this at source: √ghuṇ keeps its initial and verifies."""

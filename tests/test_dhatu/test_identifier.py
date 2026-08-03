@@ -124,6 +124,21 @@ def test_identify_prefers_ha_over_han_for_hanam():
 
 @_needs_resolver
 def test_preferred_root_hook_settles_a_homograph():
-    ident = DhatuIdentifier(preferred_root_fn=lambda w: "raYj")
+    """The hook is meant for a dictionary keyed by stem/lemma, so it must be
+    called with the SLP1 *lemma* (here "rAgi", the base reading vidyut carries
+    for रागः), not the inflected surface ("rAgaH", with its visarga). A hook
+    that only ever sees inflected surfaces would miss on every stem-keyed
+    dictionary lookup, defeating its purpose."""
+    received: list[str] = []
+
+    def preferred_root_fn(w: str) -> str | None:
+        received.append(w)
+        return "raYj"
+
+    ident = DhatuIdentifier(preferred_root_fn=preferred_root_fn)
     results = ident.identify("रागः")
+
+    assert received == ["rAgi"], (
+        f"hook must receive the SLP1 lemma, not the inflected surface; got {received!r}"
+    )
     assert any(r.dhatu and r.dhatu["root"] == "raYj" for r in results)

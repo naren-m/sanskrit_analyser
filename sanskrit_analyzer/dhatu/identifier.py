@@ -106,13 +106,19 @@ class DhatuIdentifier:
         Optional ``iast_member -> "noun"|"verb"|None`` used to rank candidates
         (e.g. the ByT5 SLM POS tag). Optional; ranking degrades gracefully.
     preferred_root_fn:
-        Optional ``slp1_form -> root_slp1|None`` consulted before the
+        Optional ``slp1_lemma -> root_slp1|None`` consulted before the
         :class:`~sanskrit_analyzer.dhatu.resolver.DhatuResolver`'s own
         heuristics settle a homographic stem (e.g. रागः could be rāj/rag/rañj).
         Meant to be backed by a dictionary's own cited etymology (MW's "fr.
         √rañj"), which this package does not carry — that lookup is the
         consuming application's concern. Optional; resolution degrades
         gracefully to the resolver's own ranking without it.
+
+        Note the two hooks differ in what form they receive: ``pos_hint_fn``
+        is called with the segmented **IAST member** (the inflected surface),
+        while ``preferred_root_fn`` is called with the **SLP1 lemma**
+        (falling back to the SLP1 surface when no lemma is available) — a
+        dictionary's etymology is keyed by stem, not by inflected surface.
     """
 
     def __init__(
@@ -196,7 +202,7 @@ class DhatuIdentifier:
             return
 
         lemma = next((a.get("lemma") for a in ranked if a.get("lemma")), None)
-        preferred = self._preferred_root(slp1) if self._preferred_root else None
+        preferred = self._preferred_root(lemma or slp1) if self._preferred_root else None
         candidates = [c for c in (slp1, lemma) if c]
         info = resolver.resolve(*candidates, preferred_root=preferred)
         if not info:
