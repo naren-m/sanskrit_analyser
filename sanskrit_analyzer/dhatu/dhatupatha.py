@@ -20,10 +20,15 @@ _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 VOWELS: set[str] = set("aAiIuUfFxXeEoO")
 CONSONANTS: set[str] = set("kKgGNcCjJYwWqQRtTdDnpPbBmyrlvSzsh")
 
-#: Traditional Dhātupāṭha "cutu" it-clusters conventionally prefixed to a
-#: root purely to disambiguate it in the recitation list (e.g. "qukfY" for
-#: kf, "quBf\\Y" for Bf).
-_IT_PREFIX_CLUSTERS = ("qu", "wu", "Qu", "Wu", "Gu")
+#: Traditional Dhātupāṭha it-clusters prefixed to a root purely to
+#: disambiguate it in the recitation list: ḍukṛñ is √kṛ, ñiṣvapa is √svap.
+#: "Gu" is deliberately absent — eleven roots (√ghuṇ, √ghūrṇ, √ghuṣ ...) own
+#: that ghu- as their own initial, and stripping it left a bare consonant.
+_IT_PREFIX_CLUSTERS = ("qu", "wu", "Yi")
+
+#: The ovit marker, written with a tilde of its own and standing before the
+#: root (ohāk = √hā). It may follow another cluster: ṭuosphūrjā.
+_IT_PREFIX_OVIT = "o~"
 
 
 def strip_anubandhas(upadesha: str) -> str:
@@ -37,10 +42,18 @@ def strip_anubandhas(upadesha: str) -> str:
     """
     s = upadesha.replace("^", "").replace("\\", "")
 
-    for prefix in _IT_PREFIX_CLUSTERS:
-        if s.startswith(prefix) and len(s) > len(prefix) + 1:
-            s = s[len(prefix):]
-            break
+    # Leading markers may stack (ṭu + o~ + sphūrjā), so peel until none match.
+    peeled = True
+    while peeled:
+        peeled = False
+        for prefix in _IT_PREFIX_CLUSTERS:
+            if s.startswith(prefix) and len(s) > len(prefix) + 1:
+                s = s[len(prefix):]
+                peeled = True
+                break
+        if s.startswith(_IT_PREFIX_OVIT) and len(s) > len(_IT_PREFIX_OVIT) + 1:
+            s = s[len(_IT_PREFIX_OVIT):]
+            peeled = True
 
     if s.endswith("~"):
         s = s[:-1]
