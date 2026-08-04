@@ -8,7 +8,18 @@ Public surface:
   segmenter (drop-in for the old remote ``segment`` contract).
 """
 
+from sanskrit_analyzer.dhatu.dhatupatha import DhatuKosha, strip_anubandhas
 from sanskrit_analyzer.dhatu.identifier import DhatuIdentifier, TokenResult, rank_analyses
+from sanskrit_analyzer.dhatu.resolver import DhatuResolver, get_dhatu_resolver
 from sanskrit_analyzer.dhatu.segmenter import segment
 
-__all__ = ["DhatuIdentifier", "TokenResult", "rank_analyses", "segment"]
+__all__ = [
+    "DhatuIdentifier",
+    "DhatuKosha",
+    "DhatuResolver",
+    "TokenResult",
+    "get_dhatu_resolver",
+    "rank_analyses",
+    "segment",
+    "strip_anubandhas",
+]
