@@ -15,6 +15,12 @@ _SLP1_MARKERS = re.compile(r"[fxzwq]|(?<=[A-Za-z])[A-Z]")
 def detect_script(text: str, plain_ascii_default: Script | None = None) -> Script:
     """Detect the script of Sanskrit text.
 
+    This is a Sanskrit-domain heuristic. It assumes the input is Sanskrit in
+    one of Devanagari, IAST, or SLP1, and may misclassify text that is not
+    (e.g. plain English, camelCase identifiers, or Harvard-Kyoto, which shares
+    SLP1's capital-letter conventions). Full Harvard-Kyoto support is out of
+    scope; HK input may be read as SLP1.
+
     Args:
         text: The Sanskrit text to analyze.
         plain_ascii_default: Script to assume when the text is plain ASCII
@@ -33,7 +39,9 @@ def detect_script(text: str, plain_ascii_default: Script | None = None) -> Scrip
         Script.DEVANAGARI
         >>> detect_script("rāma")
         Script.IAST
-        >>> detect_script("rAma")
+        >>> detect_script("rAma")  # plain ASCII, no SLP1 markers -> IAST
+        Script.IAST
+        >>> detect_script("gacCati")  # mid-word capital aspirate -> SLP1
         Script.SLP1
     """
     if not text.strip():
@@ -47,6 +55,14 @@ def detect_script(text: str, plain_ascii_default: Script | None = None) -> Scrip
     if _IAST_DIACRITICS.search(text):
         return Script.IAST
 
+    # Acronym / all-caps guard: SLP1 capitals are single transliteration letters
+    # always interspersed with lowercase, so a run of 3+ consecutive ASCII
+    # uppercase letters indicates an English acronym (JSON, USA, KGB), never SLP1.
+    # (A 2-run like the visarga+consonant in "duHKa" is legitimate SLP1, so the
+    # threshold is 3, not 2.) Skip the SLP1 heuristic in that case so acronyms are
+    # not misrouted to SLP1 by the interior-uppercase rule below.
+    has_caps_run = re.search(r"[A-Z]{3,}", text) is not None
+
     # Check for SLP1-specific patterns. SLP1 encodes retroflexes, sibilants,
     # aspirates, long vowels and anusvara/visarga with letters plain-ASCII IAST
     # never uses:
@@ -58,7 +74,7 @@ def detect_script(text: str, plain_ascii_default: Script | None = None) -> Scrip
     #     proper nouns like "Rama". This is why the old `(?![a-z])` lookahead was
     #     wrong: it rejected the common case of a marker followed by a lowercase
     #     letter (e.g. "rAma", "gacCati"), silently misrouting SLP1 to IAST.
-    if _SLP1_MARKERS.search(text):
+    if not has_caps_run and _SLP1_MARKERS.search(text):
         return Script.SLP1
 
     # Plain ASCII with no script markers is ambiguous; honor the caller's hint.

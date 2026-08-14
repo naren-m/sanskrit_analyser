@@ -153,11 +153,38 @@ class Analyzer:
         # Initialize tree builder
         self._tree_builder = TreeBuilder(TreeBuilderConfig())
 
-        # Initialize split validator with curated vocabulary
+        # Initialize the split validator.
+        #
+        # Architecture: cheda (vidyut) is authoritative. The curated
+        # ``Vocabulary`` is the *scorer* — it is hand-tuned and was the only
+        # vocab that passed every golden split. The full kosha is used only as
+        # a *real-word veto* (``word_guard``): the validator may merge
+        # fragments and split non-words, but must NEVER split a token that is a
+        # valid whole kosha word (which is what fragmented "gacCati" -> "gat" +
+        # "cati" and over-split the golden cases when the kosha was the scorer).
         try:
             vocab = Vocabulary.load_default()
-            self._split_validator = SplitValidator(vocab)
-            logger.info("Split validator loaded with %d vocabulary entries", len(vocab))
+
+            word_guard = None
+            try:
+                from sanskrit_analyzer.validation.kosha_vocabulary import (
+                    KoshaVocabulary,
+                )
+
+                word_guard = KoshaVocabulary()
+                logger.info("Split validator real-word veto enabled (kosha)")
+            except Exception as e:
+                logger.warning(
+                    "Kosha word-guard unavailable (%s); split validator will "
+                    "run without the real-word veto",
+                    e,
+                )
+
+            self._split_validator = SplitValidator(vocab, word_guard=word_guard)
+            logger.info(
+                "Split validator loaded with %d curated vocabulary entries",
+                len(vocab),
+            )
         except Exception as e:
             logger.warning("Split validator not available: %s", e)
             self._split_validator = None
@@ -529,16 +556,35 @@ class Analyzer:
                             raw_tag=morph_dict.get("raw_tag"),
                         )
 
-                    # Rebuild dhatu
+                    # Rebuild dhatu. The serialized form (DhatuInfo.to_dict)
+                    # drops the required ``scripts`` field, so reconstruct via
+                    # the canonical COMMON_DHATUS entry when possible; otherwise
+                    # build a minimal valid DhatuInfo (matching the real
+                    # dataclass signature, which takes ``meanings``/``scripts``,
+                    # not a singular ``meaning``).
                     dhatu = None
                     dhatu_dict = bw_dict.get("dhatu")
                     if dhatu_dict:
-                        dhatu = DhatuInfo(
-                            dhatu=dhatu_dict.get("dhatu", ""),
-                            meaning=dhatu_dict.get("meaning"),
-                            gana=dhatu_dict.get("gana"),
-                            pada=dhatu_dict.get("pada"),
-                        )
+                        from sanskrit_analyzer.models.dhatu import COMMON_DHATUS
+
+                        root = dhatu_dict.get("dhatu", "")
+                        # NOTE: COMMON_DHATUS entries are shared singletons; the
+                        # rebuilt tree references the canonical DhatuInfo rather
+                        # than a per-call copy. DhatuInfo is treated as
+                        # read-only here, so the sharing is safe.
+                        dhatu = COMMON_DHATUS.get(root)
+                        if dhatu is None:
+                            meaning = dhatu_dict.get("meaning")
+                            dhatu = DhatuInfo(
+                                dhatu=root,
+                                scripts=ScriptVariants.from_text(
+                                    root, Script.SLP1
+                                ),
+                                gana=dhatu_dict.get("gana") or 0,
+                                pada=dhatu_dict.get("pada") or "",
+                                meanings=dhatu_dict.get("meanings")
+                                or ([meaning] if meaning else []),
+                            )
 
                     # Rebuild meanings
                     meanings = [

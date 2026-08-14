@@ -36,8 +36,45 @@ class SplitValidator:
       4. Returns the best-scoring candidate.
     """
 
-    def __init__(self, vocabulary: Vocabulary) -> None:
+    def __init__(self, vocabulary: Vocabulary, word_guard: object | None = None) -> None:
+        """Initialize the validator.
+
+        Args:
+            vocabulary: The curated scoring vocabulary.
+            word_guard: Optional real-word veto (e.g. ``KoshaVocabulary``). Any
+                object exposing a de-sandhi-aware ``contains(surface) -> bool``.
+                When provided, the validator will NEVER emit a candidate that
+                splits a token the guard recognises as a valid whole word.
+        """
         self._vocab = vocabulary
+        self._word_guard = word_guard
+
+    # ------------------------------------------------------------------
+
+    # Minimum SLP1 length for a token to be lockable. The kosha recognises
+    # 1-2 char particles/fragments (a, i, u, na, ca, am, ...), so locking those
+    # would freeze them in place and could ENTRENCH a cheda over-split (e.g.
+    # blocking the desired merge "van" + "am" -> "vanam"). Only tokens long
+    # enough to be a "real word worth protecting" are locked.
+    _MIN_LOCK_LEN = 3
+
+    def _is_locked(self, surface: str) -> bool:
+        """Return True if *surface* is a real whole word that must not be split.
+
+        A "locked" token is a sufficiently long surface that the kosha
+        word-guard recognises. Such tokens are real Sanskrit words (e.g.
+        "gacCati", "yoga", "duHKa") and must stay whole; the validator may
+        still merge fragments and split non-words. Short tokens (< 3 SLP1
+        chars) are never locked so cheda over-splits can still be merged back.
+        """
+        if self._word_guard is None or not surface:
+            return False
+        if len(surface) < self._MIN_LOCK_LEN:
+            return False
+        try:
+            return bool(self._word_guard.contains(surface))
+        except Exception:
+            return False
 
     # ------------------------------------------------------------------
     # Public API
@@ -119,8 +156,10 @@ class SplitValidator:
             if len(seg.surface) == 1:
                 score -= 2.0
 
-        # Simplicity bonus: fewer segments is better
+        # Simplicity bonus: fewer segments is better. Clamp it so it can
+        # never outweigh a correctly-scored split (real lemmas score +2 each).
         simplicity_bonus = (ref - len(segments)) * 0.5
+        simplicity_bonus = min(simplicity_bonus, 1.0)
         score += simplicity_bonus
 
         return score
@@ -146,7 +185,20 @@ class SplitValidator:
         candidates: list[list[Segment]] = []
         seen: set[tuple[str, ...]] = set()
 
+        # Real-word veto: cheda's authoritative tokens that are valid whole
+        # kosha words must never be broken apart by any candidate. (Merging
+        # fragments into a real word is still fine.)
+        locked_tokens = [
+            seg.surface for seg in segments if self._is_locked(seg.surface)
+        ]
+
+        def _breaks_locked(segs: list[Segment]) -> bool:
+            surfaces = {s.surface for s in segs}
+            return any(tok not in surfaces for tok in locked_tokens)
+
         def _add(segs: list[Segment]) -> None:
+            if _breaks_locked(segs):
+                return
             key = tuple(s.surface for s in segs)
             if key not in seen and len(candidates) < _MAX_CANDIDATES:
                 seen.add(key)
@@ -156,8 +208,11 @@ class SplitValidator:
         if segments:
             _add(segments)
 
-        # 2. Unsplit -- whole string as one segment
-        if original_slp1:
+        # 2. Unsplit -- whole string as one segment.
+        # Do NOT emit the whole-string candidate when the input spans multiple
+        # words (contains a space): a multi-word line is never a single token,
+        # and emitting it lets the simplicity bonus collapse correct splits.
+        if original_slp1 and " " not in original_slp1:
             _add([self._make_segment(original_slp1)])
 
         # 3. Merge adjacent pairs and re-split
@@ -206,6 +261,14 @@ class SplitValidator:
         add_fn: callable,
     ) -> None:
         """Try splitting *text* at every position using greedy longest-match."""
+        # Real-word veto: if the whole token is a valid kosha word, it must stay
+        # whole. Emit NO split candidates for it (not even sandhi splits). This
+        # is what keeps "gacCati" and single golden words ("yoga", "duHKa")
+        # intact. cheda already pre-splits multi-word input, so individual
+        # tokens are still segmented upstream.
+        if self._is_locked(text):
+            return
+
         # Try simple 2-way splits where at least one side is in vocab
         for i in range(1, len(text)):
             left_str = text[:i]
