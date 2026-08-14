@@ -28,7 +28,7 @@ from typing import Any
 from sanskrit_analyzer.deep_read import kosha_engine as engine
 from sanskrit_analyzer.deep_read.models import DeepReadResult
 from sanskrit_analyzer.dhatu import segmenter as local_segmenter
-from sanskrit_analyzer.dhatu.identifier import rank_analyses
+from sanskrit_analyzer.dhatu.identifier import rank_analyses, resolve_roots
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +220,10 @@ class DeepRead:
             # surface the plausible reading first; use the ByT5 POS when present.
             pos = pos_hint_fn(w_iast) if pos_hint_fn else None
             tok["analyses"] = rank_analyses(tok.get("analyses", []), pos_hint=pos)
+            # Resolve each pada's root through the shared DhatuResolver so this
+            # facade and DhatuIdentifier().identify() agree on root ownership
+            # (yogaḥ → yuj, not the Kośa's raw "yoji"). No-op offline.
+            resolve_roots(tok["analyses"], tok.get("slp1"))
             tokens.append(tok)
 
         try:
