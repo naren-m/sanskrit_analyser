@@ -9,9 +9,15 @@ import pytest
 
 from sanskrit_analyzer import DeepRead, DeepReadResult
 from sanskrit_analyzer.deep_read import kosha_engine as engine
+from sanskrit_analyzer.dhatu.resolver import get_dhatu_resolver
 
 requires_vidyut = pytest.mark.skipif(
     not engine.is_available(), reason="vidyut data bundle not present"
+)
+
+requires_resolver = pytest.mark.skipif(
+    not get_dhatu_resolver()._ensure(),
+    reason="vidyut data bundle not available for DhatuResolver",
 )
 
 
@@ -67,6 +73,22 @@ def test_verb_shows_dhatu():
         if a.get("dhatu")
     }
     assert "gam" in roots, f"roots seen: {roots} (engine={out['engine']})"
+
+
+@requires_resolver
+def test_analyze_via_segmenter_resolves_clean_root():
+    # योगः must resolve to the clean root yuj through the shared DhatuResolver,
+    # matching DhatuIdentifier().identify(). Before the fix the facade returned
+    # the Kośa's raw "yoji" anubandha residue, so the two public APIs disagreed.
+    out = DeepRead().analyze_via_segmenter("योगः").to_dict()
+    roots = [
+        a["dhatu"]["root"]
+        for t in out["tokens"]
+        for a in t["analyses"]
+        if a.get("dhatu")
+    ]
+    assert "yuj" in roots
+    assert "yoji" not in roots
 
 
 def test_via_dharmamitra_returns_none_when_disabled_input_empty():
