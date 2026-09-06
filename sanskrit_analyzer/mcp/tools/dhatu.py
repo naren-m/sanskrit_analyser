@@ -3,42 +3,32 @@
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
 
-from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry
+from sanskrit_analyzer.dhatu import conjugation
+from sanskrit_analyzer.dhatu.dhatupatha import DhatuKosha, entry_to_dict, get_dhatu_kosha
 from sanskrit_analyzer.mcp.response import error_response, json_response, text_response
 
 ToolDispatcher = Callable[[str, dict[str, Any]], Awaitable[list[TextContent] | None]]
 
 
-def _dhatu_to_dict(entry: DhatuEntry) -> dict[str, Any]:
-    """Convert DhatuEntry to dictionary."""
-    return {
-        "id": entry.id,
-        "dhatu_devanagari": entry.dhatu_devanagari,
-        "dhatu_iast": entry.dhatu_iast,
-        "meaning_english": entry.meaning_english,
-        "meaning_hindi": entry.meaning_hindi,
-        "gana": entry.gana,
-        "pada": entry.pada,
-        "panini_reference": entry.panini_reference,
-    }
-
-
 def build_dhatu_tools() -> tuple[list[Tool], ToolDispatcher]:
     """Build the dhatu tool specs and their dispatcher (see build_analysis_tools)."""
-    db = DhatuDB()
+    kosha = get_dhatu_kosha()
 
     tools = [
             Tool(
                 name="lookup_dhatu",
-                description="Look up a dhatu (verbal root) by its root form",
+                description=(
+                    "Look up a dhatu (verbal root) in the Dhatupatha. Accepts "
+                    "Devanagari, IAST, SLP1, or the citation form (qukfY)."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "dhatu": {
                             "type": "string",
-                            "description": "Dhatu root (e.g., gam, bhU, kR)",
+                            "description": "Dhatu root (e.g., gam, bhu, kf)",
                         },
                     },
                     "required": ["dhatu"],
@@ -46,13 +36,13 @@ def build_dhatu_tools() -> tuple[list[Tool], ToolDispatcher]:
             ),
             Tool(
                 name="search_dhatu",
-                description="Search dhatus by meaning or pattern",
+                description="Search dhatus by root form or artha (the Sanskrit gloss)",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "Search query (meaning or root pattern)",
+                            "description": "Search query (root form or artha)",
                         },
                         "limit": {
                             "type": "integer",
@@ -65,7 +55,10 @@ def build_dhatu_tools() -> tuple[list[Tool], ToolDispatcher]:
             ),
             Tool(
                 name="conjugate_verb",
-                description="Get conjugation forms for a dhatu",
+                description=(
+                    "Derive the conjugation table for a dhatu in one lakara "
+                    "with the Paninian engine (needs the vidyut data bundle)."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -75,7 +68,10 @@ def build_dhatu_tools() -> tuple[list[Tool], ToolDispatcher]:
                         },
                         "lakara": {
                             "type": "string",
-                            "description": "Tense/mood (lat, lit, lut, etc.)",
+                            "description": (
+                                "Tense/mood: lat, lit, lut, lrt, let, lot, lan, "
+                                "vidhilin, ashirlin, lun, lrn"
+                            ),
                             "default": "lat",
                         },
                     },
@@ -109,19 +105,19 @@ def build_dhatu_tools() -> tuple[list[Tool], ToolDispatcher]:
         name: str, arguments: dict[str, Any]
     ) -> list[TextContent] | None:
         if name == "lookup_dhatu":
-            return _lookup_dhatu(db, arguments)
+            return _lookup_dhatu(kosha, arguments)
         elif name == "search_dhatu":
-            return _search_dhatu(db, arguments)
+            return _search_dhatu(kosha, arguments)
         elif name == "conjugate_verb":
-            return _conjugate_verb(db, arguments)
+            return _conjugate_verb(kosha, arguments)
         elif name == "list_gana":
-            return _list_gana(db, arguments)
+            return _list_gana(kosha, arguments)
         return None
 
     return tools, dispatch
 
 
-def _lookup_dhatu(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
+def _lookup_dhatu(kosha: DhatuKosha, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle lookup_dhatu tool call."""
     dhatu = arguments.get("dhatu", "")
 
@@ -129,12 +125,13 @@ def _lookup_dhatu(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
         return error_response("dhatu parameter is required")
 
     try:
-        entry = db.lookup_by_dhatu(dhatu)
+        entries = kosha.find(dhatu)
 
-        if not entry:
+        if not entries:
             return text_response(f"Dhatu not found: {dhatu}")
 
-        return json_response(_dhatu_to_dict(entry))
+        # A root can hold several Dhatupatha entries: kf is in gana 5 and 8.
+        return json_response([entry_to_dict(e) for e in entries])
 
     except Exception as e:
         return error_response(f"looking up dhatu: {e}")
@@ -153,7 +150,7 @@ def _clamp_limit(value: Any, default: int, maximum: int = 100) -> int:
     return max(1, min(limit, maximum))
 
 
-def _search_dhatu(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
+def _search_dhatu(kosha: DhatuKosha, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle search_dhatu tool call."""
     query = arguments.get("query", "")
     limit = _clamp_limit(arguments.get("limit", 10), default=10)
@@ -162,49 +159,55 @@ def _search_dhatu(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
         return error_response("query parameter is required")
 
     try:
-        results = db.search(query, limit=limit)
+        results = kosha.search(query, limit=limit)
 
         if not results:
             return text_response(f"No dhatus found matching: {query}")
 
-        return json_response([_dhatu_to_dict(entry) for entry in results])
+        return json_response([entry_to_dict(entry) for entry in results])
 
     except Exception as e:
         return error_response(f"searching dhatus: {e}")
 
 
-def _conjugate_verb(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
+def _conjugate_verb(kosha: DhatuKosha, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle conjugate_verb tool call."""
     dhatu = arguments.get("dhatu", "")
     lakara = arguments.get("lakara", "lat")
 
     if not dhatu:
         return error_response("dhatu parameter is required")
+    if conjugation.normalize_lakara(lakara) is None:
+        return error_response(
+            f"unknown lakara: {lakara}. One of: {', '.join(conjugation.LAKARA_NAMES)}"
+        )
+    if not conjugation.is_available():
+        return error_response(
+            "conjugation needs the vidyut data bundle, which is not installed"
+        )
 
     try:
-        conjugations = db.get_conjugation(dhatu, lakara)
+        entries = kosha.find(dhatu)
+        if not entries:
+            return text_response(f"Dhatu not found: {dhatu}")
 
-        if not conjugations:
-            return text_response(f"No conjugations found for: {dhatu}")
-
-        result = [
-            {
-                "purusha": conj.purusha,
-                "vacana": conj.vacana,
-                "pada": conj.pada,
-                "form_devanagari": conj.form_devanagari,
-                "form_iast": conj.form_iast,
-            }
-            for conj in conjugations
-        ]
-
-        return json_response(result)
+        return json_response(
+            [
+                {
+                    **entry_to_dict(entry),
+                    "padas": sorted({r["pada"] for r in rows}),
+                    "forms": rows,
+                }
+                for entry in entries
+                if (rows := conjugation.conjugate(entry["code"], lakara))
+            ]
+        )
 
     except Exception as e:
         return error_response(f"conjugating verb: {e}")
 
 
-def _list_gana(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
+def _list_gana(kosha: DhatuKosha, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle list_gana tool call."""
     gana = arguments.get("gana")
     limit = _clamp_limit(arguments.get("limit", 20), default=20)
@@ -223,12 +226,12 @@ def _list_gana(db: DhatuDB, arguments: dict[str, Any]) -> list[TextContent]:
         return error_response("gana must be between 1 and 10")
 
     try:
-        results = db.get_by_gana(gana, limit=limit)
+        results = kosha.by_gana(gana)[:limit]
 
         if not results:
             return text_response(f"No dhatus found in gana {gana}")
 
-        return json_response([_dhatu_to_dict(entry) for entry in results])
+        return json_response([entry_to_dict(entry) for entry in results])
 
     except Exception as e:
         return error_response(f"listing gana: {e}")

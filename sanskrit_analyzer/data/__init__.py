@@ -1,5 +1,4 @@
-"""Data access layer for Sanskrit Analyzer."""
+"""Bundled data files (Dhātupāṭha CSVs, grammar YAML, corpora).
 
-from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry, ConjugationEntry
-
-__all__ = ["DhatuDB", "DhatuEntry", "ConjugationEntry"]
+The Dhātupāṭha index lives in :mod:`sanskrit_analyzer.dhatu.dhatupatha`.
+"""

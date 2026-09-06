@@ -1,10 +1,15 @@
-"""Tests for dhatu API endpoints."""
+"""Tests for dhatu API endpoints, backed by the Dhātupāṭha."""
 
 import pytest
 from fastapi.testclient import TestClient
 
 from sanskrit_analyzer.api.app import create_app
 from sanskrit_analyzer.config import Config
+from sanskrit_analyzer.dhatu import conjugation
+
+needs_vidyut = pytest.mark.skipif(
+    not conjugation.is_available(), reason="vidyut data bundle not available"
+)
 
 
 @pytest.fixture
@@ -31,8 +36,31 @@ class TestDhatuLookup:
         assert response.status_code == 200
 
         data = response.json()
-        assert data["dhatu_devanagari"] == "गम्"
-        assert "go" in data["meaning_english"].lower()
+        assert data["count"] == 1
+        entry = data["dhatus"][0]
+        assert entry["root_devanagari"] == "गम्"
+        assert entry["code"] == "01.1137"
+        assert entry["gana"] == 1
+        assert entry["artha_iast"] == "gatau"
+
+    def test_lookup_iast_and_slp1_agree(self, client: TestClient) -> None:
+        """The same root reached through IAST and SLP1 gives the same entry."""
+        iast = client.get("/api/v1/dhatu/bhū").json()
+        slp1 = client.get("/api/v1/dhatu/BU").json()
+        assert iast == slp1
+        assert {e["code"] for e in iast["dhatus"]} >= {"01.0001"}
+
+    def test_lookup_citation_form(self, client: TestClient) -> None:
+        """The Dhātupāṭha citation form resolves to its root."""
+        response = client.get("/api/v1/dhatu/ḍukṛñ")
+        assert response.status_code == 200
+        assert all(e["root_slp1"] == "kf" for e in response.json()["dhatus"])
+
+    def test_lookup_returns_every_homonymous_entry(self, client: TestClient) -> None:
+        """√kṛ is in both the 5th and 8th gaṇa, so both entries come back."""
+        data = client.get("/api/v1/dhatu/kṛ").json()
+        assert data["count"] >= 2
+        assert {e["gana"] for e in data["dhatus"]} >= {5, 8}
 
     def test_lookup_not_found(self, client: TestClient) -> None:
         """Test looking up nonexistent dhatu."""
@@ -40,15 +68,33 @@ class TestDhatuLookup:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
 
+    @needs_vidyut
     def test_lookup_with_conjugations(self, client: TestClient) -> None:
-        """Test looking up dhatu with conjugations."""
+        """Conjugations are derived, not stored, so they are actually populated."""
         response = client.get("/api/v1/dhatu/गम्?include_conjugations=true")
         assert response.status_code == 200
 
-        data = response.json()
-        # Conjugations list should exist (may be empty)
-        assert "conjugations" in data
-        assert isinstance(data["conjugations"], list)
+        entry = response.json()["dhatus"][0]
+        assert entry["padas"] == ["parasmaipada"]
+        forms = {
+            (c["purusha"], c["vacana"]): c["forms_iast"] for c in entry["conjugations"]
+        }
+        assert forms[("prathama", "eka")] == ["gacchati"]
+        assert forms[("uttama", "bahu")] == ["gacchāmaḥ"]
+
+    @needs_vidyut
+    def test_conjugations_in_another_lakara(self, client: TestClient) -> None:
+        """A non-default lakāra derives a different paradigm."""
+        response = client.get("/api/v1/dhatu/गम्?include_conjugations=true&lakara=lrt")
+        assert response.status_code == 200
+        entry = response.json()["dhatus"][0]
+        assert all(c["lakara"] == "lrt" for c in entry["conjugations"])
+        assert entry["conjugations"][0]["forms_iast"] == ["gamiṣyati"]
+
+    def test_unknown_lakara_rejected(self, client: TestClient) -> None:
+        response = client.get("/api/v1/dhatu/गम्?include_conjugations=true&lakara=nope")
+        assert response.status_code == 400
+        assert "lakara" in response.json()["detail"].lower()
 
 
 class TestDhatuByGana:
@@ -60,13 +106,8 @@ class TestDhatuByGana:
         assert response.status_code == 200
 
         data = response.json()
-        assert "count" in data
-        assert "dhatus" in data
-        assert data["count"] <= 10
-        # All dhatus should be gana 1
-        for dhatu in data["dhatus"]:
-            if dhatu["gana"] is not None:
-                assert dhatu["gana"] == 1
+        assert data["count"] == 10
+        assert all(d["gana"] == 1 for d in data["dhatus"])
 
     def test_get_invalid_gana(self, client: TestClient) -> None:
         """Test getting invalid gana."""
@@ -81,18 +122,17 @@ class TestDhatuByGana:
 class TestDhatuSearch:
     """Tests for POST /api/v1/dhatu/search."""
 
-    def test_search_by_meaning(self, client: TestClient) -> None:
-        """Test searching by English meaning."""
+    def test_search_by_artha(self, client: TestClient) -> None:
+        """Search by the Dhātupāṭha's own Sanskrit gloss."""
         response = client.post(
             "/api/v1/dhatu/search",
-            json={"query": "go", "search_type": "meaning"},
+            json={"query": "gatau", "search_type": "meaning"},
         )
         assert response.status_code == 200
 
         data = response.json()
         assert data["count"] > 0
-        # At least one should contain "go" in meaning
-        assert any("go" in (d["meaning_english"] or "").lower() for d in data["dhatus"])
+        assert all("gatau" in d["artha_iast"] for d in data["dhatus"])
 
     def test_search_by_dhatu(self, client: TestClient) -> None:
         """Test searching by dhatu form."""
@@ -104,44 +144,39 @@ class TestDhatuSearch:
 
         data = response.json()
         assert data["count"] == 1
-        assert data["dhatus"][0]["dhatu_devanagari"] == "गम्"
+        assert data["dhatus"][0]["root_devanagari"] == "गम्"
 
     def test_search_all(self, client: TestClient) -> None:
         """Test searching all fields."""
         response = client.post(
             "/api/v1/dhatu/search",
-            json={"query": "to do", "search_type": "all"},
+            json={"query": "pac", "search_type": "all"},
         )
         assert response.status_code == 200
-
-        data = response.json()
-        assert data["count"] >= 0  # May or may not find matches
+        assert response.json()["count"] > 0
 
     def test_search_with_limit(self, client: TestClient) -> None:
         """Test search respects limit."""
         response = client.post(
             "/api/v1/dhatu/search",
-            json={"query": "to", "search_type": "meaning", "limit": 5},
+            json={"query": "a", "search_type": "meaning", "limit": 5},
         )
         assert response.status_code == 200
-
-        data = response.json()
-        assert data["count"] <= 5
+        assert response.json()["count"] == 5
 
 
 class TestDhatuStats:
     """Tests for GET /api/v1/dhatu/stats."""
 
     def test_get_stats(self, client: TestClient) -> None:
-        """Test getting dhatu statistics."""
+        """Stats cover the whole Dhātupāṭha, not a handful of sample roots."""
         response = client.get("/api/v1/dhatu/stats")
         assert response.status_code == 200
 
         data = response.json()
-        assert "total_dhatus" in data
-        assert "gana_counts" in data
-        assert data["total_dhatus"] > 0
-        assert isinstance(data["gana_counts"], dict)
+        assert data["total_dhatus"] > 2000
+        assert sorted(int(g) for g in data["gana_counts"]) == list(range(1, 11))
+        assert sum(data["gana_counts"].values()) == data["total_dhatus"]
 
 
 class TestDhatuResponseStructure:
@@ -149,25 +184,24 @@ class TestDhatuResponseStructure:
 
     def test_dhatu_fields(self, client: TestClient) -> None:
         """Test dhatu response has all expected fields."""
-        response = client.get("/api/v1/dhatu/गम्")
-        assert response.status_code == 200
-
-        data = response.json()
-        assert "id" in data
-        assert "dhatu_devanagari" in data
-        assert "meaning_english" in data
-        assert "gana" in data
-        assert "pada" in data
-        assert "conjugations" in data
+        data = client.get("/api/v1/dhatu/गम्").json()["dhatus"][0]
+        for field in (
+            "code",
+            "root_slp1",
+            "root_iast",
+            "root_devanagari",
+            "upadesha_slp1",
+            "gana",
+            "gana_name",
+            "artha_iast",
+            "curated",
+            "conjugations",
+        ):
+            assert field in data
 
     def test_list_response_structure(self, client: TestClient) -> None:
         """Test list response structure."""
-        response = client.get("/api/v1/dhatu/gana/1?limit=5")
-        assert response.status_code == 200
-
-        data = response.json()
+        data = client.get("/api/v1/dhatu/gana/1?limit=5").json()
         assert isinstance(data["count"], int)
         assert isinstance(data["dhatus"], list)
-        if data["dhatus"]:
-            assert "id" in data["dhatus"][0]
-            assert "dhatu_devanagari" in data["dhatus"][0]
+        assert data["dhatus"][0]["code"]

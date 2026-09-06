@@ -5,7 +5,7 @@ import pytest
 from indic_transliteration import sanscript
 from indic_transliteration.sanscript import transliterate
 from sanskrit_analyzer.analyzer import Analyzer
-from sanskrit_analyzer.data.dhatu_db import DhatuDB
+from sanskrit_analyzer.dhatu.dhatupatha import get_dhatu_kosha
 from sanskrit_analyzer.mcp.server import create_server, health_check
 from mcp.server import Server
 from starlette.applications import Starlette
@@ -38,7 +38,7 @@ class TestHealthCheck:
         assert "status" in data
         assert "version" in data
         assert "components" in data
-        assert "dhatu_db" in data["components"]
+        assert "dhatupatha" in data["components"]
         assert "analyzer" in data["components"]
 
 
@@ -46,10 +46,9 @@ class TestEndToEnd:
     """End-to-end tests for common workflows."""
 
     def test_dhatu_lookup_workflow(self) -> None:
-        """Test looking up a dhatu returns list."""
-        db = DhatuDB()
-        results = db.search("go", limit=5)
-        assert isinstance(results, list)
+        """Looking up a root reaches the real Dhatupatha."""
+        entries = get_dhatu_kosha().find("gam")
+        assert [e["code"] for e in entries] == ["01.1137"]
 
     @pytest.mark.asyncio
     async def test_analysis_workflow(self) -> None:

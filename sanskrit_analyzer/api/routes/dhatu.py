@@ -1,38 +1,29 @@
-"""Dhatu (verbal root) API endpoints."""
+"""Dhatu (verbal root) API endpoints, backed by the Dhātupāṭha.
+
+Roots come from the bundled Dhātupāṭha CSVs (~2,250 entries, gaṇa and artha
+per entry). Conjugated forms are not stored: they are derived on demand by
+``vidyut.prakriya``, so any root can be conjugated in any lakāra.
+"""
 
 from enum import Enum
-from functools import lru_cache
-from typing import TYPE_CHECKING
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-if TYPE_CHECKING:
-    from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry
+from sanskrit_analyzer.dhatu import conjugation
+from sanskrit_analyzer.dhatu.dhatupatha import entry_to_dict, get_dhatu_kosha
 
 router = APIRouter(prefix="/api/v1/dhatu", tags=["Dhatu"])
-
-
-@lru_cache(maxsize=1)
-def _get_db() -> "DhatuDB":
-    """Return the process-wide shared DhatuDB instance.
-
-    DhatuDB manages one SQLite connection per thread, so a single shared
-    instance is safe to reuse across requests and threadpool workers. This
-    avoids re-opening the database on every request.
-    """
-    from sanskrit_analyzer.data.dhatu_db import DhatuDB
-
-    return DhatuDB()
 
 
 class SearchType(str, Enum):
     """Type of dhatu search."""
 
-    DHATU = "dhatu"  # Search by dhatu form
-    MEANING = "meaning"  # Search by English meaning
-    ALL = "all"  # Search all fields
+    DHATU = "dhatu"  # Match the root form only
+    MEANING = "meaning"  # Match the artha (Sanskrit gloss)
+    ALL = "all"  # Match either
 
 
 class DhatuSearchRequest(BaseModel):
@@ -47,36 +38,39 @@ class DhatuSearchRequest(BaseModel):
 
 
 class ConjugationResponse(BaseModel):
-    """Single conjugation form response."""
+    """One (pada, puruṣa, vacana) slot of a conjugation table."""
 
     lakara: str
+    pada: str
     purusha: str
     vacana: str
-    pada: str
-    form_devanagari: str
-    form_iast: str | None = None
+    forms_slp1: list[str]
+    forms_devanagari: list[str]
+    forms_iast: list[str]
 
 
 class DhatuResponse(BaseModel):
-    """Dhatu information response."""
+    """One Dhātupāṭha entry."""
 
-    id: int
-    dhatu_devanagari: str
-    dhatu_iast: str | None = None
-    meaning_english: str | None = None
-    meaning_hindi: str | None = None
-    gana: int | None = None
-    pada: str | None = None
-    it_category: str | None = None
-    panini_reference: str | None = None
-    examples: str | None = None
-    synonyms: str | None = None
-    related_words: str | None = None
+    code: str = Field(..., description="Dhātupāṭha code, e.g. 01.1137")
+    root_slp1: str
+    root_iast: str
+    root_devanagari: str
+    upadesha_slp1: str = Field(..., description="Citation form, with it-markers")
+    upadesha_iast: str
+    upadesha_devanagari: str
+    gana: int
+    gana_name: str
+    artha_slp1: str | None = Field(None, description="Sanskrit gloss from the Dhātupāṭha")
+    artha_iast: str | None = None
+    artha_devanagari: str | None = None
+    curated: bool = Field(False, description="Root reading is hand-curated, not heuristic")
+    padas: list[str] = Field(default=[], description="Padas the root forms (derived)")
     conjugations: list[ConjugationResponse] = []
 
 
 class DhatuListResponse(BaseModel):
-    """Response for list of dhatus."""
+    """Response for a list of dhatus."""
 
     count: int
     dhatus: list[DhatuResponse]
@@ -89,47 +83,18 @@ class GanaStatsResponse(BaseModel):
     gana_counts: dict[int, int]
 
 
-def _entry_to_response(entry: "DhatuEntry") -> DhatuResponse:
-    """Convert DhatuEntry to response model."""
-    conjugations = [
-        ConjugationResponse(
-            lakara=c.lakara,
-            purusha=c.purusha,
-            vacana=c.vacana,
-            pada=c.pada,
-            form_devanagari=c.form_devanagari,
-            form_iast=c.form_iast,
-        )
-        for c in entry.conjugations
-    ]
-
-    return DhatuResponse(
-        id=entry.id,
-        dhatu_devanagari=entry.dhatu_devanagari,
-        dhatu_iast=entry.dhatu_iast,
-        meaning_english=entry.meaning_english,
-        meaning_hindi=entry.meaning_hindi,
-        gana=entry.gana,
-        pada=entry.pada,
-        it_category=entry.it_category,
-        panini_reference=entry.panini_reference,
-        examples=entry.examples,
-        synonyms=entry.synonyms,
-        related_words=entry.related_words,
-        conjugations=conjugations,
-    )
+def _to_response(entry: dict[str, Any], **extra: Any) -> DhatuResponse:
+    return DhatuResponse(**entry_to_dict(entry), **extra)
 
 
 @router.get("/stats", response_model=GanaStatsResponse)
 async def get_dhatu_stats(request: Request) -> GanaStatsResponse:
-    """Get dhatu database statistics.
+    """Get Dhātupāṭha statistics.
 
-    Returns total count and breakdown by gana (verb class).
+    Returns total count and breakdown by gaṇa (verb class).
     """
-    db = _get_db()
-    total = await run_in_threadpool(db.count)
-    gana_counts = await run_in_threadpool(db.get_gana_stats)
-    return GanaStatsResponse(total_dhatus=total, gana_counts=gana_counts)
+    kosha = get_dhatu_kosha()
+    return GanaStatsResponse(total_dhatus=kosha.count(), gana_counts=kosha.gana_stats())
 
 
 @router.get("/gana/{gana}", response_model=DhatuListResponse)
@@ -138,16 +103,15 @@ async def get_dhatus_by_gana(
     gana: int,
     limit: int = Query(default=100, ge=1, le=500, description="Maximum results"),
 ) -> DhatuListResponse:
-    """Get all dhatus in a specific gana (verb class).
+    """Get dhatus in a specific gaṇa (verb class).
 
     Gana ranges from 1-10, corresponding to the 10 Sanskrit verb classes.
     """
     if not 1 <= gana <= 10:
         raise HTTPException(status_code=400, detail="Gana must be between 1 and 10")
 
-    db = _get_db()
-    entries = await run_in_threadpool(db.get_by_gana, gana, limit=limit)
-    dhatus = [_entry_to_response(e) for e in entries]
+    entries = await run_in_threadpool(get_dhatu_kosha().by_gana, gana)
+    dhatus = [_to_response(e) for e in entries[:limit]]
     return DhatuListResponse(count=len(dhatus), dhatus=dhatus)
 
 
@@ -156,48 +120,68 @@ async def search_dhatus(
     request: Request,
     body: DhatuSearchRequest,
 ) -> DhatuListResponse:
-    """Search for dhatus.
+    """Search the Dhātupāṭha.
 
     Supports searching by:
-    - dhatu: Match dhatu form (Devanagari, IAST, or transliterated)
-    - meaning: Match English meaning
-    - all: Search all fields
+    - dhatu: match the root form (Devanagari, IAST or SLP1)
+    - meaning: match the artha, the Sanskrit gloss carried by the Dhātupāṭha
+    - all: match either
     """
-    db = _get_db()
+    kosha = get_dhatu_kosha()
     if body.search_type == SearchType.DHATU:
-        # Try exact lookup first
-        entry = await run_in_threadpool(db.lookup_by_dhatu, body.query)
-        if entry:
-            return DhatuListResponse(count=1, dhatus=[_entry_to_response(entry)])
-        # Fall back to search
-        entries = await run_in_threadpool(db.search, body.query, limit=body.limit)
-    elif body.search_type == SearchType.MEANING:
-        entries = await run_in_threadpool(db.lookup_by_meaning, body.query, limit=body.limit)
-    else:  # ALL
-        entries = await run_in_threadpool(db.search, body.query, limit=body.limit)
+        entries = (await run_in_threadpool(kosha.find, body.query))[: body.limit]
+    else:
+        artha_only = body.search_type == SearchType.MEANING
+        entries = await run_in_threadpool(kosha.search, body.query, body.limit, artha_only)
 
-    dhatus = [_entry_to_response(e) for e in entries]
+    dhatus = [_to_response(e) for e in entries]
     return DhatuListResponse(count=len(dhatus), dhatus=dhatus)
 
 
-@router.get("/{dhatu}", response_model=DhatuResponse)
+@router.get("/{dhatu}", response_model=DhatuListResponse)
 async def get_dhatu(
     request: Request,
     dhatu: str,
     include_conjugations: bool = Query(
         default=False,
-        description="Include conjugation forms",
+        description="Derive conjugation forms (needs the vidyut data bundle)",
     ),
-) -> DhatuResponse:
-    """Look up a specific dhatu by its form.
+    lakara: str = Query(
+        default="lat",
+        description=f"Lakāra to conjugate; one of {', '.join(conjugation.LAKARA_NAMES)}",
+    ),
+) -> DhatuListResponse:
+    """Look up a dhatu by its root form.
 
-    Accepts dhatu in Devanagari (e.g., गम्), IAST (e.g., gam), or
-    transliterated form.
+    Accepts Devanagari (गम्), IAST (gam), SLP1 (BU), or the Dhātupāṭha
+    citation form (ḍukṛñ). A root may have several Dhātupāṭha entries — √kṛ is
+    in both the 5th and 8th gaṇa — so the response is a list.
     """
-    db = _get_db()
-    entry = await run_in_threadpool(
-        db.lookup_by_dhatu, dhatu, include_conjugations=include_conjugations
-    )
-    if entry is None:
+    entries = await run_in_threadpool(get_dhatu_kosha().find, dhatu)
+    if not entries:
         raise HTTPException(status_code=404, detail=f"Dhatu not found: {dhatu}")
-    return _entry_to_response(entry)
+
+    if not include_conjugations:
+        return DhatuListResponse(
+            count=len(entries), dhatus=[_to_response(e) for e in entries]
+        )
+
+    if conjugation.normalize_lakara(lakara) is None:
+        raise HTTPException(status_code=400, detail=f"Unknown lakara: {lakara}")
+    if not conjugation.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="Conjugation needs the vidyut data bundle, which is not installed",
+        )
+
+    dhatus = []
+    for entry in entries:
+        rows = await run_in_threadpool(conjugation.conjugate, entry["code"], lakara)
+        dhatus.append(
+            _to_response(
+                entry,
+                padas=sorted({r["pada"] for r in rows}),
+                conjugations=[ConjugationResponse(**r) for r in rows],
+            )
+        )
+    return DhatuListResponse(count=len(dhatus), dhatus=dhatus)

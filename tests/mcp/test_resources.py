@@ -2,7 +2,7 @@
 
 import json
 
-from sanskrit_analyzer.data.dhatu_db import DhatuDB
+from sanskrit_analyzer.dhatu.dhatupatha import get_dhatu_kosha
 from sanskrit_analyzer.mcp.resources.dhatus import _get_gana_dhatus, _get_overview
 from sanskrit_analyzer.mcp.resources.grammar import (
     _get_pratyayas_index,
@@ -19,20 +19,18 @@ class TestDhatuResources:
 
     def test_overview_returns_valid_json(self) -> None:
         """Test that dhatus overview returns valid JSON with expected fields."""
-        db = DhatuDB()
-        result = _get_overview(db)
+        result = _get_overview(get_dhatu_kosha())
         data = json.loads(result)
-        assert "total_dhatus" in data
-        assert "gana_distribution" in data
+        assert data["total_dhatus"] > 2000
         assert len(data["gana_distribution"]) == 10
+        assert sum(g["count"] for g in data["gana_distribution"]) == data["total_dhatus"]
 
     def test_gana_resource_returns_dhatus(self) -> None:
         """Test that gana resource returns dhatus list."""
-        db = DhatuDB()
-        result = _get_gana_dhatus(db, 1)
+        result = _get_gana_dhatus(get_dhatu_kosha(), 1)
         data = json.loads(result)
         assert data["gana"] == 1
-        assert "dhatus" in data
+        assert all(d["gana"] == 1 for d in data["dhatus"])
 
 
 class TestGrammarResources:

@@ -98,25 +98,25 @@ def create_server() -> Server:
     return server
 
 
-# Health-probe objects are cached so a monitoring poll doesn't rebuild a DhatuDB
-# and Analyzer (an expensive load) on every request.
-_health_db: Any = None
+# Health-probe objects are cached so a monitoring poll doesn't reload the
+# Dhatupatha and Analyzer (an expensive load) on every request.
+_health_kosha: Any = None
 _health_analyzer: Any = None
 
 
 def _get_health_probes() -> tuple[Any, Any]:
-    """Lazily build and cache the DhatuDB/Analyzer used by the health check."""
-    global _health_db, _health_analyzer
-    if _health_db is None:
-        from sanskrit_analyzer.data.dhatu_db import DhatuDB
+    """Lazily build and cache the Dhatupatha/Analyzer used by the health check."""
+    global _health_kosha, _health_analyzer
+    if _health_kosha is None:
+        from sanskrit_analyzer.dhatu.dhatupatha import get_dhatu_kosha
 
-        _health_db = DhatuDB()
+        _health_kosha = get_dhatu_kosha()
     if _health_analyzer is None:
         from sanskrit_analyzer import Analyzer
         from sanskrit_analyzer.config import Config
 
         _health_analyzer = Analyzer(Config())
-    return _health_db, _health_analyzer
+    return _health_kosha, _health_analyzer
 
 
 async def health_check(request: Request) -> JSONResponse:
@@ -128,14 +128,12 @@ async def health_check(request: Request) -> JSONResponse:
     # Check component health
     components: dict[str, dict[str, Any]] = {}
 
-    # Check DhatuDB
+    # Check the Dhatupatha index
     try:
-        db, _ = _get_health_probes()
-        # Quick test query
-        _ = db.get_by_gana(1, limit=1)
-        components["dhatu_db"] = {"status": "healthy"}
+        kosha, _ = _get_health_probes()
+        components["dhatupatha"] = {"status": "healthy", "roots": kosha.count()}
     except Exception as e:
-        components["dhatu_db"] = {"status": "unhealthy", "error": str(e)}
+        components["dhatupatha"] = {"status": "unhealthy", "error": str(e)}
 
     # Check Analyzer
     try:
