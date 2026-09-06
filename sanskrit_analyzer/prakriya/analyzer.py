@@ -11,12 +11,9 @@ import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
 
-from sanskrit_analyzer.deep_read.kosha_engine import (
-    VidyutUnavailable,
-    desandhi_candidates,
-    resolve_data_dir,
-)
 from sanskrit_analyzer.prakriya.sutra_index import get_index
+from sanskrit_analyzer.utils.desandhi import desandhi_candidates
+from sanskrit_analyzer.vidyut_data import kosha as _kosha
 
 logger = logging.getLogger(__name__)
 
@@ -55,16 +52,6 @@ class PadaAnalysis:
             "verified": self.verified,
             "prakriya": [s.to_dict() for s in self.prakriya],
         }
-
-
-@lru_cache(maxsize=1)
-def _kosha():
-    data_dir = resolve_data_dir()
-    if data_dir is None:
-        raise VidyutUnavailable("vidyut data bundle not found.")
-    from vidyut.kosha import Kosha
-
-    return Kosha(str(data_dir / "kosha"))
 
 
 @lru_cache(maxsize=1)

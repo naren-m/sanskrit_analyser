@@ -6,8 +6,9 @@ from sanskrit_analyzer.engines.base import EngineBase, EngineResult, Segment
 from sanskrit_analyzer.models.scripts import Script
 from sanskrit_analyzer.utils.normalize import detect_script
 from sanskrit_analyzer.utils.transliterate import transliterate
+from sanskrit_analyzer.vidyut_data import resolve_data_dir
 
-# Default data path for vidyut
+# Where to download the bundle when no data directory is found.
 DEFAULT_VIDYUT_DATA_PATH = os.path.expanduser("~/.vidyut-data")
 
 
@@ -23,9 +24,15 @@ class VidyutEngine(EngineBase):
         """Initialize the Vidyut engine.
 
         Args:
-            data_path: Path to vidyut data directory. Defaults to ~/.vidyut-data.
+            data_path: Path to vidyut data directory. Defaults to the bundle
+                found by :func:`sanskrit_analyzer.vidyut_data.resolve_data_dir`
+                (``VIDYUT_DATA_DIR``, ``<cwd>/vidyut-0.4.0``, ``~/.vidyut-data``),
+                downloading to ``~/.vidyut-data`` when none exists.
         """
-        self._data_path = data_path or DEFAULT_VIDYUT_DATA_PATH
+        if data_path is None:
+            found = resolve_data_dir()
+            data_path = str(found) if found else DEFAULT_VIDYUT_DATA_PATH
+        self._data_path = data_path
         self._chedaka: object | None = None
         self._available = False
         self._init_error: str | None = None

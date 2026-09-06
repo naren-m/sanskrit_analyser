@@ -23,12 +23,20 @@ isolation. It is the shared, scripture-agnostic core promoted out of ramayanam
 from __future__ import annotations
 
 import logging
-import os
 import re
 from dataclasses import dataclass, field
-from functools import lru_cache
-from pathlib import Path
 from typing import Any
+
+# The bundle locator, the shared Kosha and the desandhi helper now live in
+# ``sanskrit_analyzer.vidyut_data`` / ``utils.desandhi``. The redundant
+# ``x as x`` aliases mark the ones this module does not itself call as
+# deliberate re-exports: downstream callers (ramayanam) import them from here.
+from sanskrit_analyzer.utils.desandhi import desandhi_candidates
+from sanskrit_analyzer.utils.desandhi import visarga_candidates as visarga_candidates
+from sanskrit_analyzer.vidyut_data import VidyutUnavailable
+from sanskrit_analyzer.vidyut_data import is_available as is_available
+from sanskrit_analyzer.vidyut_data import kosha as _kosha
+from sanskrit_analyzer.vidyut_data import resolve_data_dir as resolve_data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -145,36 +153,6 @@ class Analysis:
         }
 
 
-class VidyutUnavailable(RuntimeError):
-    """Raised when the vidyut data bundle cannot be located/loaded."""
-
-
-def resolve_data_dir() -> Path | None:
-    """Find a vidyut data directory that actually contains a ``kosha`` subdir.
-
-    Order: ``VIDYUT_DATA_DIR`` env, a ``vidyut-0.4.0/`` bundle in the current
-    working directory (a consuming project run from its repo root — e.g.
-    ramayanam's ``python run.py`` — ships the bundle there), then the
-    user-level ``~/.vidyut-data``. The bundle path is *data*, not a secret, so a
-    default search is fine.
-
-    This is deliberately layout-agnostic: as a shared library module we cannot
-    assume any fixed depth relative to a host repo, so discovery is driven by an
-    explicit env var and well-known locations rather than ``__file__`` arithmetic.
-    """
-    candidates: list[Path] = []
-    env = os.environ.get("VIDYUT_DATA_DIR")
-    if env:
-        candidates.append(Path(env).expanduser())
-    candidates.append(Path.cwd() / "vidyut-0.4.0")
-    candidates.append(Path.home() / ".vidyut-data")
-
-    for c in candidates:
-        if (c / "kosha").is_dir():
-            return c
-    return None
-
-
 # ---------------------------------------------------------------------------
 # Pure helpers (no vidyut needed) -- the easily-testable core.
 # ---------------------------------------------------------------------------
@@ -198,40 +176,6 @@ def tokenize(text: str) -> list[str]:
     return tokens
 
 
-def desandhi_candidates(slp: str) -> list[str]:
-    """Generate lookup candidates for a SLP1 form, undoing common final sandhi.
-
-    Two facts force this. (1) Kosha is keyed by the underlying ``-s``/``-r``/stem
-    form, not the pausal visarga ``-H``. (2) In *running* verse text a word-final
-    visarga has already mutated by sandhi — ``-aḥ`` → ``-o`` before a voiced
-    sound (रामः → रामो), visarga → ``ś``/``ṣ`` before sibilants, final ``m`` →
-    anusvāra ``ṃ``. Without reversing these, almost nothing in connected text
-    resolves. Order is preserved and de-duplicated.
-    """
-    out = [slp]
-    if slp:
-        stem, last = slp[:-1], slp[-1]
-        if last == "H":  # visarga (pausa) -> -as / -ar
-            out += [stem + "s", stem + "r"]
-        elif last == "o":  # -aḥ / -as -> -o before voiced (रामो, महावीर्यो)
-            out += [stem + "as", stem + "aH", stem + "a"]
-        elif last in ("S", "z"):  # visarga -> ś / ṣ before c-/ṭ-
-            out += [stem + "H", stem + "s"]
-        elif last == "M":  # final m -> anusvāra ṃ
-            out += [stem + "m"]
-    seen: set[str] = set()
-    uniq: list[str] = []
-    for c in out:
-        if c and c not in seen:
-            seen.add(c)
-            uniq.append(c)
-    return uniq
-
-
-# Backwards-compatible alias (the function used to only handle visarga).
-visarga_candidates = desandhi_candidates
-
-
 def gana_to_number(gana_name: str | None) -> int | None:
     if not gana_name:
         return None
@@ -247,25 +191,6 @@ def english_for_root(root: str | None) -> str | None:
 # ---------------------------------------------------------------------------
 # Vidyut-backed engine.
 # ---------------------------------------------------------------------------
-
-@lru_cache(maxsize=1)
-def _kosha():
-    data_dir = resolve_data_dir()
-    if data_dir is None:
-        raise VidyutUnavailable(
-            "vidyut data bundle not found. Checked VIDYUT_DATA_DIR, "
-            "<repo>/vidyut-0.4.0, and ~/.vidyut-data."
-        )
-    from vidyut.kosha import Kosha  # imported lazily so import-time stays cheap
-
-    logger.info("Loading vidyut kosha from %s", data_dir / "kosha")
-    return Kosha(str(data_dir / "kosha"))
-
-
-def is_available() -> bool:
-    """True if the vidyut data bundle is present (does not load the kosha)."""
-    return resolve_data_dir() is not None
-
 
 # ---------------------------------------------------------------------------
 # Transliteration helpers (public API).

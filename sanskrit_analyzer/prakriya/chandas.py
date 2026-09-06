@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 
-from sanskrit_analyzer.deep_read.kosha_engine import VidyutUnavailable, resolve_data_dir
+from sanskrit_analyzer.vidyut_data import VidyutUnavailable, resolve_data_dir
 
 
 @dataclass(frozen=True)

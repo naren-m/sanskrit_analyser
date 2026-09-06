@@ -31,11 +31,11 @@ simply returns None and the caller keeps its prior behaviour.
 from __future__ import annotations
 
 import logging
-import os
 import re
 from collections.abc import Iterator
 from typing import Any
 
+from sanskrit_analyzer import vidyut_data
 from sanskrit_analyzer.dhatu.dhatupatha import DhatuKosha, strip_anubandhas
 
 logger = logging.getLogger(__name__)
@@ -54,14 +54,7 @@ class DhatuResolver:
         if self._ready is not None:
             return self._ready
         try:
-            from vidyut.kosha import Kosha
-
-            from sanskrit_analyzer.prakriya.analyzer import resolve_data_dir
-
-            data_dir = resolve_data_dir()
-            if data_dir is None:
-                raise RuntimeError("vidyut data bundle not found")
-            self._kosha = Kosha(os.path.join(str(data_dir), "kosha"))
+            self._kosha = vidyut_data.kosha()
             self._dhatu_kosha = DhatuKosha()
             self._ready = True
         except Exception as e:  # missing data bundle

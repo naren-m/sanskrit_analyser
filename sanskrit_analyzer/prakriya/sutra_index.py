@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from sanskrit_analyzer.deep_read.kosha_engine import VidyutUnavailable, resolve_data_dir
+from sanskrit_analyzer.vidyut_data import VidyutUnavailable, resolve_data_dir
 
 
 @dataclass(frozen=True)
@@ -28,7 +28,7 @@ class SutraIndex:
         self._sutras = sutras
 
     @classmethod
-    def load(cls, data_dir: Path | None = None) -> "SutraIndex":
+    def load(cls, data_dir: Path | None = None) -> SutraIndex:
         data_dir = data_dir or resolve_data_dir()
         if data_dir is None:
             raise VidyutUnavailable(

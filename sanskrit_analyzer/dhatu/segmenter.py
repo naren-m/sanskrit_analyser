@@ -33,7 +33,9 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 
+from sanskrit_analyzer import vidyut_data
 from sanskrit_analyzer.deep_read import kosha_engine
+from sanskrit_analyzer.utils.desandhi import desandhi_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +45,14 @@ logger = logging.getLogger(__name__)
 _MIN_SPLIT_LEN = 6
 
 
-class SegmenterUnavailable(RuntimeError):
+class SegmenterUnavailable(RuntimeError):  # noqa: N818 - name is downstream API
     """Raised when the vidyut sandhi/kosha data needed to segment is missing."""
 
 
 @lru_cache(maxsize=1)
 def _splitter():
     """Load the vidyut sandhi splitter from the resolved data bundle."""
-    data_dir = kosha_engine.resolve_data_dir()
+    data_dir = vidyut_data.resolve_data_dir()
     if data_dir is None:
         raise SegmenterUnavailable(
             "vidyut data bundle not found; cannot build the sandhi splitter."
@@ -66,14 +68,14 @@ def _splitter():
 
 def is_available() -> bool:
     """True if both the kosha and sandhi data needed to segment are present."""
-    data_dir = kosha_engine.resolve_data_dir()
+    data_dir = vidyut_data.resolve_data_dir()
     return data_dir is not None and (Path(data_dir) / "sandhi" / "rules.csv").is_file()
 
 
 def _kosha_valid(slp: str) -> bool:
     """True if ``slp`` (after undoing common final sandhi) is a real pada."""
-    kosha = kosha_engine._kosha()
-    return any(list(kosha.get(cand)) for cand in kosha_engine.desandhi_candidates(slp))
+    kosha = vidyut_data.kosha()
+    return any(list(kosha.get(cand)) for cand in desandhi_candidates(slp))
 
 
 @lru_cache(maxsize=8192)
@@ -137,7 +139,7 @@ def segment(text: str) -> list[str] | None:
                 if iast:
                     members.append(iast)
         return members
-    except kosha_engine.VidyutUnavailable:
+    except vidyut_data.VidyutUnavailable:
         return None
     except Exception as exc:  # segmentation is best-effort; never break the caller
         logger.warning("segmentation failed for %r: %s", text, exc)

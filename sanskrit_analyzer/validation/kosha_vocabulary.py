@@ -16,46 +16,9 @@ from __future__ import annotations
 
 import functools
 
-from sanskrit_analyzer.engines.vidyut_engine import DEFAULT_VIDYUT_DATA_PATH
+from sanskrit_analyzer import vidyut_data
+from sanskrit_analyzer.utils.desandhi import desandhi_candidates
 from sanskrit_analyzer.validation.vocabulary import Vocabulary
-
-
-def _desandhi(slp: str) -> list[str]:
-    """Return de-sandhi candidate forms to look up in the kosha.
-
-    The kosha stores ``-s``/stem forms (not pausal visarga ``-H``), and
-    running text has sandhi'd word boundaries (e.g. रामः -> रामो). For a
-    given SLP1 form we therefore also try a handful of reversed-sandhi
-    variants so a surface form can still resolve to a stored entry.
-    """
-    candidates = [slp]
-    if not slp:
-        return candidates
-
-    last = slp[-1]
-    base = slp[:-1]
-
-    if last == "H":  # visarga -> s / r
-        candidates.append(base + "s")
-        candidates.append(base + "r")
-    elif last == "o":  # -o <- -as / -aH / -a
-        candidates.append(base + "as")
-        candidates.append(base + "aH")
-        candidates.append(base + "a")
-    elif last in ("S", "z"):  # sandhi'd sibilant <- visarga / s
-        candidates.append(base + "H")
-        candidates.append(base + "s")
-    elif last == "M":  # anusvara <- m
-        candidates.append(base + "m")
-
-    # De-dup while preserving order
-    seen: set[str] = set()
-    result: list[str] = []
-    for c in candidates:
-        if c not in seen:
-            seen.add(c)
-            result.append(c)
-    return result
 
 
 class KoshaVocabulary:
@@ -69,18 +32,21 @@ class KoshaVocabulary:
         """Initialize, opening the kosha and the curated indeclinable vocab.
 
         Args:
-            data_path: Path to the vidyut kosha directory. Defaults to
-                ``<DEFAULT_VIDYUT_DATA_PATH>/kosha``.
+            data_path: Path to the vidyut kosha directory. Defaults to the
+                shared process-wide kosha (see
+                :func:`sanskrit_analyzer.vidyut_data.kosha`).
 
         Raises:
             Exception: If the kosha cannot be opened. The Analyzer wraps
                 construction in try/except and falls back to the curated
                 vocabulary, so a clear failure here is acceptable.
         """
-        from vidyut.kosha import Kosha
+        if data_path:
+            from vidyut.kosha import Kosha
 
-        root = data_path or f"{DEFAULT_VIDYUT_DATA_PATH}/kosha"
-        self._kosha = Kosha(root)
+            self._kosha = Kosha(data_path)
+        else:
+            self._kosha = vidyut_data.kosha()
 
         # The curated vocabulary is consulted FIRST (it is purpose-tuned, e.g.
         # the Yoga-Sutra golden splits, and carries pos/lemma metadata); the
@@ -110,7 +76,7 @@ class KoshaVocabulary:
             return False
         if self._curated.contains(slp1_lemma):
             return True
-        return any(self._kosha_has(form) for form in _desandhi(slp1_lemma))
+        return any(self._kosha_has(form) for form in desandhi_candidates(slp1_lemma))
 
     def find_stem(self, slp1_form: str) -> str | None:
         """Return a known stem for *slp1_form*.
@@ -123,7 +89,7 @@ class KoshaVocabulary:
         curated = self._curated.find_stem(slp1_form)
         if curated is not None:
             return curated
-        if any(self._kosha_has(form) for form in _desandhi(slp1_form)):
+        if any(self._kosha_has(form) for form in desandhi_candidates(slp1_form)):
             return slp1_form
         return None
 
