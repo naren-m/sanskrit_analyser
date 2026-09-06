@@ -6,9 +6,9 @@ the classical pathyā/vipulā checks ourselves (design doc §3.3.5):
 
 * every pāda has 8 syllables;
 * syllables 2–3 are never both laghu;
-* syllable 5 is laghu and 6 is guru (pāda-final syllable is anceps);
-* syllable 7: guru in odd pādas -> pathyā; other odd-pāda shapes -> vipulā.
-  Even pādas always need 7th laghu (ja-gaṇa at 5–7).
+* even pādas take ja-gaṇa (L G L) at syllables 5–7 (pāda-final syllable is anceps);
+* odd pādas take ya-gaṇa (L G G) -> pathyā, or one of the four vipulā gaṇas
+  na (LLL), bha (GLL), ma (GGG), ra (GLG). Anything else is not a śloka.
 """
 from __future__ import annotations
 
@@ -64,8 +64,25 @@ def _as_four_padas(scans: list[str]) -> list[str]:
     return scans
 
 
+# Odd-pāda syllables 5–7 of a classical śloka. pathyā takes ya-gaṇa; the four
+# vipulā forms take na, bha, ma, ra. ja-gaṇa (LGL) in an odd pāda is the even-pāda
+# shape and is not a śloka form at all.
+_ODD_PADA_FORMS = {
+    "LGG": "paTyA",
+    "LLL": "na-vipulA",
+    "GLL": "Ba-vipulA",
+    "GGG": "ma-vipulA",
+    "GLG": "ra-vipulA",
+}
+
+
 def anushtubh_form(scans: list[str]) -> str | None:
-    """Return "paTyA"/"vipulA" if the 4 pāda scans satisfy śloka rules, else None."""
+    """Return the śloka form ("paTyA" or "<gaṇa>-vipulA") for 4 pāda scans, else None.
+
+    A verse is labelled by its odd pādas: "paTyA" when both are pathyā, otherwise
+    the vipulā of the first odd pāda that is not pathyā. The 8th syllable of each
+    pāda is anceps and is not inspected.
+    """
     if len(scans) != 4 or any(len(s) != 8 for s in scans):
         return None
     for s in scans:
@@ -75,13 +92,10 @@ def anushtubh_form(scans: list[str]) -> str | None:
     for s in (scans[1], scans[3]):
         if s[4:7] != "LGL":
             return None
-    # odd pādas: 5=L, 6=G required; 7=G -> pathyā, else vipulā
-    for s in (scans[0], scans[2]):
-        if s[4] != "L" or s[5] != "G":
-            return "vipulA"  # vipulā variants relax 5–7; be permissive but labeled
-    if all(s[6] == "G" for s in (scans[0], scans[2])):
-        return "paTyA"
-    return "vipulA"
+    forms = [_ODD_PADA_FORMS.get(s[4:7]) for s in (scans[0], scans[2])]
+    if None in forms:
+        return None
+    return next((f for f in forms if f != "paTyA"), "paTyA")
 
 
 def is_available() -> bool:

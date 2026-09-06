@@ -38,11 +38,26 @@ def transliterate(text: str, from_script: Script, to_script: Script) -> str:
 
     from indic_transliteration import sanscript
 
+    if from_script == Script.IAST:
+        text = _iso15919_to_iast(text)
+
     from_scheme = _SCRIPT_TO_SCHEME[from_script]
     to_scheme = _SCRIPT_TO_SCHEME[to_script]
 
     result: str = sanscript.transliterate(text, from_scheme, to_scheme)
     return result
+
+
+# ISO 15919 spellings that scholarly sources mix into IAST. indic_transliteration's
+# "iast" scheme does not know them, so e.g. "saṁskṛtam" came back as "sṁskftam".
+_ISO15919_TO_IAST = str.maketrans({"ṁ": "ṃ", "ē": "e", "ō": "o"})
+_ISO15919_RING = (("r̥̄", "ṝ"), ("l̥̄", "ḹ"), ("r̥", "ṛ"), ("l̥", "ḷ"))
+
+
+def _iso15919_to_iast(text: str) -> str:
+    for iso, iast in _ISO15919_RING:
+        text = text.replace(iso, iast)
+    return text.translate(_ISO15919_TO_IAST)
 
 
 def to_slp1(text: str, from_script: Script) -> str:

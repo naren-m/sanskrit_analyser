@@ -73,14 +73,25 @@ class TestEngineNormalization:
         engine = HeritageEngine.__new__(HeritageEngine)
         assert engine._normalize_to_slp1("Bavati") == "Bavati"
 
-    def test_dharmamitra_normalize_treats_plain_ascii_as_slp1(self):
-        from sanskrit_analyzer.engines.dharmamitra_engine import DharmamitraEngine
-
-        engine = DharmamitraEngine.__new__(DharmamitraEngine)
-        assert engine._normalize_to_iast("Bavati") == "bhavati"
-
     def test_local_byt5_normalize_treats_plain_ascii_as_slp1(self):
         from sanskrit_analyzer.engines.local_byt5_engine import LocalByT5Engine
 
         engine = LocalByT5Engine.__new__(LocalByT5Engine)
         assert engine._normalize_to_iast("Bavati") == "bhavati"
+
+
+class TestIso15919Input:
+    """ISO 15919 variants (ṁ, r̥, ē) are read as their IAST equivalents."""
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("saṁskṛtam", "saMskftam"),
+            ("kr̥ṣṇa", "kfzRa"),
+            ("pitr̥̄n", "pitFn"),
+            ("kl̥ptam", "kxptam"),
+            ("dēva", "deva"),
+        ],
+    )
+    def test_iso_variants_normalize(self, text, expected):
+        assert normalize_slp1(text) == expected

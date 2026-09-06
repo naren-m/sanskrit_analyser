@@ -1,5 +1,6 @@
-# Sandhi Rules Database
-# TODO: Full population of sandhi rules from Paninian grammar
+# Sandhi Rules Database (selected rules)
+# Every `sutra:` code is verified against the Aṣṭādhyāyī text in the vidyut
+# bundle by tests/test_data_files/test_sutra_citations.py. Check before adding.
 
 description: >
   Sandhi (सन्धि) refers to the euphonic combination of sounds at word boundaries
@@ -98,11 +99,52 @@ categories:
         - before: "गुरु + आज्ञा"
           after: "गुर्वाज्ञा"
 
+    - name: ayavayav
+      devanagari: अयवायाव
+      sutra: "6.1.78"
+      rule: "एचोऽयवायावः"
+      before: "e/ai/o/au + vowel"
+      after: "ay/āy/av/āv + vowel"
+      description: "Diphthongs before a vowel become ay, āy, av, āv (final y/v of ay/av is often dropped before non-a vowels, 8.3.19)"
+      examples:
+        - before: "हरे + ए"
+          after: "हरये"
+        - before: "विष्णो + इति"
+          after: "विष्णविति"
+        - before: "नै + अकः"
+          after: "नायकः"
+
+    - name: purvarupa
+      devanagari: पूर्वरूप
+      sutra: "6.1.109"
+      rule: "एङः पदान्तादति"
+      before: "word-final e/o + a"
+      after: "e/o + avagraha"
+      description: "Word-final e or o absorbs a following short a; the elision is written with avagraha"
+      examples:
+        - before: "ते + अपि"
+          after: "तेऽपि"
+        - before: "सो + अहम्"
+          after: "सोऽहम्"
+
+    - name: pragrhya
+      devanagari: प्रगृह्य
+      sutra: "1.1.11"
+      rule: "ईदूदेद्द्विवचनं प्रगृह्यम्"
+      before: "dual ending ī/ū/e + vowel"
+      after: "unchanged (no sandhi)"
+      description: "Dual endings in ī, ū, e are pragṛhya and undergo no vowel sandhi (6.1.125 प्लुतप्रगृह्या अचि नित्यम्)"
+      examples:
+        - before: "हरी + एतौ"
+          after: "हरी एतौ"
+        - before: "विष्णू + इमौ"
+          after: "विष्णू इमौ"
+
   consonant:
     # hal-sandhi (हल्-सन्धि) - Consonant sandhi rules
     - name: jash-tva
       devanagari: जश्त्व
-      sutra: "8.4.53"
+      sutra: "8.2.39"
       rule: "झलां जशोऽन्ते"
       before: "voiceless stop + voiced"
       after: "voiced stop"
@@ -161,15 +203,67 @@ categories:
         - before: "तत् + टीका"
           after: "तट्टीका"
 
+    - name: chatva
+      devanagari: छत्व
+      sutra: "8.4.63"
+      rule: "शश्छोऽटि"
+      before: "t-class (after ścutva: c) + ś + vowel/semivowel/nasal"
+      after: "c + ch"
+      description: "After a stop, ś followed by a vowel, y/v/r or nasal optionally becomes ch (with the stop already palatalised by 8.4.40)"
+      examples:
+        - before: "तत् + श्रुत्वा"
+          after: "तच्छ्रुत्वा"
+        - before: "सत् + शास्त्रम्"
+          after: "सच्छास्त्रम्"
+
+    - name: anusvara
+      devanagari: अनुस्वार
+      sutra: "8.3.23"
+      rule: "मोऽनुस्वारः"
+      before: "word-final m + consonant"
+      after: "ṃ + consonant"
+      description: "Word-final m before a consonant becomes anusvāra"
+      examples:
+        - before: "रामम् + पश्यति"
+          after: "रामं पश्यति"
+        - before: "गृहम् + गच्छति"
+          after: "गृहं गच्छति"
+
+    - name: parasavarna
+      devanagari: परसवर्ण
+      sutra: "8.4.58"
+      rule: "अनुस्वारस्य ययि परसवर्णः"
+      before: "ṃ + stop (yay)"
+      after: "homorganic nasal + stop"
+      description: "Anusvāra before a stop optionally (8.4.59 वा पदान्तस्य at word end) becomes the nasal of that stop's class"
+      examples:
+        - before: "सम् + कल्प"
+          after: "सङ्कल्प"
+        - before: "किम् + चित्"
+          after: "किञ्चित्"
+
+    - name: namut
+      devanagari: ङमुट्
+      sutra: "8.3.32"
+      rule: "ङमो ह्रस्वादचि ङमुण्नित्यम्"
+      before: "short vowel + word-final ṅ/ṇ/n + vowel"
+      after: "doubled nasal"
+      description: "Word-final ṅ, ṇ, n after a short vowel is doubled before a vowel"
+      examples:
+        - before: "प्रत्यङ् + आत्मा"
+          after: "प्रत्यङ्ङात्मा"
+        - before: "सुगण् + ईशः"
+          after: "सुगण्णीशः"
+
   visarga:
     # visarga-sandhi (विसर्गसन्धि)
     - name: visarga-to-o
       devanagari: विसर्गस्य ओकारः
-      sutra: "8.3.34"
-      rule: "विसर्जनीयस्य सः"
+      sutra: "6.1.114"
+      rule: "हशि च"
       before: "aḥ + voiced consonant"
       after: "o"
-      description: "Visarga after a becomes o before voiced consonants"
+      description: "Final s becomes ru (8.2.66 ससजुषो रुः), ru becomes u before a voiced consonant (6.1.114), and a + u gives o by guṇa (6.1.87)"
       examples:
         - before: "रामः + गच्छति"
           after: "रामो गच्छति"
@@ -178,24 +272,52 @@ categories:
 
     - name: visarga-to-r
       devanagari: विसर्गस्य रेफः
-      sutra: "8.3.17"
-      rule: "भोभगोअघोअपूर्वस्य योऽशि"
-      before: "āḥ + voiced"
-      after: "ā + r"
-      description: "Visarga after ā becomes r before voiced sounds"
+      sutra: "8.2.66"
+      rule: "ससजुषो रुः"
+      before: "ḥ (from s) after a vowel other than a/ā + vowel or voiced consonant"
+      after: "r"
+      description: "Final s becomes ru; after any vowel except a/ā the r stays before vowels and voiced consonants"
+      examples:
+        - before: "हरिः + आगतः"
+          after: "हरिरागतः"
+        - before: "गुरुः + गच्छति"
+          after: "गुरुर्गच्छति"
+
+    - name: rephanta-retention
+      devanagari: रेफान्तपदम्
+      sutra: "8.3.15"
+      rule: "खरवसानयोर्विसर्जनीयः"
+      before: "r-final word (पुनर्, अन्तर्, प्रातर्) + vowel or voiced consonant"
+      after: "r"
+      description: "These words end in r, not s; the visarga is only the pausa form (8.3.15), so before vowels and voiced sounds the original r appears"
       examples:
         - before: "पुनः + अपि"
           after: "पुनरपि"
         - before: "अन्तः + आत्मा"
           after: "अन्तरात्मा"
 
+    - name: visarga-lopa-after-a
+      devanagari: विसर्गलोपः
+      sutra: "8.3.17"
+      rule: "भोभगोअघोअपूर्वस्य योऽशि"
+      before: "āḥ + vowel or voiced consonant; aḥ + vowel other than a"
+      after: "ā / a (visarga dropped, hiatus stays)"
+      description: "ru after a/ā becomes y before vowels and voiced sounds (8.3.17); the y is then dropped before consonants (8.3.22 हलि सर्वेषाम्) and optionally before vowels (8.3.19 लोपः शाकल्यस्य), leaving hiatus"
+      examples:
+        - before: "देवाः + आगताः"
+          after: "देवा आगताः"
+        - before: "देवाः + गच्छन्ति"
+          after: "देवा गच्छन्ति"
+        - before: "रामः + इति"
+          after: "राम इति"
+
     - name: visarga-lopa
       devanagari: विसर्गलोप
-      sutra: "6.1.114"
-      rule: "हशि च"
+      sutra: "6.1.113"
+      rule: "अतो रोरप्लुतादप्लुते"
       before: "aḥ + a"
       after: "o + avagraha"
-      description: "Visarga after a followed by a becomes o with avagraha"
+      description: "ru after short a becomes u before short a (6.1.113), a + u gives o (6.1.87), and the following a is absorbed by pūrvarūpa (6.1.109), written with avagraha"
       examples:
         - before: "कः + अपि"
           after: "कोऽपि"
@@ -214,6 +336,21 @@ categories:
           after: "रामश्शेते"
         - before: "देवः + सेवते"
           after: "देवस्सेवते"
+
+    - name: visarga-to-s
+      devanagari: विसर्गस्य सकारः
+      sutra: "8.3.34"
+      rule: "विसर्जनीयस्य सः"
+      before: "ḥ + t/th; ḥ + c/ch; ḥ + ṭ/ṭh"
+      after: "s / ś / ṣ"
+      description: "Visarga becomes s before dentals, then ścutva (8.4.40) gives ś before palatals and ṣṭutva (8.4.41) gives ṣ before retroflexes"
+      examples:
+        - before: "रामः + तिष्ठति"
+          after: "रामस्तिष्ठति"
+        - before: "बालः + चलति"
+          after: "बालश्चलति"
+        - before: "धनुः + टङ्कारः"
+          after: "धनुष्टङ्कारः"
 
     - name: visarga-retention
       devanagari: विसर्गस्थितिः

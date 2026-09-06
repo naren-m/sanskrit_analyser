@@ -36,3 +36,33 @@ def test_anushtubh_form_pure_function():
 def test_prose_returns_none_name():
     r = identify("rAmaH gacCati")
     assert r.name is None
+
+
+@pytest.mark.parametrize(
+    "odd_5_7,expected",
+    [
+        ("LGG", "paTyA"),
+        ("LLL", "na-vipulA"),
+        ("GLL", "Ba-vipulA"),
+        ("GGG", "ma-vipulA"),
+        ("GLG", "ra-vipulA"),
+        ("LGL", None),  # ja-gaṇa is the even-pāda shape; not a śloka odd pāda
+        ("LLG", None),  # sa-gaṇa: no such vipulā
+    ],
+)
+def test_anushtubh_odd_pada_forms(odd_5_7, expected):
+    odd = "GGGG" + odd_5_7 + "G"
+    even = "GGGGLGLG"
+    assert anushtubh_form([odd, even, odd, even]) == expected
+
+
+def test_anushtubh_mixed_odd_padas_reports_the_vipula():
+    pathya = "GGGGLGGG"
+    na_vipula = "GGGGLLLG"
+    even = "GGGGLGLG"
+    assert anushtubh_form([pathya, even, na_vipula, even]) == "na-vipulA"
+
+
+def test_anushtubh_even_pada_must_be_ja_gana():
+    odd = "GGGGLGGG"
+    assert anushtubh_form([odd, "GGGGLGGG", odd, "GGGGLGLG"]) is None
