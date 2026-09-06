@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sanskrit-analyzer"
 version = "0.1.0"
-description = "Centralized Sanskrit sentence parser with 3-engine ensemble analysis"
+description = "Sanskrit sentence parser: Vidyut + Heritage ensemble, local sandhi segmenter, dhātu identification"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -31,7 +31,6 @@ dependencies = [
     "vidyut>=0.4.0",
     "aiohttp>=3.9.0",
     "pyyaml>=6.0",
-    "streamlit>=1.53.1",
     "mcp>=1.26.0",
 ]
 
@@ -55,8 +54,11 @@ api = [
 mcp = [
     "mcp>=1.0.0",
 ]
+ui = [
+    "streamlit>=1.53.1",
+]
 all = [
-    "sanskrit-analyzer[ml,cache,api,mcp]",
+    "sanskrit-analyzer[ml,cache,api,mcp,ui]",
 ]
 dev = [
     "pytest>=7.0",
@@ -79,6 +81,9 @@ Repository = "https://github.com/narenmudivarthy/sanskrit-analyzer"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sanskrit_analyzer"]
+# CDSL Layer B TSVs (~20 MB) have no in-package consumer yet; keep them in the
+# repo for provenance but out of the wheel until something reads them.
+exclude = ["sanskrit_analyzer/data/vyutpatti/*.tsv"]
 
 # Required because the [project.optional-dependencies].api group includes a
 # direct reference (`homelab-observability @ git+...`). Without this flag

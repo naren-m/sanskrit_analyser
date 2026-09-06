@@ -6,7 +6,7 @@ Retrieved-vyutpatti layer for the vyutpatti database. All files TSV, SLP1, heade
 
 Source: Cologne Digital Sanskrit Dictionaries, Universität zu Köln
 (`https://www.sanskrit-lexicon.uni-koeln.de/`), fetched via `pycdsl` from the
-`/scans/<DICT>Scan/2020/downloads/` endpoints. Build script: `build_layerb.py`.
+`/scans/<DICT>Scan/2020/downloads/` endpoints. Build script: `scripts/build_layerb.py` (repo root; not shipped in the wheel).
 
 | dict | ed. | entries | role |
 |---|---|---|---|

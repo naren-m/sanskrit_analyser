@@ -45,7 +45,10 @@ class EngineConfig:
 
     vidyut: bool = True
     vidyut_weight: float = 0.35
-    heritage: bool = True
+    # Off by default: the Heritage HTML parser is still a stub that returns the
+    # whole input as one unsplit segment, and enabling it costs an HTTP call
+    # (localhost:8080, then sanskrit.inria.fr) on every cache miss.
+    heritage: bool = False
     heritage_weight: float = 0.25
     heritage_mode: str = "local"  # local | remote | fallback
     heritage_local_url: str = "http://localhost:8080"

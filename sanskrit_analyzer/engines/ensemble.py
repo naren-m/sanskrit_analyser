@@ -128,23 +128,29 @@ class EnsembleAnalyzer:
         """Get names of available engines."""
         return [e.name for e in self._engines if e.is_available]
 
-    async def analyze(self, text: str) -> EnsembleResult:
+    async def analyze(self, text: str, engines: list[str] | None = None) -> EnsembleResult:
         """Analyze text using all engines and combine results.
 
         Args:
             text: Sanskrit text to analyze.
+            engines: Optional engine names to restrict this call to. Filtering
+                here (rather than mutating ``self._engines``) keeps concurrent
+                callers sharing one analyzer from racing on the engine list.
 
         Returns:
             EnsembleResult with merged segments and agreement info.
         """
-        if not self._engines:
+        selected = self._engines
+        if engines:
+            selected = [e for e in self._engines if e.name in engines]
+        if not selected:
             return EnsembleResult(
                 errors=["No engines configured"],
             )
 
         # Run all engines in parallel
         tasks = []
-        for engine in self._engines:
+        for engine in selected:
             if engine.is_available:
                 tasks.append(self._run_engine(engine, text))
 

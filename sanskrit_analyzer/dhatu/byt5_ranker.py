@@ -37,9 +37,10 @@ class ByT5Adapter:
     def __init__(self, engine=None) -> None:
         self._engine = engine
         self._loaded = engine is not None
-        # Cache of the most recent line's ByT5 analysis: text -> {surface: pos}.
-        self._pos_cache: dict[str, dict[str, str]] = {}
-        self._seg_cache: dict[str, list[str]] = {}
+        # The most recent line's ByT5 analysis; see _analyze for why only one.
+        self._cached_text: str | None = None
+        self._pos: dict[str, str] = {}
+        self._segments: list[str] = []
 
     def _ensure_engine(self):
         if not self._loaded:
@@ -58,25 +59,33 @@ class ByT5Adapter:
         return bool(engine and engine.is_available)
 
     def _analyze(self, text: str) -> None:
-        """Run and cache the ByT5 SLM segmentation + POS tags for ``text``."""
+        """Run and cache the ByT5 SLM segmentation + POS tags for ``text``.
+
+        Only the most recent line is kept: ``pos_hint`` is asked about words of
+        the line just segmented, and keeping older lines would both grow without
+        bound and let a POS tag from an earlier line leak onto a homograph here.
+        """
+        self._cached_text = None
+        self._pos = {}
+        self._segments = []
+
         engine = self._ensure_engine()
         if engine is None or not engine.is_available:
             return
-        import asyncio
 
-        result = asyncio.run(engine.analyze(text))
+        result = _run_engine(engine, text)
         segments = [s for s in (getattr(result, "segments", None) or []) if s.surface]
-        self._pos_cache[text] = {s.surface: s.pos for s in segments if s.pos}
-        self._seg_cache[text] = [s.surface for s in segments]
+        self._cached_text = text
+        self._pos = {s.surface: s.pos for s in segments if s.pos}
+        self._segments = [s.surface for s in segments]
 
     def segment(self, text: str) -> list[str] | None:
         """ByT5 segmentation of ``text`` into IAST members, or ``None``."""
         if not text or not text.strip():
             return []
-        if text not in self._seg_cache:
+        if self._cached_text != text:
             self._analyze(text)
-        members = self._seg_cache.get(text)
-        return members if members else None
+        return self._segments or None
 
     def pos_hint(self, word: str) -> str | None:
         """Coarse POS (``"noun"``/``"verb"``) ByT5 assigned to ``word``, if seen.
@@ -85,11 +94,30 @@ class ByT5Adapter:
         :func:`rank_analyses` acts on; adjectives/indeclinables return ``None``
         (no ranking preference).
         """
-        for mapping in self._pos_cache.values():
-            pos = mapping.get(word)
-            if pos in ("noun", "verb"):
-                return pos
-        return None
+        pos = self._pos.get(word)
+        return pos if pos in ("noun", "verb") else None
+
+
+def _run_engine(engine, text: str):
+    """Call the engine synchronously whether or not an event loop is running.
+
+    ``LocalByT5Engine`` exposes ``analyze_sync``; other engines (and test fakes)
+    only have the async ``analyze``. ``asyncio.run`` raises inside a running loop
+    (FastAPI/MCP callers), so in that case the coroutine runs on a helper thread.
+    """
+    sync = getattr(engine, "analyze_sync", None)
+    if sync is not None:
+        return sync(text)
+
+    import asyncio
+    import concurrent.futures
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(engine.analyze(text))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(lambda: asyncio.run(engine.analyze(text))).result()
 
 
 @lru_cache(maxsize=1)

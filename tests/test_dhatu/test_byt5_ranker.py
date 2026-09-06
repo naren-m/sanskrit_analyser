@@ -45,6 +45,44 @@ def test_adapter_segment_empty():
     assert ByT5Adapter(engine=_FakeEngine()).segment("") == []
 
 
+def test_adapter_works_inside_running_event_loop():
+    """FastAPI/MCP call DeepRead from a coroutine; asyncio.run would raise there."""
+    import asyncio
+
+    async def go():
+        return ByT5Adapter(engine=_FakeEngine()).segment("रामः गच्छति")
+
+    assert asyncio.run(go()) == ["rāmaḥ", "gacchati"]
+
+
+def test_adapter_prefers_analyze_sync():
+    class _SyncEngine(_FakeEngine):
+        calls = 0
+
+        def analyze_sync(self, text):
+            self.calls += 1
+            return _FakeResult([_FakeSeg("naraḥ", "noun")])
+
+    engine = _SyncEngine()
+    adapter = ByT5Adapter(engine=engine)
+    assert adapter.segment("नरः") == ["naraḥ"]
+    assert engine.calls == 1
+
+
+def test_pos_hint_does_not_leak_across_lines():
+    class _TwoLines(_FakeEngine):
+        async def analyze(self, text):
+            if text == "a":
+                return _FakeResult([_FakeSeg("mā", "verb")])
+            return _FakeResult([_FakeSeg("gacchati", "verb")])
+
+    adapter = ByT5Adapter(engine=_TwoLines())
+    adapter.segment("a")
+    assert adapter.pos_hint("mā") == "verb"
+    adapter.segment("b")
+    assert adapter.pos_hint("mā") is None
+
+
 # --- model-backed (skips without the cached ByT5) ------------------------------
 
 def _byt5_available() -> bool:

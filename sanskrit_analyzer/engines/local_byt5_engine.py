@@ -100,8 +100,8 @@ class LocalByT5Engine(EngineBase):
     def _load_model(self) -> None:
         """Load the ByT5 model and tokenizer."""
         try:
-            from transformers import T5ForConditionalGeneration, AutoTokenizer
             import torch
+            from transformers import AutoTokenizer, T5ForConditionalGeneration
 
             self._device = self._get_device()
             logger.info(
@@ -339,8 +339,16 @@ class LocalByT5Engine(EngineBase):
     async def analyze(self, text: str) -> EngineResult:
         """Analyze Sanskrit text using the local ByT5 model.
 
-        Uses the combined SLM task for efficiency (segmentation + lemma + morphology
-        in a single model call).
+        Thin async wrapper over :meth:`analyze_sync` for the ensemble protocol;
+        inference itself is CPU/GPU-bound and synchronous.
+        """
+        return self.analyze_sync(text)
+
+    def analyze_sync(self, text: str) -> EngineResult:
+        """Synchronous analysis (segmentation + lemma + morphology in one call).
+
+        Safe to call from inside a running event loop, unlike ``asyncio.run``
+        around :meth:`analyze`.
 
         Args:
             text: Sanskrit text in any script.
@@ -417,6 +425,7 @@ class LocalByT5Engine(EngineBase):
 
         # Force garbage collection
         import gc
+
         import torch
 
         gc.collect()

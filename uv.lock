@@ -3099,7 +3099,6 @@ dependencies = [
     { name = "mcp" },
     { name = "pydantic" },
     { name = "pyyaml" },
-    { name = "streamlit" },
     { name = "vidyut" },
 ]
 
@@ -3111,6 +3110,7 @@ all = [
     { name = "opentelemetry-instrumentation-fastapi" },
     { name = "redis" },
     { name = "sentence-transformers" },
+    { name = "streamlit" },
     { name = "torch" },
     { name = "transformers" },
     { name = "uvicorn" },
@@ -3141,6 +3141,9 @@ ml = [
     { name = "torch" },
     { name = "transformers" },
 ]
+ui = [
+    { name = "streamlit" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -3160,16 +3163,16 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "redis", marker = "extra == 'cache'", specifier = ">=5.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "sanskrit-analyzer", extras = ["ml", "cache", "api", "mcp"], marker = "extra == 'all'" },
+    { name = "sanskrit-analyzer", extras = ["ml", "cache", "api", "mcp", "ui"], marker = "extra == 'all'" },
     { name = "sentence-transformers", marker = "extra == 'ml'", specifier = ">=2.7" },
-    { name = "streamlit", specifier = ">=1.53.1" },
+    { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.53.1" },
     { name = "torch", marker = "extra == 'ml'", specifier = ">=2.0" },
     { name = "transformers", marker = "extra == 'ml'", specifier = ">=4.35.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "uvicorn", marker = "extra == 'api'", specifier = ">=0.24.0" },
     { name = "vidyut", specifier = ">=0.4.0" },
 ]
-provides-extras = ["ml", "cache", "api", "mcp", "all", "dev"]
+provides-extras = ["ml", "cache", "api", "mcp", "ui", "all", "dev"]
 
 [[package]]
 name = "scikit-learn"

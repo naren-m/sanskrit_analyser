@@ -1,13 +1,15 @@
 # संस्कृत विश्लेषक | Sanskrit Analyzer
 
-A comprehensive Sanskrit text analysis library with 3-engine ensemble parsing, hierarchical parse trees, and interactive visualization.
+Sanskrit text analysis library: Vidyut + Heritage ensemble parsing, a local sandhi-aware segmenter with dhātu identification, hierarchical parse trees, and interactive visualization.
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
 ## Features
 
-- **3-Engine Ensemble Analysis**: Combines Vidyut, Dharmamitra, and Heritage engines for accurate Sanskrit parsing
+- **Ensemble Analysis**: Combines Vidyut and Sanskrit Heritage engines; an optional local ByT5 engine (`[ml]` extra) can be added
+- **Deep Read**: Offline sandhi-aware DP segmenter over the `vidyut.kosha` lexicon with per-word dhātu identification (`DeepRead`)
+- **Prakriyā Engine**: Verse analyzer with chandas identification and sūtra traces (`sanskrit_analyzer.prakriya`)
 - **4-Level Parse Tree**: Sentence → Sandhi Groups → Base Words → Dhātus
 - **Multi-Script Support**: Devanagari, IAST, SLP1, and ITRANS
 - **Hybrid Disambiguation**: Rules → LLM → Human review pipeline
@@ -103,8 +105,8 @@ docker-compose up
 │                     Sanskrit Analyzer                        │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────┐  ┌──────────────┐  ┌─────────────┐            │
-│  │ Vidyut  │  │ Dharmamitra  │  │  Heritage   │  Engines   │
-│  │ (0.35)  │  │    (0.40)    │  │   (0.25)    │            │
+│  │ Vidyut  │  │ Local ByT5   │  │  Heritage   │  Engines   │
+│  │ (0.35)  │  │ (0.45, opt.) │  │   (0.25)    │            │
 │  └────┬────┘  └──────┬───────┘  └──────┬──────┘            │
 │       └──────────────┼─────────────────┘                    │
 │                      ▼                                       │
@@ -134,49 +136,46 @@ docker-compose up
 Create a `config.yaml` file:
 
 ```yaml
+# Keys are flat and match the dataclass fields in sanskrit_analyzer/config.py.
+# Unknown keys are silently dropped, so nested "vidyut: {enabled: true}" style
+# configs are NOT honoured.
 engines:
-  vidyut:
-    enabled: true
-    weight: 0.35
-  dharmamitra:
-    enabled: true
-    weight: 0.40
-    model: "dharmamitra/sanskrit-grammar-byt5"
-  heritage:
-    enabled: true
-    weight: 0.25
-    url: "https://sanskrit.inria.fr"
+  vidyut: true
+  vidyut_weight: 0.35
+  heritage: false               # HTML parser is a stub; needs a Heritage server
+  heritage_weight: 0.25
+  heritage_mode: local          # local | remote | fallback
+  heritage_local_url: "http://localhost:8080"
+  local_byt5: false             # needs the [ml] extra
+  local_byt5_weight: 0.45
+  local_byt5_model: "chronbmm/sanskrit5-multitask"
+  local_byt5_device: auto       # auto | cpu | cuda | mps
 
 cache:
-  memory:
-    enabled: true
-    max_size: 1000
-  redis:
-    enabled: false
-    url: "redis://localhost:6379/0"
-    ttl: 604800
-  sqlite:
-    enabled: true
-    path: "./corpus.db"
+  memory_enabled: true
+  memory_max_size: 1000
+  redis_enabled: false
+  redis_url: "redis://localhost:6379/0"
+  redis_ttl_days: 7
+  sqlite_enabled: true
+  sqlite_path: "~/.sanskrit_analyzer/corpus.db"
 
 disambiguation:
-  rules:
-    enabled: true
-    skip_threshold: 0.95
-  llm:
-    enabled: false
-    provider: "ollama"
-    model: "llama3"
-  human:
-    enabled: false
-    auto_flag_threshold: 0.5
+  rules_enabled: true
+  min_confidence_skip: 0.95
+  llm_enabled: false
+  llm_provider: ollama          # ollama | openai
+  llm_model: "llama3.2"
+  ollama_url: "http://localhost:11434"
+  human_enabled: false
 ```
 
 Environment variables override config file settings:
 - `SANSKRIT_REDIS_URL`: Redis connection URL
+- `SANSKRIT_SQLITE_PATH`: Path to the SQLite corpus database
 - `SANSKRIT_LLM_PROVIDER`: "ollama" or "openai"
 - `SANSKRIT_LLM_MODEL`: Model name for LLM disambiguation
-- `SANSKRIT_CORPUS_PATH`: Path to SQLite corpus database
+- `SANSKRIT_OLLAMA_URL`, `SANSKRIT_OPENAI_API_KEY`, `SANSKRIT_LOG_LEVEL`, `SANSKRIT_LOG_FILE`
 
 ## API Endpoints
 
@@ -283,9 +282,12 @@ sanskrit_analyzer/
 │   ├── engines/
 │   │   ├── base.py           # Abstract engine base
 │   │   ├── vidyut_engine.py  # Vidyut wrapper
-│   │   ├── dharmamitra_engine.py
 │   │   ├── heritage_engine.py
+│   │   ├── local_byt5_engine.py  # optional, [ml] extra
 │   │   └── ensemble.py       # Ensemble voting
+│   ├── dhatu/                # Local sandhi DP segmenter + dhātu identifier
+│   ├── deep_read/            # DeepRead facade + kosha engine
+│   ├── prakriya/             # Verse analyzer, chandas, sūtra traces
 │   ├── cache/
 │   │   ├── memory.py         # LRU cache
 │   │   ├── redis_cache.py    # Redis layer
@@ -339,7 +341,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## Acknowledgments
 
 - [Vidyut](https://github.com/ambuda-org/vidyut) - Sanskrit NLP toolkit by Ambuda
-- [Dharmamitra](https://github.com/BuddhistDigitalResourceCenter) - Sanskrit grammar models
+- [Cologne Digital Sanskrit Dictionaries](https://www.sanskrit-lexicon.uni-koeln.de/) - vyutpatti source data
+- [chronbmm/sanskrit5-multitask](https://huggingface.co/chronbmm/sanskrit5-multitask) - optional local ByT5 model
 - [Sanskrit Heritage](https://sanskrit.inria.fr) - INRIA Sanskrit tools
 - [Panini](https://en.wikipedia.org/wiki/P%C4%81%E1%B9%87ini) - For the grammar that makes this all possible
 

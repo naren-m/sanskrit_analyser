@@ -1,6 +1,6 @@
 """Tests for ensemble analyzer."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -255,3 +255,23 @@ class TestMergedSegment:
         assert segment.surface == "test"
         assert segment.lemma == "lemma"
         assert segment.confidence == 0.9
+
+
+class TestEngineFilter:
+    """``engines=`` restricts a single call without mutating the shared list."""
+
+    @pytest.mark.asyncio
+    async def test_filter_leaves_engine_list_intact(self) -> None:
+        segment = Segment(surface="rAmaH", lemma="rAma", confidence=0.9)
+        analyzer = EnsembleAnalyzer(
+            engines=[MockEngine("vidyut", 0.35, [segment]), MockEngine("heritage", 0.25, [segment])]
+        )
+        result = await analyzer.analyze("rAmaH", engines=["vidyut"])
+        assert set(result.engine_results) == {"vidyut"}
+        assert analyzer.engine_names == ["vidyut", "heritage"]
+
+    @pytest.mark.asyncio
+    async def test_filter_with_no_match_reports_error(self) -> None:
+        analyzer = EnsembleAnalyzer(engines=[MockEngine("vidyut", 0.35, [])])
+        result = await analyzer.analyze("rAmaH", engines=["nope"])
+        assert result.errors == ["No engines configured"]

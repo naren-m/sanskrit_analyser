@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from sanskrit_analyzer.cache.memory import LRUCache
 from sanskrit_analyzer.cache.tiered import TieredCache, TieredCacheConfig
 from sanskrit_analyzer.config import AnalysisMode, Config
+from sanskrit_analyzer.data.dhatu_db import DhatuDB
 from sanskrit_analyzer.disambiguation.llm import LLMConfig, LLMProvider
 from sanskrit_analyzer.disambiguation.pipeline import (
     DisambiguationPipeline,
@@ -25,12 +25,11 @@ from sanskrit_analyzer.disambiguation.rules import (
 )
 from sanskrit_analyzer.engines.base import EngineBase
 from sanskrit_analyzer.engines.ensemble import EnsembleAnalyzer, EnsembleConfig
+from sanskrit_analyzer.models.dhatu import DhatuInfo
 from sanskrit_analyzer.models.scripts import Script, ScriptVariants
 from sanskrit_analyzer.models.tree import AnalysisTree, CacheTier
 from sanskrit_analyzer.tree_builder import TreeBuilder, TreeBuilderConfig
 from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1
-from sanskrit_analyzer.data.dhatu_db import DhatuDB, DhatuEntry
-from sanskrit_analyzer.models.dhatu import DhatuInfo
 from sanskrit_analyzer.validation.split_validator import SplitValidator
 from sanskrit_analyzer.validation.vocabulary import Vocabulary
 
@@ -345,19 +344,7 @@ class Analyzer:
         logger.debug("Cache miss, running ensemble analysis")
         assert self._ensemble is not None
 
-        # Override engines if specified
-        if engines:
-            # Temporarily filter engines
-            original_engines = self._ensemble._engines.copy()
-            self._ensemble._engines = [
-                e for e in self._ensemble._engines if e.name in engines
-            ]
-
-        ensemble_result = await self._ensemble.analyze(normalized_slp1)
-
-        # Restore engines if we filtered
-        if engines:
-            self._ensemble._engines = original_engines
+        ensemble_result = await self._ensemble.analyze(normalized_slp1, engines=engines)
 
         # Validate and re-score splits if validator is available.
         # The validator rescores VIDYUT splits against a small curated
@@ -509,14 +496,13 @@ class Analyzer:
         Returns:
             Reconstructed AnalysisTree.
         """
+        from sanskrit_analyzer.models.morphology import Meaning, MorphologicalTag
         from sanskrit_analyzer.models.tree import (
+            BaseWord,
             ConfidenceMetrics,
             ParseTree,
             SandhiGroup,
-            BaseWord,
         )
-        from sanskrit_analyzer.models.morphology import MorphologicalTag, Meaning
-        from sanskrit_analyzer.models.dhatu import DhatuInfo
 
         # Use cached values if not provided
         original_text = original_text or cached.get("original_text", "")

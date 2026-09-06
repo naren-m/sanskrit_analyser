@@ -24,7 +24,7 @@ class TestEngineConfig:
         config = EngineConfig()
         assert config.vidyut is True
         assert config.vidyut_weight == 0.35
-        assert config.heritage is True
+        assert config.heritage is False
 
     def test_validate_success(self) -> None:
         """Test successful validation."""

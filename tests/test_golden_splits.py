@@ -1,18 +1,18 @@
 """Golden tests for sandhi split quality.
 
-These golden lemmas were calibrated with a neural ByT5 segmenter available. The
-ensemble engine that provided it has since been removed, so the probe below
-always reports it unavailable and the module skips. When only the local Vidyut
-splitter is available the analyzer produces different (lower-quality) splits —
+These golden lemmas were calibrated with the neural Dharmamitra segmenter, which
+has since been removed. The local Vidyut/DP splitter produces different splits —
 e.g. ``nirodha`` → ``niruD`` instead of ``niroDa`` — so asserting the golden
-values would test infrastructure, not our code. The golden splits are revisited
-in a later phase.
+values would fail on segmenter differences, not on our code. The module is
+skipped wholesale until the goldens are re-calibrated against the local path.
 """
 
 import json
 from pathlib import Path
+
 import pytest
-from sanskrit_analyzer import Analyzer, Config, AnalysisMode
+
+from sanskrit_analyzer import AnalysisMode, Analyzer, Config
 
 GOLDEN_FILE = Path(__file__).parent / "data" / "yoga_sutra_splits_golden.json"
 
@@ -21,26 +21,18 @@ def load_golden_cases():
         return json.load(f)
 
 
-def _dharmamitra_available() -> bool:
-    """Best-effort probe: is the Dharmamitra segmenter reachable right now?"""
-    try:
-        from sanskrit_analyzer.engines.dharmamitra_engine import DharmamitraEngine
+# The neural (Dharmamitra) engine these goldens were calibrated against is gone.
+# Skip the whole module rather than probing for it on every run; the golden data
+# is kept so the local segmenter can be re-calibrated against it later.
+pytest.skip(
+    "Golden splits were calibrated with the removed Dharmamitra engine; "
+    "the local Vidyut/DP splitter produces different splits",
+    allow_module_level=True,
+)
 
-        engine = DharmamitraEngine()
-        import asyncio
-
-        result = asyncio.run(engine.analyze("gacchati"))
-        return bool(getattr(result, "success", False))
-    except Exception:
-        return False
 
 @pytest.fixture(scope="module")
 def analyzer():
-    if not _dharmamitra_available():
-        pytest.skip(
-            "Neural segmenter unavailable (ensemble engine removed); golden "
-            "splits were calibrated with it and degrade to Vidyut without it"
-        )
     try:
         # Disable persistent caches so the test exercises the live split path
         # rather than a stale cached result.
