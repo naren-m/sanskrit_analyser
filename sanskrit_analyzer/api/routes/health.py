@@ -58,8 +58,9 @@ async def detailed_health_check(request: Request) -> DetailedHealthResponse:
         status="healthy",
         version=__version__,
         engines={
-            "vidyut": health.get("engine_vidyut", False),
-            "heritage": health.get("engine_heritage", False),
+            name[len("engine_") :]: ok
+            for name, ok in health.items()
+            if name.startswith("engine_")
         },
         cache={
             "memory": health.get("cache_memory", False),

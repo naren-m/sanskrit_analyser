@@ -242,7 +242,7 @@ class TestSQLiteCorpus:
             "confidence": 0.95,
             "engine_results": {
                 "vidyut": {"confidence": 0.9},
-                "dharmamitra": {"confidence": 0.95},
+                "local_byt5": {"confidence": 0.95},
             },
         }
 

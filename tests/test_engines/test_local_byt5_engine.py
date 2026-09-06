@@ -15,12 +15,6 @@ class TestLocalByT5Engine:
             engine = LocalByT5Engine(load_on_init=False)
             assert engine.name == "local_byt5"
 
-    def test_engine_weight(self) -> None:
-        """Test engine weight property."""
-        with patch.object(LocalByT5Engine, "_load_model"):
-            engine = LocalByT5Engine(load_on_init=False)
-            assert engine.weight == 0.45
-
     def test_not_available_without_model(self) -> None:
         """Test engine is not available when model fails to load."""
         with patch.object(LocalByT5Engine, "_load_model"):

@@ -1,7 +1,7 @@
 """Main Analyzer class - the primary public interface for Sanskrit analysis.
 
 This module provides the high-level Analyzer class that orchestrates the entire
-analysis pipeline: normalization -> caching -> ensemble analysis -> tree building
+analysis pipeline: normalization -> caching -> engine run -> tree building
 -> disambiguation -> caching -> result return.
 """
 
@@ -24,7 +24,7 @@ from sanskrit_analyzer.disambiguation.rules import (
     RuleBasedDisambiguatorConfig,
 )
 from sanskrit_analyzer.engines.base import EngineBase
-from sanskrit_analyzer.engines.ensemble import EnsembleAnalyzer, EnsembleConfig
+from sanskrit_analyzer.engines.runner import EngineRunner
 from sanskrit_analyzer.models.dhatu import DhatuInfo
 from sanskrit_analyzer.models.scripts import Script, ScriptVariants
 from sanskrit_analyzer.models.tree import AnalysisTree, CacheTier
@@ -56,7 +56,7 @@ class Analyzer:
 
     1. Normalize input text to SLP1
     2. Check tiered cache (Memory -> Redis -> SQLite)
-    3. If cache miss, run ensemble analysis (Vidyut + Heritage)
+    3. If cache miss, run the configured engines (Vidyut by default)
     4. Build 4-level parse tree from engine results
     5. Run disambiguation pipeline (Rules -> LLM -> Human flag)
     6. Store result in tiered cache
@@ -89,7 +89,7 @@ class Analyzer:
         self._setup_logging()
 
         # Initialize components (lazy)
-        self._ensemble: EnsembleAnalyzer | None = None
+        self._runner: EngineRunner | None = None
         self._cache: TieredCache | None = None
         self._disambiguation: DisambiguationPipeline | None = None
         self._tree_builder: TreeBuilder | None = None
@@ -140,8 +140,8 @@ class Analyzer:
 
         logger.info("Initializing Sanskrit Analyzer components...")
 
-        # Initialize ensemble analyzer
-        self._ensemble = self._create_ensemble()
+        # Initialize the engine runner
+        self._runner = self._create_engine_runner()
 
         # Initialize tiered cache
         self._cache = self._create_cache()
@@ -191,8 +191,8 @@ class Analyzer:
         self._initialized = True
         logger.info("Sanskrit Analyzer initialized successfully")
 
-    def _create_ensemble(self) -> EnsembleAnalyzer:
-        """Create and configure the ensemble analyzer."""
+    def _create_engine_runner(self) -> EngineRunner:
+        """Create the engine runner, in priority order."""
         engines: list[EngineBase] = []
 
         if self._config.engines.vidyut:
@@ -202,19 +202,6 @@ class Analyzer:
                 logger.debug("Vidyut engine loaded")
             except ImportError:
                 logger.warning("Vidyut engine not available")
-
-        if self._config.engines.heritage:
-            try:
-                from sanskrit_analyzer.engines.heritage_engine import HeritageEngine
-                # heritage_mode config determines use_local
-                use_local = self._config.engines.heritage_mode in ("local", "fallback")
-                engines.append(HeritageEngine(
-                    local_url=self._config.engines.heritage_local_url,
-                    use_local=use_local,
-                ))
-                logger.debug("Heritage engine loaded")
-            except ImportError:
-                logger.warning("Heritage engine not available")
 
         if self._config.engines.local_byt5:
             try:
@@ -227,13 +214,7 @@ class Analyzer:
             except ImportError:
                 logger.warning("Local ByT5 engine not available (install transformers torch)")
 
-        ensemble_config = EnsembleConfig(
-            vidyut_weight=self._config.engines.vidyut_weight,
-            heritage_weight=self._config.engines.heritage_weight,
-            local_byt5_weight=self._config.engines.local_byt5_weight,
-        )
-
-        return EnsembleAnalyzer(engines=engines, config=ensemble_config)
+        return EngineRunner(engines=engines)
 
     def _create_cache(self) -> TieredCache:
         """Create and configure the tiered cache."""
@@ -340,11 +321,11 @@ class Analyzer:
                 )
                 return tree
 
-        # Run ensemble analysis
-        logger.debug("Cache miss, running ensemble analysis")
-        assert self._ensemble is not None
+        # Run the configured engines
+        logger.debug("Cache miss, running engine analysis")
+        assert self._runner is not None
 
-        ensemble_result = await self._ensemble.analyze(normalized_slp1, engines=engines)
+        run_result = await self._runner.analyze(normalized_slp1, engines=engines)
 
         # Validate and re-score splits if validator is available.
         # The validator rescores VIDYUT splits against a small curated
@@ -353,13 +334,13 @@ class Analyzer:
         # vocabulary-driven re-splits, so it only runs on vidyut's raw output.
         assert self._tree_builder is not None
         raw_vidyut_segments = None
-        if ensemble_result.segments:
-            engine_result = ensemble_result.engine_results.get("vidyut")
+        if run_result.segments:
+            engine_result = run_result.engine_results.get("vidyut")
             if engine_result and engine_result.segments:
                 raw_vidyut_segments = engine_result.segments
 
         if self._split_validator and (
-            raw_vidyut_segments is not None or not ensemble_result.segments
+            raw_vidyut_segments is not None or not run_result.segments
         ):
             # Pass empty list when no engine produced segments; the
             # validator can still split using vocabulary alone.
@@ -376,9 +357,9 @@ class Analyzer:
                 mode=mode.value,
             )
         else:
-            # Build parse tree from ensemble (original path)
+            # Build parse tree from the engine run (original path)
             tree = self._tree_builder.build(
-                ensemble_result,
+                run_result,
                 original_text,
                 normalized_slp1,
                 mode.value,
@@ -698,9 +679,9 @@ class Analyzer:
 
         health: dict[str, bool] = {}
 
-        # Check ensemble engines
-        if self._ensemble:
-            for engine in self._ensemble._engines:
+        # Check engines
+        if self._runner:
+            for engine in self._runner._engines:
                 try:
                     engine_health = await engine.health_check()
                     health[f"engine_{engine.name}"] = engine_health
@@ -726,9 +707,9 @@ class Analyzer:
         Returns:
             List of engine names that are loaded and available.
         """
-        if not self._ensemble:
+        if not self._runner:
             return []
-        return self._ensemble.available_engines
+        return self._runner.available_engines
 
     async def clear_cache(self, tier: str | None = None) -> None:
         """Clear the analysis cache.

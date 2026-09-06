@@ -64,18 +64,13 @@ class VidyutEngine(EngineBase):
         return "vidyut"
 
     @property
-    def weight(self) -> float:
-        """Return the default weight for ensemble voting."""
-        return 0.35
-
-    @property
     def is_available(self) -> bool:
         """Check if the engine is available."""
         return self._available
 
     def _normalize_to_slp1(self, text: str) -> str:
         """Normalize input text to SLP1 for Vidyut."""
-        # The ensemble feeds engines already-normalized SLP1; plain ASCII
+        # The runner feeds engines already-normalized SLP1; plain ASCII
         # with no script markers (e.g. title-case "Bavati") must therefore
         # be treated as SLP1, not re-transliterated as IAST.
         script = detect_script(text, plain_ascii_default=Script.SLP1)

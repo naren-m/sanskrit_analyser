@@ -28,7 +28,7 @@ class AnalyzeRequest(BaseModel):
     )
     engines: list[str] | None = Field(
         default=None,
-        description="Optional list of engines to use (vidyut, heritage)",
+        description="Optional list of engines to use (e.g. vidyut, local_byt5)",
     )
     bypass_cache: bool = Field(
         default=False,
@@ -250,7 +250,7 @@ async def analyze_text(request: Request, body: AnalyzeRequest) -> AnalysisTreeRe
     - Sandhi groups (compounds)
     - Base words with morphological analysis
     - Dhatu information for verbs
-    - Confidence scores from ensemble voting
+    - Confidence scores from the analysis engines
     """
     analyzer = request.app.state.analyzer
 

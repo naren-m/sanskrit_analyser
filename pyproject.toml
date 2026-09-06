@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sanskrit-analyzer"
 version = "0.1.0"
-description = "Sanskrit sentence parser: Vidyut + Heritage ensemble, local sandhi segmenter, dhātu identification"
+description = "Sanskrit sentence parser: Vidyut parsing, local sandhi segmenter, dhātu identification"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"

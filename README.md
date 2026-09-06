@@ -1,13 +1,13 @@
 # संस्कृत विश्लेषक | Sanskrit Analyzer
 
-Sanskrit text analysis library: Vidyut + Heritage ensemble parsing, a local sandhi-aware segmenter with dhātu identification, hierarchical parse trees, and interactive visualization.
+Sanskrit text analysis library: Vidyut-based parsing, a local sandhi-aware segmenter with dhātu identification, hierarchical parse trees, and interactive visualization.
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
 ## Features
 
-- **Ensemble Analysis**: Combines Vidyut and Sanskrit Heritage engines; an optional local ByT5 engine (`[ml]` extra) can be added
+- **Engine Runner**: Vidyut (Pāṇinian rules) by default; an optional local ByT5 engine (`[ml]` extra) can be added
 - **Deep Read**: Offline sandhi-aware DP segmenter over the `vidyut.kosha` lexicon with per-word dhātu identification (`DeepRead`)
 - **Prakriyā Engine**: Verse analyzer with chandas identification and sūtra traces (`sanskrit_analyzer.prakriya`)
 - **4-Level Parse Tree**: Sentence → Sandhi Groups → Base Words → Dhātus
@@ -104,15 +104,14 @@ docker-compose up
 ┌─────────────────────────────────────────────────────────────┐
 │                     Sanskrit Analyzer                        │
 ├─────────────────────────────────────────────────────────────┤
-│  ┌─────────┐  ┌──────────────┐  ┌─────────────┐            │
-│  │ Vidyut  │  │ Local ByT5   │  │  Heritage   │  Engines   │
-│  │ (0.35)  │  │ (0.45, opt.) │  │   (0.25)    │            │
-│  └────┬────┘  └──────┬───────┘  └──────┬──────┘            │
-│       └──────────────┼─────────────────┘                    │
+│  ┌─────────┐  ┌──────────────┐                             │
+│  │ Vidyut  │  │ Local ByT5   │              Engines        │
+│  │         │  │  (optional)  │                             │
+│  └────┬────┘  └──────┬───────┘                             │
+│       └──────────────┘                                      │
 │                      ▼                                       │
 │              ┌───────────────┐                              │
-│              │   Ensemble    │  Weighted voting              │
-│              │   Analyzer    │                              │
+│              │ Engine Runner │  First engine with segments   │
 │              └───────┬───────┘                              │
 │                      ▼                                       │
 │              ┌───────────────┐                              │
@@ -139,15 +138,11 @@ Create a `config.yaml` file:
 # Keys are flat and match the dataclass fields in sanskrit_analyzer/config.py.
 # Unknown keys are silently dropped, so nested "vidyut: {enabled: true}" style
 # configs are NOT honoured.
+# Engines run in the order listed; the first one that returns segments is the
+# analysis. There is no weighted vote, so engines carry no weights.
 engines:
   vidyut: true
-  vidyut_weight: 0.35
-  heritage: false               # HTML parser is a stub; needs a Heritage server
-  heritage_weight: 0.25
-  heritage_mode: local          # local | remote | fallback
-  heritage_local_url: "http://localhost:8080"
-  local_byt5: false             # needs the [ml] extra
-  local_byt5_weight: 0.45
+  local_byt5: false             # needs the [ml] extra and ~2 GB of weights
   local_byt5_model: "chronbmm/sanskrit5-multitask"
   local_byt5_device: auto       # auto | cpu | cuda | mps
 
@@ -282,9 +277,8 @@ sanskrit_analyzer/
 │   ├── engines/
 │   │   ├── base.py           # Abstract engine base
 │   │   ├── vidyut_engine.py  # Vidyut wrapper
-│   │   ├── heritage_engine.py
 │   │   ├── local_byt5_engine.py  # optional, [ml] extra
-│   │   └── ensemble.py       # Ensemble voting
+│   │   └── runner.py         # Runs engines, picks the primary result
 │   ├── dhatu/                # Local sandhi DP segmenter + dhātu identifier
 │   ├── deep_read/            # DeepRead facade + kosha engine
 │   ├── prakriya/             # Verse analyzer, chandas, sūtra traces
@@ -343,7 +337,6 @@ MIT License - see [LICENSE](LICENSE) for details.
 - [Vidyut](https://github.com/ambuda-org/vidyut) - Sanskrit NLP toolkit by Ambuda
 - [Cologne Digital Sanskrit Dictionaries](https://www.sanskrit-lexicon.uni-koeln.de/) - vyutpatti source data
 - [chronbmm/sanskrit5-multitask](https://huggingface.co/chronbmm/sanskrit5-multitask) - optional local ByT5 model
-- [Sanskrit Heritage](https://sanskrit.inria.fr) - INRIA Sanskrit tools
 - [Panini](https://en.wikipedia.org/wiki/P%C4%81%E1%B9%87ini) - For the grammar that makes this all possible
 
 ---

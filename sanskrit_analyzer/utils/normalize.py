@@ -28,7 +28,7 @@ def detect_script(text: str, plain_ascii_default: Script | None = None) -> Scrip
             no SLP1-exclusive letters or interior capitals). Title-case SLP1
             like "Bavati" is indistinguishable from an IAST proper noun like
             "Rama"; callers that know their input's script (e.g. engines fed
-            already-normalized SLP1 by the ensemble) use this to resolve the
+            already-normalized SLP1 by the runner) use this to resolve the
             ambiguity. None keeps the historical IAST fallback.
 
     Returns:

@@ -43,19 +43,13 @@ class AnalysisMode(Enum):
 class EngineConfig:
     """Configuration for individual analysis engines."""
 
+    # Engines run in this order; the first one that returns segments is the
+    # analysis (see sanskrit_analyzer.engines.runner). There is no weighted
+    # vote any more, so engines carry no weights.
     vidyut: bool = True
-    vidyut_weight: float = 0.35
-    # Off by default: the Heritage HTML parser is still a stub that returns the
-    # whole input as one unsplit segment, and enabling it costs an HTTP call
-    # (localhost:8080, then sanskrit.inria.fr) on every cache miss.
-    heritage: bool = False
-    heritage_weight: float = 0.25
-    heritage_mode: str = "local"  # local | remote | fallback
-    heritage_local_url: str = "http://localhost:8080"
-    heritage_lexicon_path: str | None = None
-    # Local ByT5 engine (runs model locally instead of API)
+    # Local ByT5 engine. Off by default: it needs the [ml] extra and ~2 GB of
+    # model weights, and it costs about 140x vidyut's latency per line.
     local_byt5: bool = False
-    local_byt5_weight: float = 0.45
     local_byt5_model: str = "chronbmm/sanskrit5-multitask"
     local_byt5_device: str = "auto"  # auto | cpu | cuda | mps
 
@@ -65,22 +59,6 @@ class EngineConfig:
         Raises:
             ConfigError: If validation fails.
         """
-        # Validate weights
-        for name, weight in [
-            ("vidyut_weight", self.vidyut_weight),
-            ("heritage_weight", self.heritage_weight),
-            ("local_byt5_weight", self.local_byt5_weight),
-        ]:
-            if not 0.0 <= weight <= 1.0:
-                raise ConfigError(f"{name} must be between 0.0 and 1.0, got {weight}")
-
-        # Validate heritage mode
-        valid_modes = ("local", "remote", "fallback")
-        if self.heritage_mode not in valid_modes:
-            raise ConfigError(
-                f"heritage_mode must be one of {valid_modes}, got {self.heritage_mode}"
-            )
-
         # Validate device settings
         valid_devices = ("auto", "cpu", "cuda", "mps")
         if self.local_byt5_device not in valid_devices:
@@ -480,11 +458,7 @@ log_level: INFO
 # Engine configuration
 engines:
   vidyut: true
-  vidyut_weight: 0.35
-  heritage: true
-  heritage_weight: 0.25
-  heritage_mode: local  # local | remote | fallback
-  heritage_local_url: http://localhost:8080
+  local_byt5: false  # needs the [ml] extra
 
 # Cache configuration
 cache:
@@ -555,13 +529,7 @@ academic:
             "log_file": self.log_file,
             "engines": {
                 "vidyut": self.engines.vidyut,
-                "vidyut_weight": self.engines.vidyut_weight,
-                "heritage": self.engines.heritage,
-                "heritage_weight": self.engines.heritage_weight,
-                "heritage_mode": self.engines.heritage_mode,
-                "heritage_local_url": self.engines.heritage_local_url,
                 "local_byt5": self.engines.local_byt5,
-                "local_byt5_weight": self.engines.local_byt5_weight,
                 "local_byt5_model": self.engines.local_byt5_model,
                 "local_byt5_device": self.engines.local_byt5_device,
             },

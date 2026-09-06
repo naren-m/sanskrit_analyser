@@ -1,9 +1,9 @@
 """
-Sanskrit Analyzer - Centralized Sanskrit sentence parser with ensemble analysis.
+Sanskrit Analyzer - Centralized Sanskrit sentence parser.
 
 This package provides:
 - 4-level parse trees (Sentence -> Sandhi Groups -> Base Words -> Dhatus)
-- ensemble (Vidyut, Sanskrit Heritage, local ByT5)
+- engines (Vidyut, optional local ByT5)
 - Hybrid disambiguation (Rules -> LLM -> Human)
 - Tiered caching (Memory -> Redis -> SQLite)
 """

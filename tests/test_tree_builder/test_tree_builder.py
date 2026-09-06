@@ -3,7 +3,7 @@
 import pytest
 
 from sanskrit_analyzer.engines.base import EngineResult, Segment
-from sanskrit_analyzer.engines.ensemble import EnsembleResult, MergedSegment
+from sanskrit_analyzer.engines.runner import AnalyzedSegment, EngineRunResult
 from sanskrit_analyzer.models.morphology import Case, Gender, Number, PartOfSpeech
 from sanskrit_analyzer.models.tree import CacheTier
 from sanskrit_analyzer.tree_builder import TreeBuilder, TreeBuilderConfig
@@ -38,35 +38,35 @@ class TestTreeBuilder:
         return TreeBuilder()
 
     @pytest.fixture
-    def simple_segments(self) -> list[MergedSegment]:
+    def simple_segments(self) -> list[AnalyzedSegment]:
         """Create simple test segments."""
         return [
-            MergedSegment(
+            AnalyzedSegment(
                 surface="rAmaH",
                 lemma="rAma",
                 morphology="noun.masculine.singular.nominative",
                 confidence=0.9,
                 pos="noun",
                 meanings=["Rama", "pleasing"],
-                engine_votes={"vidyut": 0.9, "dharmamitra": 0.85},
+                engine_votes={"vidyut": 0.9, "local_byt5": 0.85},
                 agreement_score=0.9,
             ),
-            MergedSegment(
+            AnalyzedSegment(
                 surface="gacCati",
                 lemma="gam",
                 morphology="verb.third.singular.present.active",
                 confidence=0.95,
                 pos="verb",
                 meanings=["goes", "walks"],
-                engine_votes={"vidyut": 0.95, "dharmamitra": 0.92},
+                engine_votes={"vidyut": 0.95, "local_byt5": 0.92},
                 agreement_score=0.95,
             ),
         ]
 
     @pytest.fixture
-    def ensemble_result(self, simple_segments: list[MergedSegment]) -> EnsembleResult:
-        """Create ensemble result for testing."""
-        return EnsembleResult(
+    def run_result(self, simple_segments: list[AnalyzedSegment]) -> EngineRunResult:
+        """Create runner result for testing."""
+        return EngineRunResult(
             segments=simple_segments,
             engine_results={
                 "vidyut": EngineResult(
@@ -77,8 +77,8 @@ class TestTreeBuilder:
                     ],
                     confidence=0.92,
                 ),
-                "dharmamitra": EngineResult(
-                    engine="dharmamitra",
+                "local_byt5": EngineResult(
+                    engine="local_byt5",
                     segments=[
                         Segment(surface="rAmaH", lemma="rAma", confidence=0.85, pos="noun"),
                         Segment(surface="gacCati", lemma="gam", confidence=0.92, pos="verb"),
@@ -87,7 +87,6 @@ class TestTreeBuilder:
                 ),
             },
             overall_confidence=0.9,
-            agreement_level="high",
         )
 
     def test_init(self, builder: TreeBuilder) -> None:
@@ -97,11 +96,11 @@ class TestTreeBuilder:
     def test_build_basic(
         self,
         builder: TreeBuilder,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
     ) -> None:
         """Test basic tree building."""
         tree = builder.build(
-            ensemble_result,
+            run_result,
             original_text="rāmaḥ gacchati",
             normalized_slp1="rAmaH gacCati",
         )
@@ -115,11 +114,11 @@ class TestTreeBuilder:
     def test_build_parse_tree_structure(
         self,
         builder: TreeBuilder,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
     ) -> None:
         """Test parse tree structure."""
         tree = builder.build(
-            ensemble_result,
+            run_result,
             original_text="rāmaḥ gacchati",
             normalized_slp1="rAmaH gacCati",
         )
@@ -133,11 +132,11 @@ class TestTreeBuilder:
     def test_build_sandhi_group(
         self,
         builder: TreeBuilder,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
     ) -> None:
         """Test sandhi group structure."""
         tree = builder.build(
-            ensemble_result,
+            run_result,
             original_text="rāmaḥ gacchati",
             normalized_slp1="rAmaH gacCati",
         )
@@ -153,11 +152,11 @@ class TestTreeBuilder:
     def test_build_base_word(
         self,
         builder: TreeBuilder,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
     ) -> None:
         """Test base word structure."""
         tree = builder.build(
-            ensemble_result,
+            run_result,
             original_text="rāmaḥ gacchati",
             normalized_slp1="rAmaH gacCati",
         )
@@ -174,11 +173,11 @@ class TestTreeBuilder:
     def test_build_verb_with_dhatu(
         self,
         builder: TreeBuilder,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
     ) -> None:
         """Test verb with dhatu lookup."""
         tree = builder.build(
-            ensemble_result,
+            run_result,
             original_text="rāmaḥ gacchati",
             normalized_slp1="rAmaH gacCati",
         )
@@ -196,11 +195,11 @@ class TestTreeBuilder:
     def test_build_morphology_parsing(
         self,
         builder: TreeBuilder,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
     ) -> None:
         """Test morphology parsing."""
         tree = builder.build(
-            ensemble_result,
+            run_result,
             original_text="rāmaḥ gacchati",
             normalized_slp1="rAmaH gacCati",
         )
@@ -244,7 +243,7 @@ class TestTreeBuilder:
 
     def test_build_empty_segments(self, builder: TreeBuilder) -> None:
         """Test building with empty segments."""
-        result = EnsembleResult(
+        result = EngineRunResult(
             segments=[],
             engine_results={},
             overall_confidence=0.0,
@@ -262,11 +261,11 @@ class TestTreeBuilder:
     def test_script_variants_generated(
         self,
         builder: TreeBuilder,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
     ) -> None:
         """Test that script variants are generated."""
         tree = builder.build(
-            ensemble_result,
+            run_result,
             original_text="rāmaḥ gacchati",
             normalized_slp1="rAmaH gacCati",
         )
@@ -283,11 +282,11 @@ class TestTreeBuilder:
     def test_mode_preserved(
         self,
         builder: TreeBuilder,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
     ) -> None:
         """Test that mode is preserved."""
         tree = builder.build(
-            ensemble_result,
+            run_result,
             original_text="rāmaḥ gacchati",
             normalized_slp1="rAmaH gacCati",
             mode="educational",
@@ -298,11 +297,11 @@ class TestTreeBuilder:
     def test_cache_tier_default(
         self,
         builder: TreeBuilder,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
     ) -> None:
         """Test that cache tier defaults to NONE."""
         tree = builder.build(
-            ensemble_result,
+            run_result,
             original_text="rāmaḥ gacchati",
             normalized_slp1="rAmaH gacCati",
         )
@@ -312,7 +311,7 @@ class TestTreeBuilder:
     def test_unique_ids_generated(self, builder: TreeBuilder) -> None:
         """Test that unique IDs are generated."""
         segments = [
-            MergedSegment(
+            AnalyzedSegment(
                 surface="test",
                 lemma="test",
                 confidence=0.9,
@@ -321,12 +320,12 @@ class TestTreeBuilder:
             ),
         ]
 
-        result1 = EnsembleResult(
+        result1 = EngineRunResult(
             segments=segments,
             engine_results={},
             overall_confidence=0.9,
         )
-        result2 = EnsembleResult(
+        result2 = EngineRunResult(
             segments=segments,
             engine_results={},
             overall_confidence=0.9,
@@ -350,7 +349,7 @@ class TestTreeBuilder:
         builder = TreeBuilder(config)
 
         segments = [
-            MergedSegment(
+            AnalyzedSegment(
                 surface="gacCati",
                 lemma="gam",
                 morphology="verb.third.singular.present",
@@ -361,7 +360,7 @@ class TestTreeBuilder:
             ),
         ]
 
-        result = EnsembleResult(
+        result = EngineRunResult(
             segments=segments,
             engine_results={},
             overall_confidence=0.9,
@@ -379,7 +378,7 @@ class TestTreeBuilder:
         builder = TreeBuilder(config)
 
         segments = [
-            MergedSegment(
+            AnalyzedSegment(
                 surface="rAmaH",
                 lemma="rAma",
                 confidence=0.9,
@@ -390,7 +389,7 @@ class TestTreeBuilder:
             ),
         ]
 
-        result = EnsembleResult(
+        result = EngineRunResult(
             segments=segments,
             engine_results={},
             overall_confidence=0.9,
@@ -405,11 +404,11 @@ class TestTreeBuilder:
     def test_to_dict_serialization(
         self,
         builder: TreeBuilder,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
     ) -> None:
         """Test that tree can be serialized to dict."""
         tree = builder.build(
-            ensemble_result,
+            run_result,
             original_text="rāmaḥ gacchati",
             normalized_slp1="rAmaH gacCati",
         )
@@ -428,11 +427,11 @@ class TestTreeBuilder:
     def test_engine_votes_preserved(
         self,
         builder: TreeBuilder,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
     ) -> None:
         """Test that engine votes are preserved in parse tree."""
         tree = builder.build(
-            ensemble_result,
+            run_result,
             original_text="rāmaḥ gacchati",
             normalized_slp1="rAmaH gacCati",
         )
@@ -440,7 +439,7 @@ class TestTreeBuilder:
         parse = tree.best_parse
         assert parse is not None
         assert "vidyut" in parse.engine_votes
-        assert "dharmamitra" in parse.engine_votes
+        assert "local_byt5" in parse.engine_votes
 
 
 class TestMorphologyParsing:

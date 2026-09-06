@@ -14,12 +14,11 @@ from sanskrit_analyzer.config import Config
 def mock_analyzer() -> MagicMock:
     """Create a mock analyzer."""
     analyzer = MagicMock()
-    analyzer.get_available_engines = MagicMock(return_value=["vidyut", "dharmamitra"])
+    analyzer.get_available_engines = MagicMock(return_value=["vidyut"])
     analyzer._cache = MagicMock()
     analyzer.health_check = AsyncMock(return_value={
         "engine_vidyut": True,
-        "engine_dharmamitra": True,
-        "engine_heritage": False,
+        "engine_local_byt5": False,
         "cache_memory": True,
         "cache_redis": False,
         "cache_sqlite": True,
@@ -34,8 +33,6 @@ def config() -> Config:
     """Create test config."""
     config = Config()
     config.engines.vidyut = False
-    config.engines.dharmamitra = False
-    config.engines.heritage = False
     config.cache.redis_enabled = False
     config.cache.sqlite_enabled = False
     config.disambiguation.llm_enabled = False
@@ -100,8 +97,7 @@ class TestHealthEndpoint:
 
         # Check structure
         assert isinstance(data["engines"], dict)
-        assert "vidyut" in data["engines"]
-        assert "heritage" in data["engines"]
+        assert data["engines"] == {"vidyut": True, "local_byt5": False}
 
         assert isinstance(data["cache"], dict)
         assert "memory" in data["cache"]

@@ -12,7 +12,7 @@ orchestration in :mod:`sanskrit_analyzer.deep_read.facade` keeps both paths and
 falls back to this engine.
 
 Named ``kosha_engine`` (not ``vidyut_engine``) to avoid colliding with the
-ensemble member in :mod:`sanskrit_analyzer.engines.vidyut_engine`: different
+engine in :mod:`sanskrit_analyzer.engines.vidyut_engine`: different
 responsibility (per-word kosha lookup vs. segmentation), different name.
 
 The module has **no web-framework imports** so it can be unit-tested in

@@ -1,6 +1,6 @@
 """Resolve the verbal root (dhātu) behind any Sanskrit word.
 
-The ensemble engines give a *lemma* — for a verb that is already the root
+The analysis engines give a *lemma* — for a verb that is already the root
 (gacchati -> gam), but for a derived nominal it is only the stem (yoga, not
 yuj). This module recovers the root for derived nominals too, which is the
 educationally interesting fact ("yoga comes from √yuj, 'to yoke'").

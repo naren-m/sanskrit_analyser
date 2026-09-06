@@ -12,8 +12,6 @@ def config() -> Config:
     """Create test config."""
     config = Config()
     config.engines.vidyut = False
-    config.engines.dharmamitra = False
-    config.engines.heritage = False
     return config
 
 

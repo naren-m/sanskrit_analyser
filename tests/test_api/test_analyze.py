@@ -22,8 +22,6 @@ def config() -> Config:
     """Create test config."""
     config = Config()
     config.engines.vidyut = False
-    config.engines.dharmamitra = False
-    config.engines.heritage = False
     config.cache.redis_enabled = False
     config.cache.sqlite_enabled = False
     config.disambiguation.llm_enabled = False
@@ -80,9 +78,7 @@ def mock_analyzer(mock_tree: AnalysisTree) -> MagicMock:
     """Create mock analyzer."""
     analyzer = MagicMock()
     analyzer.analyze = AsyncMock(return_value=mock_tree)
-    analyzer.get_available_engines = MagicMock(
-        return_value=["vidyut", "dharmamitra", "heritage"]
-    )
+    analyzer.get_available_engines = MagicMock(return_value=["vidyut"])
     analyzer._cache = None
     return analyzer
 

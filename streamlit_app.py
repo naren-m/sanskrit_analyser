@@ -15,7 +15,7 @@ st.set_page_config(
 
 # Title
 st.title("🕉️ Sanskrit Analyzer")
-st.caption("3-Engine Ensemble Analysis | Sandhi Splitting | Morphological Analysis")
+st.caption("Vidyut Analysis | Sandhi Splitting | Morphological Analysis")
 
 # Initialize analyzer (cached)
 @st.cache_resource

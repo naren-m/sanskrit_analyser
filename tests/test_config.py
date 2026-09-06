@@ -23,24 +23,17 @@ class TestEngineConfig:
         """Test default values."""
         config = EngineConfig()
         assert config.vidyut is True
-        assert config.vidyut_weight == 0.35
-        assert config.heritage is False
+        assert config.local_byt5 is False
 
     def test_validate_success(self) -> None:
         """Test successful validation."""
         config = EngineConfig()
         config.validate()  # Should not raise
 
-    def test_validate_invalid_weight(self) -> None:
-        """Test validation with invalid weight."""
-        config = EngineConfig(vidyut_weight=1.5)
-        with pytest.raises(ConfigError, match="vidyut_weight"):
-            config.validate()
-
-    def test_validate_invalid_heritage_mode(self) -> None:
-        """Test validation with invalid heritage mode."""
-        config = EngineConfig(heritage_mode="invalid")
-        with pytest.raises(ConfigError, match="heritage_mode"):
+    def test_validate_invalid_device(self) -> None:
+        """Test validation with an unknown ByT5 device."""
+        config = EngineConfig(local_byt5_device="tpu")
+        with pytest.raises(ConfigError, match="local_byt5_device"):
             config.validate()
 
 
@@ -206,7 +199,7 @@ cache:
         config_file = tmp_path / "config.yaml"
         config_file.write_text("""
 engines:
-  vidyut_weight: 2.0
+  local_byt5_device: tpu
 """)
         with pytest.raises(ConfigError, match="Invalid configuration"):
             Config.from_file(config_file)
@@ -216,11 +209,11 @@ engines:
         config_file = tmp_path / "config.yaml"
         config_file.write_text("""
 engines:
-  vidyut_weight: 2.0
+  local_byt5_device: tpu
 """)
         # Should not raise when validation is disabled
         config = Config.from_file(config_file, validate=False)
-        assert config.engines.vidyut_weight == 2.0
+        assert config.engines.local_byt5_device == "tpu"
 
     def test_from_file_invalid_mode(self, tmp_path: Path) -> None:
         """Test loading with invalid mode."""

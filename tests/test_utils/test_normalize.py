@@ -1,7 +1,7 @@
 """Tests for script detection and SLP1 normalization.
 
 Regression coverage for the word-initial-capital SLP1 ambiguity: the
-ensemble feeds engines already-normalized SLP1, but engines re-detect
+runner feeds engines already-normalized SLP1, but engines re-detect
 the script. Title-case SLP1 like "Bavati" (bhavati) has no interior
 uppercase or SLP1-exclusive lowercase, so detect_script falls back to
 IAST and a second IAST->SLP1 pass destroys the aspirate ("bavati").
@@ -56,7 +56,7 @@ class TestNormalizeSlp1:
 
 
 class TestEngineNormalization:
-    """Engines receive SLP1 from the ensemble and must not mangle it."""
+    """Engines receive SLP1 from the runner and must not mangle it."""
 
     def test_vidyut_normalize_is_idempotent_on_slp1(self):
         from sanskrit_analyzer.engines.vidyut_engine import VidyutEngine
@@ -66,12 +66,6 @@ class TestEngineNormalization:
         assert engine._normalize_to_slp1("yogaScittavfttiniroDaH") == (
             "yogaScittavfttiniroDaH"
         )
-
-    def test_heritage_normalize_is_idempotent_on_slp1(self):
-        from sanskrit_analyzer.engines.heritage_engine import HeritageEngine
-
-        engine = HeritageEngine.__new__(HeritageEngine)
-        assert engine._normalize_to_slp1("Bavati") == "Bavati"
 
     def test_local_byt5_normalize_treats_plain_ascii_as_slp1(self):
         from sanskrit_analyzer.engines.local_byt5_engine import LocalByT5Engine

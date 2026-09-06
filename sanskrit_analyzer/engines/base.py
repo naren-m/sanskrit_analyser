@@ -77,11 +77,6 @@ class EngineBase(ABC):
         ...
 
     @property
-    def weight(self) -> float:
-        """Default weight for ensemble voting. Override in subclasses."""
-        return 0.33
-
-    @property
     def is_available(self) -> bool:
         """Check if the engine is available for use.
 

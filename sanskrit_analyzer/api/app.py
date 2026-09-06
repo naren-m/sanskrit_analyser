@@ -75,7 +75,7 @@ def create_app(
     app = FastAPI(
         title="Sanskrit Analyzer API",
         description=(
-            "REST API for analyzing Sanskrit text with 3-engine ensemble analysis. "
+            "REST API for analyzing Sanskrit text. "
             "Provides morphological analysis, sandhi splitting, and dhatu lookups."
         ),
         version=__version__,

@@ -17,10 +17,6 @@ class TestVidyutEngine:
         """Test engine name property."""
         assert engine.name == "vidyut"
 
-    def test_engine_weight(self, engine: VidyutEngine) -> None:
-        """Test engine weight property."""
-        assert engine.weight == 0.35
-
     @pytest.mark.asyncio
     async def test_analyze_simple_verb(self, engine: VidyutEngine) -> None:
         """Test analysis of a simple verb form."""

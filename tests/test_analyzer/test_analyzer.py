@@ -8,7 +8,7 @@ import pytest
 from sanskrit_analyzer.analyzer import Analyzer, CorpusStats
 from sanskrit_analyzer.config import AnalysisMode, Config
 from sanskrit_analyzer.engines.base import EngineResult, Segment
-from sanskrit_analyzer.engines.ensemble import EnsembleResult, MergedSegment
+from sanskrit_analyzer.engines.runner import AnalyzedSegment, EngineRunResult
 from sanskrit_analyzer.models.tree import AnalysisTree, CacheTier
 
 
@@ -54,18 +54,17 @@ class TestAnalyzerAnalyze:
         config = Config()
         # Disable all engines to speed up tests
         config.engines.vidyut = False
-        config.engines.heritage = False
         config.cache.redis_enabled = False
         config.cache.sqlite_enabled = False
         config.disambiguation.llm_enabled = False
         return Analyzer(config)
 
     @pytest.fixture
-    def mock_ensemble_result(self) -> EnsembleResult:
-        """Create mock ensemble result."""
-        return EnsembleResult(
+    def mock_run_result(self) -> EngineRunResult:
+        """Create mock runner result."""
+        return EngineRunResult(
             segments=[
-                MergedSegment(
+                AnalyzedSegment(
                     surface="rAmaH",
                     lemma="rAma",
                     morphology="noun.masculine.singular.nominative",
@@ -75,7 +74,7 @@ class TestAnalyzerAnalyze:
                     engine_votes={"test": 0.9},
                     agreement_score=0.9,
                 ),
-                MergedSegment(
+                AnalyzedSegment(
                     surface="gacCati",
                     lemma="gam",
                     morphology="verb.third.singular.present",
@@ -97,20 +96,19 @@ class TestAnalyzerAnalyze:
                 ),
             },
             overall_confidence=0.92,
-            agreement_level="high",
         )
 
     @pytest.mark.asyncio
     async def test_analyze_basic(
         self,
         analyzer: Analyzer,
-        mock_ensemble_result: EnsembleResult,
+        mock_run_result: EngineRunResult,
     ) -> None:
         """Test basic analysis."""
-        # Mock the ensemble
+        # Mock the runner
         analyzer._initialized = True
-        analyzer._ensemble = MagicMock()
-        analyzer._ensemble.analyze = AsyncMock(return_value=mock_ensemble_result)
+        analyzer._runner = MagicMock()
+        analyzer._runner.analyze = AsyncMock(return_value=mock_run_result)
         analyzer._tree_builder = MagicMock()
         analyzer._cache = None
         analyzer._disambiguation = None
@@ -132,7 +130,7 @@ class TestAnalyzerAnalyze:
 
         assert result is not None
         assert result.original_text == "rāmaḥ gacchati"
-        analyzer._ensemble.analyze.assert_called_once()
+        analyzer._runner.analyze.assert_called_once()
 
     def _make_mock_tree(self) -> AnalysisTree:
         from sanskrit_analyzer.models.tree import ConfidenceMetrics, ParseTree
@@ -150,7 +148,7 @@ class TestAnalyzerAnalyze:
     async def test_split_validator_skipped_for_non_vidyut_segments(
         self,
         analyzer: Analyzer,
-        mock_ensemble_result: EnsembleResult,
+        mock_run_result: EngineRunResult,
     ) -> None:
         """Validator must not override segmentation from non-vidyut engines.
 
@@ -158,12 +156,12 @@ class TestAnalyzerAnalyze:
         vocabulary. When segments come from another engine (e.g. local ByT5,
         whose neural segmentation is already high quality), re-splitting them
         against the 99-word vocab corrupts correct lemmas (observed live:
-        'yatna' -> 'yat'+'na'). mock_ensemble_result's engine_results only
-        contain the key "test" — no vidyut — so the ensemble path must be used.
+        'yatna' -> 'yat'+'na'). mock_run_result's engine_results only
+        contain the key "test" — no vidyut — so the runner path must be used.
         """
         analyzer._initialized = True
-        analyzer._ensemble = MagicMock()
-        analyzer._ensemble.analyze = AsyncMock(return_value=mock_ensemble_result)
+        analyzer._runner = MagicMock()
+        analyzer._runner.analyze = AsyncMock(return_value=mock_run_result)
         analyzer._tree_builder = MagicMock()
         analyzer._cache = None
         analyzer._disambiguation = None
@@ -183,22 +181,22 @@ class TestAnalyzerAnalyze:
     async def test_split_validator_used_for_vidyut_segments(
         self,
         analyzer: Analyzer,
-        mock_ensemble_result: EnsembleResult,
+        mock_run_result: EngineRunResult,
     ) -> None:
         """Validator path stays active when vidyut produced the segments."""
         vidyut_segments = [
             Segment(surface="rAmaH", lemma="rAma", confidence=0.9, pos="noun"),
             Segment(surface="gacCati", lemma="gam", confidence=0.95, pos="verb"),
         ]
-        mock_ensemble_result.engine_results["vidyut"] = EngineResult(
+        mock_run_result.engine_results["vidyut"] = EngineResult(
             engine="vidyut",
             segments=vidyut_segments,
             confidence=0.9,
         )
 
         analyzer._initialized = True
-        analyzer._ensemble = MagicMock()
-        analyzer._ensemble.analyze = AsyncMock(return_value=mock_ensemble_result)
+        analyzer._runner = MagicMock()
+        analyzer._runner.analyze = AsyncMock(return_value=mock_run_result)
         analyzer._tree_builder = MagicMock()
         analyzer._cache = None
         analyzer._disambiguation = None
@@ -221,12 +219,12 @@ class TestAnalyzerAnalyze:
     async def test_analyze_devanagari_input(
         self,
         analyzer: Analyzer,
-        mock_ensemble_result: EnsembleResult,
+        mock_run_result: EngineRunResult,
     ) -> None:
         """Test analysis with Devanagari input."""
         analyzer._initialized = True
-        analyzer._ensemble = MagicMock()
-        analyzer._ensemble.analyze = AsyncMock(return_value=mock_ensemble_result)
+        analyzer._runner = MagicMock()
+        analyzer._runner.analyze = AsyncMock(return_value=mock_run_result)
         analyzer._tree_builder = MagicMock()
         analyzer._cache = None
         analyzer._disambiguation = None
@@ -246,20 +244,20 @@ class TestAnalyzerAnalyze:
         result = await analyzer.analyze("रामः गच्छति")
 
         assert result is not None
-        # Ensemble should receive normalized SLP1
-        call_args = analyzer._ensemble.analyze.call_args[0][0]
+        # Runner should receive normalized SLP1
+        call_args = analyzer._runner.analyze.call_args[0][0]
         assert call_args == "rAmaH gacCati"
 
     @pytest.mark.asyncio
     async def test_analyze_with_mode(
         self,
         analyzer: Analyzer,
-        mock_ensemble_result: EnsembleResult,
+        mock_run_result: EngineRunResult,
     ) -> None:
         """Test analysis with specific mode."""
         analyzer._initialized = True
-        analyzer._ensemble = MagicMock()
-        analyzer._ensemble.analyze = AsyncMock(return_value=mock_ensemble_result)
+        analyzer._runner = MagicMock()
+        analyzer._runner.analyze = AsyncMock(return_value=mock_run_result)
         analyzer._tree_builder = MagicMock()
         analyzer._cache = None
         analyzer._disambiguation = None
@@ -288,7 +286,7 @@ class TestAnalyzerAnalyze:
     async def test_analyze_cache_hit(self, analyzer: Analyzer) -> None:
         """Test cache hit scenario."""
         analyzer._initialized = True
-        analyzer._ensemble = MagicMock()
+        analyzer._runner = MagicMock()
         analyzer._tree_builder = MagicMock()
         analyzer._disambiguation = None
 
@@ -305,19 +303,19 @@ class TestAnalyzerAnalyze:
 
         assert result is not None
         assert result.cached_at == CacheTier.MEMORY
-        # Ensemble should NOT be called on cache hit
-        analyzer._ensemble.analyze.assert_not_called()
+        # Runner should NOT be called on cache hit
+        analyzer._runner.analyze.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_analyze_bypass_cache(
         self,
         analyzer: Analyzer,
-        mock_ensemble_result: EnsembleResult,
+        mock_run_result: EngineRunResult,
     ) -> None:
         """Test bypassing cache."""
         analyzer._initialized = True
-        analyzer._ensemble = MagicMock()
-        analyzer._ensemble.analyze = AsyncMock(return_value=mock_ensemble_result)
+        analyzer._runner = MagicMock()
+        analyzer._runner.analyze = AsyncMock(return_value=mock_run_result)
         analyzer._tree_builder = MagicMock()
         analyzer._disambiguation = None
 
@@ -343,8 +341,8 @@ class TestAnalyzerAnalyze:
         result = await analyzer.analyze("test", bypass_cache=True)
 
         assert result is not None
-        # Ensemble should be called despite cache having data
-        analyzer._ensemble.analyze.assert_called_once()
+        # Runner should be called despite cache having data
+        analyzer._runner.analyze.assert_called_once()
 
 
 class TestAnalyzerBatch:
@@ -355,7 +353,6 @@ class TestAnalyzerBatch:
         """Create analyzer with minimal config."""
         config = Config()
         config.engines.vidyut = False
-        config.engines.heritage = False
         config.cache.redis_enabled = False
         config.cache.sqlite_enabled = False
         config.disambiguation.llm_enabled = False
@@ -365,7 +362,7 @@ class TestAnalyzerBatch:
     async def test_analyze_batch(self, analyzer: Analyzer) -> None:
         """Test batch analysis."""
         analyzer._initialized = True
-        analyzer._ensemble = MagicMock()
+        analyzer._runner = MagicMock()
         analyzer._cache = None
         analyzer._disambiguation = None
 
@@ -402,15 +399,14 @@ class TestAnalyzerHealthCheck:
         """Create analyzer."""
         config = Config()
         config.engines.vidyut = False
-        config.engines.heritage = False
         return Analyzer(config)
 
     @pytest.mark.asyncio
     async def test_health_check_basic(self, analyzer: Analyzer) -> None:
         """Test basic health check."""
         analyzer._initialized = True
-        analyzer._ensemble = MagicMock()
-        analyzer._ensemble._engines = []
+        analyzer._runner = MagicMock()
+        analyzer._runner._engines = []
         analyzer._disambiguation = MagicMock()
         analyzer._disambiguation.health_check = AsyncMock(return_value={"rules": True})
         analyzer._cache = MagicMock()
@@ -493,12 +489,12 @@ class TestAnalyzerEngines:
     def test_get_available_engines(self) -> None:
         """Test getting available engines."""
         analyzer = Analyzer()
-        analyzer._ensemble = MagicMock()
-        analyzer._ensemble.available_engines = ["vidyut", "heritage"]
+        analyzer._runner = MagicMock()
+        analyzer._runner.available_engines = ["vidyut", "local_byt5"]
 
         engines = analyzer.get_available_engines()
 
-        assert engines == ["vidyut", "heritage"]
+        assert engines == ["vidyut", "local_byt5"]
 
 
 class TestAnalyzerClearCache:

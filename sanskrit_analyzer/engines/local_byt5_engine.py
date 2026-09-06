@@ -146,11 +146,6 @@ class LocalByT5Engine(EngineBase):
         return "local_byt5"
 
     @property
-    def weight(self) -> float:
-        """Return the default weight for ensemble voting."""
-        return 0.45  # Higher weight as this is the full local model
-
-    @property
     def is_available(self) -> bool:
         """Check if the engine is available."""
         return self._available
@@ -163,7 +158,7 @@ class LocalByT5Engine(EngineBase):
         The pipeline hands engines normalized SLP1, so ambiguous plain ASCII
         (e.g. word-initial-capital SLP1 like "Bavati") is read as SLP1.
         """
-        # The ensemble feeds engines already-normalized SLP1; plain ASCII
+        # The runner feeds engines already-normalized SLP1; plain ASCII
         # with no script markers (e.g. title-case "Bavati") must therefore
         # be treated as SLP1, not passed through as IAST.
         script = detect_script(text, plain_ascii_default=Script.SLP1)
@@ -339,7 +334,7 @@ class LocalByT5Engine(EngineBase):
     async def analyze(self, text: str) -> EngineResult:
         """Analyze Sanskrit text using the local ByT5 model.
 
-        Thin async wrapper over :meth:`analyze_sync` for the ensemble protocol;
+        Thin async wrapper over :meth:`analyze_sync` for the engine protocol;
         inference itself is CPU/GPU-bound and synchronous.
         """
         return self.analyze_sync(text)

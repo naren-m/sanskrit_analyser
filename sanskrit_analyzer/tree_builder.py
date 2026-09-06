@@ -1,6 +1,6 @@
 """Parse tree builder for Sanskrit analysis.
 
-This module converts ensemble engine results into the 4-level hierarchical
+This module converts engine results into the 4-level hierarchical
 parse tree structure: AnalysisTree -> ParseTree -> SandhiGroup -> BaseWord.
 """
 
@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass
 
 from sanskrit_analyzer.engines.base import EngineResult, Segment
-from sanskrit_analyzer.engines.ensemble import EnsembleResult, MergedSegment
+from sanskrit_analyzer.engines.runner import AnalyzedSegment, EngineRunResult
 from sanskrit_analyzer.models.dhatu import COMMON_DHATUS, DhatuInfo
 from sanskrit_analyzer.models.morphology import (
     Case,
@@ -47,14 +47,14 @@ class TreeBuilderConfig:
 
 
 class TreeBuilder:
-    """Builds 4-level parse trees from ensemble analysis results.
+    """Builds 4-level parse trees from engine results.
 
     Converts the flat segment lists from engines into a hierarchical
     structure suitable for display and further analysis.
 
     Example:
         builder = TreeBuilder()
-        result = await ensemble.analyze("rāmo vanam gacchati")
+        result = await runner.analyze("rāmo vanam gacchati")
         tree = builder.build(result, "rāmo vanam gacchati", "rAmo vanam gacCati")
     """
 
@@ -68,15 +68,15 @@ class TreeBuilder:
 
     def build(
         self,
-        ensemble_result: EnsembleResult,
+        run_result: EngineRunResult,
         original_text: str,
         normalized_slp1: str,
         mode: str = "production",
     ) -> AnalysisTree:
-        """Build an AnalysisTree from ensemble results.
+        """Build an AnalysisTree from an engine run.
 
         Args:
-            ensemble_result: Result from EnsembleAnalyzer.
+            run_result: Result from EngineRunner.
             original_text: The original input text (any script).
             normalized_slp1: Text normalized to SLP1.
             mode: Analysis mode (production, educational, academic).
@@ -87,17 +87,17 @@ class TreeBuilder:
         sentence_id = self._generate_sentence_id(normalized_slp1)
         scripts = ScriptVariants.from_text(normalized_slp1, Script.SLP1)
 
-        # Build parse tree from ensemble segments
+        # Build parse tree from the primary engine's segments
         parse_tree = self._build_parse_tree(
-            ensemble_result.segments,
-            ensemble_result.engine_results,
-            ensemble_result.overall_confidence,
+            run_result.segments,
+            run_result.engine_results,
+            run_result.overall_confidence,
         )
 
         # Calculate confidence metrics
         confidence = ConfidenceMetrics(
-            overall=ensemble_result.overall_confidence,
-            engine_agreement=self._calculate_engine_agreement(ensemble_result),
+            overall=run_result.overall_confidence,
+            engine_agreement=self._calculate_engine_agreement(run_result),
             disambiguation_applied=False,
         )
 
@@ -135,11 +135,8 @@ class TreeBuilder:
         sentence_id = self._generate_sentence_id(normalized_slp1)
         scripts = ScriptVariants.from_text(normalized_slp1, Script.SLP1)
 
-        # Convert segments to merged format
-        merged = [self._segment_to_merged(seg, engine_name) for seg in segments]
-
-        # Build parse tree
-        parse_tree = self._build_parse_tree_from_merged(merged, {engine_name: 1.0})
+        analyzed = [AnalyzedSegment.from_segment(seg, engine_name) for seg in segments]
+        parse_tree = self._build_parse_tree_from_segments(analyzed, {engine_name: 1.0})
 
         # Average confidence
         avg_confidence = (
@@ -167,14 +164,14 @@ class TreeBuilder:
 
     def _build_parse_tree(
         self,
-        segments: list[MergedSegment],
+        segments: list[AnalyzedSegment],
         engine_results: dict[str, EngineResult],
         overall_confidence: float,
     ) -> ParseTree:
-        """Build a ParseTree from merged segments.
+        """Build a ParseTree from analyzed segments.
 
         Args:
-            segments: Merged segments from ensemble.
+            segments: Segments from the primary engine.
             engine_results: Per-engine results.
             overall_confidence: Overall confidence score.
 
@@ -187,20 +184,20 @@ class TreeBuilder:
             if result.success
         }
 
-        return self._build_parse_tree_from_merged(
+        return self._build_parse_tree_from_segments(
             segments, engine_votes, overall_confidence
         )
 
-    def _build_parse_tree_from_merged(
+    def _build_parse_tree_from_segments(
         self,
-        segments: list[MergedSegment],
+        segments: list[AnalyzedSegment],
         engine_votes: dict[str, float],
         confidence: float = 0.0,
     ) -> ParseTree:
-        """Build ParseTree from merged segments.
+        """Build ParseTree from analyzed segments.
 
         Args:
-            segments: Merged segment list.
+            segments: Analyzed segment list.
             engine_votes: Per-engine confidence scores.
             confidence: Overall confidence.
 
@@ -231,13 +228,13 @@ class TreeBuilder:
 
     def _build_sandhi_group(
         self,
-        segment: MergedSegment,
+        segment: AnalyzedSegment,
         base_words: list[BaseWord],
     ) -> SandhiGroup:
         """Build a SandhiGroup from a segment.
 
         Args:
-            segment: The merged segment.
+            segment: The analyzed segment.
             base_words: Component words in this group.
 
         Returns:
@@ -261,11 +258,11 @@ class TreeBuilder:
             base_words=base_words,
         )
 
-    def _build_base_word(self, segment: MergedSegment) -> BaseWord:
-        """Build a BaseWord from a merged segment.
+    def _build_base_word(self, segment: AnalyzedSegment) -> BaseWord:
+        """Build a BaseWord from an analyzed segment.
 
         Args:
-            segment: The merged segment.
+            segment: The analyzed segment.
 
         Returns:
             BaseWord with full analysis.
@@ -527,36 +524,11 @@ class TreeBuilder:
         # Default to tatpuruṣa (most common)
         return CompoundType.TATPURUSHA
 
-    def _segment_to_merged(
-        self,
-        segment: Segment,
-        engine_name: str,
-    ) -> MergedSegment:
-        """Convert a Segment to MergedSegment.
-
-        Args:
-            segment: The segment to convert.
-            engine_name: Name of the source engine.
-
-        Returns:
-            MergedSegment representation.
-        """
-        return MergedSegment(
-            surface=segment.surface,
-            lemma=segment.lemma,
-            morphology=segment.morphology,
-            confidence=segment.confidence,
-            pos=segment.pos,
-            meanings=segment.meanings or [],
-            engine_votes={engine_name: segment.confidence},
-            agreement_score=1.0,
-        )
-
-    def _calculate_engine_agreement(self, result: EnsembleResult) -> float:
+    def _calculate_engine_agreement(self, result: EngineRunResult) -> float:
         """Calculate engine agreement score.
 
         Args:
-            result: Ensemble result.
+            result: Engine run result.
 
         Returns:
             Agreement score (0.0 to 1.0).
