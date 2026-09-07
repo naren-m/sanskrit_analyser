@@ -81,8 +81,10 @@ Repository = "https://github.com/narenmudivarthy/sanskrit-analyzer"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sanskrit_analyzer"]
-# CDSL Layer B TSVs (~20 MB) have no in-package consumer yet; keep them in the
-# repo for provenance but out of the wheel until something reads them.
+# CDSL Layer B TSVs (~20 MB). sanskrit_analyzer.lexicon reads them, but they stay
+# out of the wheel on size; lexicon.resolve_data_dir() also looks at
+# SANSKRIT_LAYERB_DIR and ~/.sanskrit_analyzer/vyutpatti, and lexicon.is_available()
+# is False when none of those has the data. Drop this line to ship them instead.
 exclude = ["sanskrit_analyzer/data/vyutpatti/*.tsv"]
 
 # Required because the [project.optional-dependencies].api group includes a

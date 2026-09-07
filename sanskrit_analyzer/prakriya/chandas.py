@@ -12,10 +12,29 @@ the classical pathyā/vipulā checks ourselves (design doc §3.3.5):
 """
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from sanskrit_analyzer.vidyut_data import VidyutUnavailable, resolve_data_dir
+
+_METERS_CSV = Path(__file__).resolve().parents[1] / "data" / "meters-full.csv"
+
+
+@dataclass(frozen=True)
+class MeterInfo:
+    """Display and structural detail for an identified meter.
+
+    vidyut's meters.tsv carries only name, class and L/G pattern, so the SLP1
+    name is all ``identify`` could report. These come from data/meters-full.csv.
+    """
+
+    name_iast: str
+    name_deva: str
+    syllables: int | None
+    ganas: str                # e.g. "ta-bha-ja-ja-ga-ga"
+    yati: tuple[int, ...]     # caesura positions; empty when unrecorded
 
 
 @dataclass(frozen=True)
@@ -23,6 +42,59 @@ class ChandasResult:
     name: str | None        # e.g. "mandAkrAntA", "anuzwuB (paTyA)"
     scans: list[str]        # per-pāda weight strings, e.g. "GGLG..."
     notes: str | None = None
+    info: MeterInfo | None = None
+
+
+@lru_cache(maxsize=1)
+def _meter_table() -> dict[str, list[tuple[str, MeterInfo]]]:
+    """``name_slp1 -> [(pattern, info)]`` from data/meters-full.csv.
+
+    The value is a list, not a single entry, because vidyut ships two distinct
+    meters both named ``SrI`` - a 1-syllable one and an 11-syllable one. Keying
+    by name alone would silently drop whichever came second.
+    """
+    table: dict[str, list[tuple[str, MeterInfo]]] = {}
+    with _METERS_CSV.open(encoding="utf-8") as fh:
+        for row in csv.DictReader(fh):
+            info = MeterInfo(
+                name_iast=row["name_iast"],
+                name_deva=row["name_deva"],
+                syllables=int(row["syllables"]) if row["syllables"] else None,
+                ganas=row["ganas"],
+                yati=tuple(int(p) for p in row["yati_positions"].split(";") if p.strip()),
+            )
+            table.setdefault(row["name_slp1"], []).append((row["pattern"], info))
+    return table
+
+
+def meter_info(name_slp1: str, scans: list[str] | None = None) -> MeterInfo | None:
+    """Look up display detail for a meter, disambiguating homonyms by scan.
+
+    ``SrI`` names two meters, so when a scan is available the CSV pattern (with
+    its ``|`` yati separators stripped) picks the row. With no scan, or none
+    matching, the first row is the only sensible answer.
+    """
+    entries = _meter_table().get(name_slp1)
+    if not entries:
+        return None
+    if scans:
+        observed = "".join(scans)
+        for pattern, info in entries:
+            if pattern.replace("|", "") == observed:
+                return info
+    return entries[0][1]
+
+
+# The śloka is not a fixed L/G template, so it has no row in the vṛtta-only
+# meters-full.csv and its display forms are supplied here. The identified
+# pathyā/vipulā form stays in ``ChandasResult.name``.
+_ANUSTUBH_INFO = MeterInfo(
+    name_iast="anuṣṭubh",
+    name_deva="अनुष्टुभ्",
+    syllables=32,
+    ganas="",
+    yati=(),
+)
 
 
 @lru_cache(maxsize=1)
@@ -45,10 +117,11 @@ def identify(slp1_verse: str) -> ChandasResult:
     if sum(len(s) for s in scans) < 8:
         return ChandasResult(name=None, scans=scans, notes="too short for meter")
     if match.padya is not None:
-        return ChandasResult(name=str(match.padya), scans=scans)
+        name = str(match.padya)
+        return ChandasResult(name=name, scans=scans, info=meter_info(name, scans))
     form = anushtubh_form(_as_four_padas(scans))
     if form:
-        return ChandasResult(name=f"anuzwuB ({form})", scans=scans)
+        return ChandasResult(name=f"anuzwuB ({form})", scans=scans, info=_ANUSTUBH_INFO)
     return ChandasResult(
         name=None, scans=scans, notes="no meter matched (prose or corrupt text?)"
     )
