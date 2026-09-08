@@ -193,6 +193,20 @@ class SplitValidator:
         ]
 
         def _breaks_locked(segs: list[Segment]) -> bool:
+            # Only a candidate with MORE segments than cheda can chop a locked
+            # token apart. Fewer segments is a merge -- explicitly permitted by
+            # the strategy above -- and the same count cannot introduce a new
+            # boundary inside a token.
+            #
+            # Do NOT instead demand the locked surface survive verbatim: sandhi
+            # rewrites fragments at the join (asanam is spelled Asanam inside
+            # anuSAsanam), and cheda respells single tokens too (yogas -> yogaH),
+            # so a merged token rarely appears unchanged. Since every fragment of
+            # a cheda over-split is itself a real kosha entry, rejecting those
+            # froze the over-split in place -- the exact failure the
+            # _MIN_LOCK_LEN comment warns about.
+            if len(segs) <= len(segments):
+                return False
             surfaces = {s.surface for s in segs}
             return any(tok not in surfaces for tok in locked_tokens)
 
@@ -219,8 +233,13 @@ class SplitValidator:
         if len(segments) >= 2:
             self._merge_and_resplit(segments, _add)
 
-        # 4. For single-segment or unsplit input, try positional splits
-        if original_slp1 and len(original_slp1) >= 2:
+        # 4. For single-segment or unsplit input, try positional splits.
+        # Same space restriction as 2: positional splitting cuts the raw string
+        # at every offset, so on a multi-word line it produces cuts that straddle
+        # a space ("sa gacCati va"|"nam"). Those used to be suppressed only as a
+        # side effect of the locked-token veto rejecting every merge, which
+        # masked the missing guard here.
+        if original_slp1 and len(original_slp1) >= 2 and " " not in original_slp1:
             self._try_positional_splits(original_slp1, _add)
 
         return candidates

@@ -237,3 +237,58 @@ class TestPassthrough:
         result = sv.validate_and_rescore(segments, original_slp1="yoga")
         assert len(result) == 1
         assert result[0].surface == "yoga"
+
+
+class _FakeGuard:
+    """Stand-in for KoshaVocabulary over a fixed word set.
+
+    Like the real kosha it also accepts short fragments (``uSA``, ``asanam``)
+    as genuine entries; that permissiveness is what makes the merge case fail.
+    """
+
+    def __init__(self, words: set[str]) -> None:
+        self._words = words
+
+    def contains(self, surface: str) -> bool:
+        return surface in self._words
+
+
+class TestWordGuardAllowsMerges:
+    """The kosha veto must protect whole words without freezing over-splits.
+
+    ``_generate_candidates`` documents the intent: a candidate "may merge
+    fragments and split non-words, but NEVER breaks a token the kosha
+    recognises as a valid whole word". Absorbing a locked token into a longer
+    real word is a merge, not a break, so it has to stay legal - otherwise the
+    veto entrenches exactly the cheda over-split it was meant to guard against.
+    """
+
+    def test_merge_into_longer_real_word_is_not_a_break(self) -> None:
+        """anuSAsanam must win even though uSA/asanam are locked fragments."""
+        vocab = _vocab_with("anuSAsana")
+        guard = _FakeGuard({"uSA", "asanam", "anuSAsanam"})
+        sv = SplitValidator(vocabulary=vocab, word_guard=guard)
+
+        over_split = [
+            _seg("an", "aYji", "subanta"),
+            _seg("uSA", "vaS", "subanta"),
+            _seg("asanam", "asana", "subanta"),
+        ]
+        result = sv.validate_and_rescore(over_split, original_slp1="anuSAsanam")
+
+        assert [s.surface for s in result] == ["anuSAsanam"]
+
+    def test_locked_token_still_cannot_be_split_apart(self) -> None:
+        """The veto's real job is preserved: a locked word is never broken up."""
+        vocab = _vocab_with("gam")
+        sv = SplitValidator(vocabulary=vocab, word_guard=_FakeGuard({"gacCati"}))
+
+        candidates = sv._generate_candidates(
+            [_seg("gacCati", "gam", "tinanta")], original_slp1="gacCati"
+        )
+
+        for candidate in candidates:
+            surfaces = [s.surface for s in candidate]
+            assert any("gacCati" in s for s in surfaces), (
+                f"candidate {surfaces} broke the locked word gacCati"
+            )
