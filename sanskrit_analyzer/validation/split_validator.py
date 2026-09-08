@@ -229,8 +229,14 @@ class SplitValidator:
         if original_slp1 and " " not in original_slp1:
             _add([self._make_segment(original_slp1)])
 
-        # 3. Merge adjacent pairs and re-split
-        if len(segments) >= 2:
+        # 3. Merge adjacent pairs and re-split.
+        # Restricted to single-word input for the same reason as 2 and 4:
+        # Segment carries no offsets, so adjacent segments that straddle a
+        # space are indistinguishable from ones inside a word, and merging
+        # them welds two orthographic words together ("dadarSa giriSfNga..."
+        # -> "dadarSagiriSfNgasTAnpaY" | "ca"). The locked-token veto used to
+        # suppress that as a side effect of rejecting every merge.
+        if len(segments) >= 2 and " " not in original_slp1:
             self._merge_and_resplit(segments, _add)
 
         # 4. For single-segment or unsplit input, try positional splits.

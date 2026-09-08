@@ -292,3 +292,43 @@ class TestWordGuardAllowsMerges:
             assert any("gacCati" in s for s in surfaces), (
                 f"candidate {surfaces} broke the locked word gacCati"
             )
+
+
+class TestMultiWordInputIsNotWelded:
+    """Candidates must never join two orthographic words into one surface.
+
+    ``Segment`` carries no offsets, so adjacent segments that straddle a space
+    look identical to ones inside a word. Merging them welds the words together
+    ("dadarSa giriSfNga..." -> "dadarSagiriSfNgasTAnpaY" | "ca"). This only
+    shows up on real multi-word lines, which is why the single-word cases above
+    did not catch it.
+    """
+
+    def test_merge_never_spans_a_space(self) -> None:
+        vocab = _vocab_with("dadarSa", "giri")
+        sv = SplitValidator(vocabulary=vocab)
+
+        segments = [_seg("dadarSa", "dfS", "tinanta"), _seg("giriM", "giri", "subanta")]
+        candidates = sv._generate_candidates(
+            segments, original_slp1="dadarSa giriM"
+        )
+
+        for candidate in candidates:
+            for seg in candidate:
+                assert " " not in seg.surface.strip(), (
+                    f"candidate {[s.surface for s in candidate]} welded across a space"
+                )
+                assert seg.surface not in ("dadarSagiriM",), (
+                    f"candidate {[s.surface for s in candidate]} merged two words"
+                )
+
+    def test_single_word_input_still_merges(self) -> None:
+        """The guard must not disable merging inside a single word."""
+        vocab = _vocab_with("vana")
+        sv = SplitValidator(vocabulary=vocab)
+
+        merged = sv.validate_and_rescore(
+            [_seg("van", "av", "subanta"), _seg("am", "a", "subanta")],
+            original_slp1="vanam",
+        )
+        assert [s.surface for s in merged] == ["vanam"]
