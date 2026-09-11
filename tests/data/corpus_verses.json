@@ -1,0 +1,247 @@
+[
+  {
+    "id": "bala_1.1.1",
+    "source": "ramayanam",
+    "ref": "BalaKanda 1.1.1",
+    "text": "तपस्स्वाध्यायनिरतं तपस्वी वाग्विदां वरम् ।नारदं परिपप्रच्छ वाल्मीकिर्मुनिपुङ्गवम् ।।",
+    "meter": "anuzwuB",
+    "gloss": {
+      "tapasvI": ["tapasvin"],
+      "vAlmIkiH": ["vAlmIki"],
+      "nAradam": ["nArada"],
+      "paripapracCa": ["pracC", "pracCa"],
+      "varam": ["vara"],
+      "munipuNgavam": ["munipuMgava", "puMgava"]
+    }
+  },
+  {
+    "id": "bala_1.1.2",
+    "source": "ramayanam",
+    "ref": "BalaKanda 1.1.2",
+    "text": "कोन्वस्मिन्साम्प्रतं लोके गुणवान्कश्च वीर्यवान् ।धर्मज्ञश्च कृतज्ञश्च सत्यवाक्यो दृढव्रत:।।",
+    "meter": "anuzwuB",
+    "gloss": {
+      "kaH": ["ka", "kim"],
+      "asmin": ["idam"],
+      "loke": ["loka"],
+      "sAmpratam": ["sAmpratam", "sAmprata"],
+      "guRavAn": ["guRavat"],
+      "vIryavAn": ["vIryavat"],
+      "DarmajYaH": ["DarmajYa"],
+      "kftajYaH": ["kftajYa"],
+      "satyavAkyaH": ["satyavAkya"],
+      "dfQavrataH": ["dfQavrata"]
+    }
+  },
+  {
+    "id": "bala_1.1.8",
+    "source": "ramayanam",
+    "ref": "BalaKanda 1.1.8",
+    "text": "इक्ष्वाकुवंशप्रभवो रामो नाम जनैश्श्रुत: ।नियतात्मा महावीर्यो द्युतिमान्धृतिमान् वशी ।।",
+    "meter": "anuzwuB",
+    "gloss": {
+      "ikzvAkuvaMSapraBavaH": ["ikzvAkuvaMSapraBava", "praBava"],
+      "rAmaH": ["rAma"],
+      "nAma": ["nAma", "nAman"],
+      "janEH": ["jana"],
+      "SrutaH": ["Sruta", "Sru"],
+      "niyatAtmA": ["niyatAtman"],
+      "mahAvIryaH": ["mahAvIrya"],
+      "dyutimAn": ["dyutimat"],
+      "DftimAn": ["Dftimat"],
+      "vaSI": ["vaSin"]
+    }
+  },
+  {
+    "id": "ayodhya_2.1.1",
+    "source": "ramayanam",
+    "ref": "AyodhyaKanda 2.1.1",
+    "text": "गच्छता मातुलकुलं भरतेन तदाऽनघ।शत्रुघ्नो नित्यशत्रुघ्नो नीतः प्रीतिपुरस्कृतः।।",
+    "meter": "anuzwuB",
+    "gloss": {
+      "gacCatA": ["gam", "gacCat"],
+      "mAtulakulam": ["mAtulakula", "kula"],
+      "Baratena": ["Barata"],
+      "tadA": ["tadA"],
+      "anaGa": ["anaGa"],
+      "SatruGnaH": ["SatruGna"],
+      "nityaSatruGnaH": ["nityaSatruGna"],
+      "nItaH": ["nIta", "nI"],
+      "prItipuraskftaH": ["prItipuraskfta", "puraskfta"]
+    }
+  },
+  {
+    "id": "aranya_3.1.1",
+    "source": "ramayanam",
+    "ref": "AranyaKanda 3.1.1",
+    "text": "प्रविश्य तु महारण्यं दण्डकारण्यमात्मवान्।ददर्श रामो दुर्धर्षस्तापसाश्रममण्डलम्।।",
+    "meter": "anuzwuB",
+    "gloss": {
+      "praviSya": ["viS", "praviS"],
+      "mahAraRyam": ["mahAraRya", "araRya"],
+      "daRqakAraRyam": ["daRqakAraRya", "araRya"],
+      "AtmavAn": ["Atmavat"],
+      "dadarSa": ["dfS"],
+      "rAmaH": ["rAma"],
+      "durDarzaH": ["durDarza"],
+      "tApasASramamaRqalam": ["tApasASramamaRqala", "maRqala"]
+    }
+  },
+  {
+    "id": "kishkindha_4.1.2",
+    "source": "ramayanam",
+    "ref": "KishkindaKanda 4.1.2",
+    "text": "तस्य दृष्ट्वैव तां हर्षादिन्द्रियाणि चकम्पिरे।स कामवशमापन्नस्सौमित्रिमिदमब्रवीत्।।",
+    "meter": "anuzwuB",
+    "gloss": {
+      "tasya": ["tad"],
+      "dfzwvA": ["dfS"],
+      "harzAt": ["harza"],
+      "indriyARi": ["indriya"],
+      "cakampire": ["kamp"],
+      "kAmavaSam": ["kAmavaSa", "vaSa"],
+      "ApannaH": ["Apanna", "pad"],
+      "sOmitrim": ["sOmitri"],
+      "idam": ["idam"],
+      "abravIt": ["brU"]
+    }
+  },
+  {
+    "id": "sundara_5.1.1",
+    "source": "ramayanam",
+    "ref": "SundaraKanda 5.1.1",
+    "text": "ततो रावणनीतायाः सीतायाः शत्रुकर्शनः।इयेष पदमन्वेष्टुं चारणाचरिते पथि।।",
+    "meter": "anuzwuB",
+    "gloss": {
+      "tataH": ["tatas"],
+      "rAvaRanItAyAH": ["rAvaRanIta", "rAvaRanItA", "nIta"],
+      "sItAyAH": ["sItA"],
+      "SatrukarSanaH": ["SatrukarSana", "karSana"],
+      "iyeza": ["iz"],
+      "padam": ["pada"],
+      "anvezwum": ["iz", "anviz"],
+      "cAraRAcarite": ["cAraRAcarita", "carita"],
+      "paTi": ["paTin"]
+    }
+  },
+  {
+    "id": "sundara_5.1.3",
+    "source": "ramayanam",
+    "ref": "SundaraKanda 5.1.3",
+    "text": "अथ वैडूर्यवर्णेषु शाद्वलेषु महाबलः।धीरः सलिलकल्पेषु विचचार यथासुखम्।।",
+    "meter": "anuzwuB",
+    "gloss": {
+      "aTa": ["aTa"],
+      "vEqUryavarRezu": ["vEqUryavarRa", "varRa"],
+      "SAdvalezu": ["SAdvala"],
+      "mahAbalaH": ["mahAbala"],
+      "DIraH": ["DIra"],
+      "salilakalpezu": ["salilakalpa", "kalpa"],
+      "vicacAra": ["car"],
+      "yaTAsuKam": ["yaTAsuKam", "yaTAsuKa", "suKa"]
+    }
+  },
+  {
+    "id": "ys_1.1",
+    "source": "yoga_sutras",
+    "ref": "Yoga Sutra 1.1",
+    "text": "अथ योगानुशासनम्",
+    "meter": null,
+    "gloss": {
+      "aTa": ["aTa"],
+      "yoga": ["yoga"],
+      "anuSAsanam": ["anuSAsana"]
+    }
+  },
+  {
+    "id": "ys_1.2",
+    "source": "yoga_sutras",
+    "ref": "Yoga Sutra 1.2",
+    "text": "योगश्चित्तवृत्तिनिरोधः",
+    "meter": null,
+    "gloss": {
+      "yogaH": ["yoga"],
+      "citta": ["citta"],
+      "vftti": ["vftti"],
+      "niroDaH": ["niroDa"]
+    }
+  },
+  {
+    "id": "ys_1.3",
+    "source": "yoga_sutras",
+    "ref": "Yoga Sutra 1.3",
+    "text": "तदा द्रष्टुः स्वरूपेऽवस्थानम्",
+    "meter": null,
+    "gloss": {
+      "tadA": ["tadA"],
+      "drazwuH": ["drazwf"],
+      "svarUpe": ["svarUpa"],
+      "avasTAnam": ["avasTAna"]
+    }
+  },
+  {
+    "id": "ys_1.12",
+    "source": "yoga_sutras",
+    "ref": "Yoga Sutra 1.12",
+    "text": "अभ्यासवैराग्याभ्यां तन्निरोधः",
+    "meter": null,
+    "gloss": {
+      "aByAsa": ["aByAsa"],
+      "vErAgyAByAm": ["vErAgya"],
+      "tad": ["tad"],
+      "niroDaH": ["niroDa"]
+    }
+  },
+  {
+    "id": "ys_1.27",
+    "source": "yoga_sutras",
+    "ref": "Yoga Sutra 1.27",
+    "text": "तस्य वाचकः प्रणवः",
+    "meter": null,
+    "gloss": {
+      "tasya": ["tad"],
+      "vAcakaH": ["vAcaka"],
+      "praRavaH": ["praRava"]
+    }
+  },
+  {
+    "id": "ys_2.1",
+    "source": "yoga_sutras",
+    "ref": "Yoga Sutra 2.1",
+    "text": "तपःस्वाध्यायेश्वरप्रणिधानानि क्रियायोगः",
+    "meter": null,
+    "gloss": {
+      "tapaH": ["tapas"],
+      "svADyAya": ["svADyAya"],
+      "ISvara": ["ISvara"],
+      "praRiDAnAni": ["praRiDAna"],
+      "kriyA": ["kriyA"],
+      "yogaH": ["yoga"]
+    }
+  },
+  {
+    "id": "ys_2.46",
+    "source": "yoga_sutras",
+    "ref": "Yoga Sutra 2.46",
+    "text": "स्थिरसुखम् आसनम्",
+    "meter": null,
+    "gloss": {
+      "sTira": ["sTira"],
+      "suKam": ["suKa"],
+      "Asanam": ["Asana"]
+    }
+  },
+  {
+    "id": "ys_3.1",
+    "source": "yoga_sutras",
+    "ref": "Yoga Sutra 3.1",
+    "text": "देशबन्धश्चित्तस्य धारणा",
+    "meter": null,
+    "gloss": {
+      "deSa": ["deSa"],
+      "banDaH": ["banDa"],
+      "cittasya": ["citta"],
+      "DAraRA": ["DAraRA"]
+    }
+  }
+]

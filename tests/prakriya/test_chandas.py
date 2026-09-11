@@ -119,3 +119,11 @@ def test_every_meter_row_loads():
     assert len(infos) == 145
     assert all(isinstance(i.yati, tuple) for i in infos)
     assert all(isinstance(y, int) for i in infos for y in i.yati)
+
+
+def test_valid_sloka_beats_vidyut_jati_fuzzy_match():
+    # Rāmāyaṇa 3.10.3, a plain pathyā śloka. vidyut's classifier fuzzy-matches
+    # 32-syllable lines to the jāti meter upagīti; 1,005 corpus ślokas hit this.
+    r = identify("kintu vakzyAmyahaM devi tvayEvoktamidaM vacaH . "
+                 "kzatriyErDAryate cApo nArtaSabdo Bavediti")
+    assert r.name == "anuzwuB (paTyA)"

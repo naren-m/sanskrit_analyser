@@ -109,22 +109,28 @@ def _classifier():
 
 def identify(slp1_verse: str) -> ChandasResult:
     match = _classifier().classify(slp1_verse.replace(".", " "))
-    scans = [
-        "".join(str(a.weight) for a in row) for row in (match.aksharas or [])
-    ]
+    scans = ["".join(str(a.weight) for a in row) for row in (match.aksharas or [])]
     # vidyut fuzzy-matches even tiny fragments (5 syllables of prose match a
     # short vṛtta); below one pāda's worth of syllables a "meter" is noise.
     if sum(len(s) for s in scans) < 8:
         return ChandasResult(name=None, scans=scans, notes="too short for meter")
-    if match.padya is not None:
-        name = str(match.padya)
-        return ChandasResult(name=name, scans=scans, info=meter_info(name, scans))
+
+    # A vidyut name that meters-full.csv also carries is a vṛtta: an exact L/G
+    # template match, and the strongest answer we can give.
+    name = str(match.padya) if match.padya is not None else None
+    info = meter_info(name, scans) if name else None
+    if info is not None:
+        return ChandasResult(name=name, scans=scans, info=info)
+
+    # Any name left is a fuzzy jāti (mātrā) match such as upagIti, which our
+    # table does not carry. A valid śloka scan outranks it; śloka itself has no
+    # fixed template for vidyut to match, so only our own rules can find it.
     form = anushtubh_form(_as_four_padas(scans))
     if form:
         return ChandasResult(name=f"anuzwuB ({form})", scans=scans, info=_ANUSTUBH_INFO)
-    return ChandasResult(
-        name=None, scans=scans, notes="no meter matched (prose or corrupt text?)"
-    )
+    if name:
+        return ChandasResult(name=name, scans=scans)
+    return ChandasResult(name=None, scans=scans, notes="no meter matched (prose or corrupt text?)")
 
 
 def _as_four_padas(scans: list[str]) -> list[str]:
