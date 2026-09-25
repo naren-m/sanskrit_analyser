@@ -30,6 +30,23 @@ logger = logging.getLogger(__name__)
 # nominal reading of the same form also exists, prefer the nominal.
 _SHORT_ROOT_LEN = 2
 
+# The zero kṛt suffix: a bare root used as a noun (√ci → "ci", "one who
+# gathers"). Real but rare, and the kosha generates it for nearly every short
+# surface form, so it ranks last.
+_ZERO_KRT = "kvi~p"
+
+# Kṛt suffixes that form indeclinables (gerund, infinitive, absolutive). A
+# derived reading on one of these is an avyaya: कृत्वा is √kṛ + ktvā, never
+# the nominal kṛtvan the kosha also offers.
+_AVYAYA_KRT = frozenset({"ktvA", "lyap", "tumu~n", "Ramu~l"})
+
+# Pronominal (sarvanāman) stems in SLP1. A closed class, so a list is the
+# right tool: सा / सः / तम् must read as tad, अयम् as idam, अहम् as asmad.
+_PRONOMINAL_STEMS = frozenset({
+    "tad", "etad", "idam", "adas", "yad", "kim", "asmad", "yuzmad",
+    "sarva", "anya", "sva", "eka", "ubha", "katara", "katama", "itara",
+})
+
 
 @dataclass
 class TokenResult:
@@ -67,9 +84,26 @@ def rank_analyses(
     * **POS hint (preferred):** when a segmenter/tagger supplies a coarse POS for
       the token (``"noun"`` / ``"verb"``), analyses matching it are floated to the
       top. This is how the ByT5 tagger fixes ``रामः`` — it tags it a noun.
-    * **Short-root demotion (fallback):** with no hint, a finite-verb reading on a
-      1–2 char root is demoted below any nominal/derived reading of the same form.
-      Longer roots (gam, bhū) keep verb-first, so गच्छति/जगाम are unaffected.
+    * **Reading order (fallback, and the tiebreak under a hint):**
+
+      1. an *indeclinable* reading — a form the kosha lists as an avyaya
+         (च, इति, ततः, पुनः) is that avyaya in running text, not the kvip
+         root-noun or the vocative the kosha also derives for it — including
+         an indeclinable kṛdanta (कृत्वा, निवेश्य, गन्तुम्);
+      2. a pronominal stem (सा / तस्य → tad, अयम् → idam, अहम् → asmad): a
+         closed class whose forms collide with verb and noun homographs
+         (तस्य is also an imperative of √tas) but are the pronoun in text;
+      3. a finite verb, unless it sits on a 1–2 char root and a nominal reading
+         exists (रामः is not √rā); longer roots (gam, bhū) keep verb-first so
+         गच्छति/जगाम are unaffected;
+      4. a plain *nominal*. It outranks a *derived* reading because the derived
+         reading's lemma is its dhātu (वाक्यम् → vac), not the stem (vākya);
+         the dhātu is still attached by :func:`resolve_roots`, which annotates
+         the first dhātu-bearing reading wherever it ranks;
+      5. a *derived* reading;
+      6. a derived reading on the zero suffix ``kvi~p`` — a bare root used as a
+         noun, which the kosha generates for almost any short form (च → √ci,
+         सा → √sā, वनम् → √van) and which is almost never the intended word.
     """
     if not analyses:
         return analyses
@@ -77,17 +111,27 @@ def rank_analyses(
     has_nominal = any(a.get("kind") in ("nominal", "derived") for a in analyses)
     wanted = {"noun": ("nominal", "derived"), "verb": ("verb",)}.get(pos_hint or "", ())
 
-    def key(a: dict[str, Any]) -> tuple[int, int]:
+    def order(a: dict[str, Any]) -> int:
         kind = a.get("kind", "unknown")
-        base = kosha_engine._KIND_ORDER.get(kind, 99)
-        if pos_hint:
-            return (0 if kind in wanted else 1, base)
-        # Fallback: demote a short-root finite verb when a nominal reading exists.
-        if kind == "verb" and has_nominal:
+        if kind == "indeclinable" or a.get("krt") in _AVYAYA_KRT:
+            return 0
+        if kind == "nominal" and a.get("lemma") in _PRONOMINAL_STEMS:
+            return 1
+        if kind == "verb":
             root = (a.get("dhatu") or {}).get("root") or ""
-            if len(root) <= _SHORT_ROOT_LEN:
-                return (1, base)
-        return (0, base)
+            if has_nominal and len(root) <= _SHORT_ROOT_LEN:
+                return 5
+            return 2
+        if kind == "nominal":
+            return 3
+        if kind == "derived":
+            return 6 if a.get("krt") == _ZERO_KRT else 4
+        return 7
+
+    def key(a: dict[str, Any]) -> tuple[int, int]:
+        if pos_hint:
+            return (0 if a.get("kind") in wanted else 1, order(a))
+        return (0, order(a))
 
     return sorted(analyses, key=key)
 

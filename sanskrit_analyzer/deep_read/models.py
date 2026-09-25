@@ -66,14 +66,18 @@ class Analysis:
     lemma: str | None = None
     dhatu: DhatuBlock | None = None
     morphology: dict[str, str] = field(default_factory=dict)
+    krt: str | None = None  # kṛt suffix of a derived reading, e.g. "Ryat"
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "kind": self.kind,
             "lemma": self.lemma,
             "dhatu": self.dhatu.to_dict() if self.dhatu else None,
             "morphology": self.morphology,
         }
+        if self.krt:  # only when present, so legacy dicts round-trip unchanged
+            d["krt"] = self.krt
+        return d
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Analysis":
@@ -83,6 +87,7 @@ class Analysis:
             lemma=d.get("lemma"),
             dhatu=DhatuBlock.from_dict(dhatu) if dhatu else None,
             morphology=dict(d.get("morphology") or {}),
+            krt=d.get("krt"),
         )
 
 

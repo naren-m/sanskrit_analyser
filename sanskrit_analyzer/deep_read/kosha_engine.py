@@ -143,14 +143,18 @@ class Analysis:
     lemma: str | None = None
     dhatu: DhatuView | None = None
     morphology: dict[str, str] = field(default_factory=dict)
+    krt: str | None = None  # kṛt suffix of a derived reading, e.g. "Ryat", "kvi~p"
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "kind": self.kind,
             "lemma": self.lemma,
             "dhatu": self.dhatu.to_dict() if self.dhatu else None,
             "morphology": self.morphology,
         }
+        if self.krt:
+            d["krt"] = self.krt
+        return d
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +299,10 @@ def _classify(entry: Any) -> Analysis:
     elif krdanta_dhatu is not None:
         kind = "derived"  # nominal derived from a root (e.g. participle)
         dhatu = _dhatu_view(krdanta_dhatu)
+        krt = getattr(prati, "krt", None)
+        return Analysis(kind=kind, lemma=lemma, dhatu=dhatu,
+                        morphology=_morphology(entry),
+                        krt=str(krt) if krt is not None else None)
     elif getattr(entry, "is_avyaya", False):
         kind = "indeclinable"
         dhatu = None
