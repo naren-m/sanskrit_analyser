@@ -1,12 +1,14 @@
 """Text normalization utilities for Sanskrit processing."""
 
 import re
+import unicodedata
 
 from sanskrit_analyzer.models.scripts import Script
 
 
 # Character ranges for script detection
 _DEVANAGARI_RANGE = re.compile(r"[\u0900-\u097F]")
+_NUKTA = "\u093C"  # combining nukta; see strip_nukta
 _IAST_DIACRITICS = re.compile(r"[āīūṛṝḷḹēōṃḥñṅṇṭḍśṣ]", re.IGNORECASE)
 # SLP1-exclusive lowercase letters, or any interior uppercase (see detect_script).
 _SLP1_MARKERS = re.compile(r"[fxzwq]|(?<=[A-Za-z])[A-Z]")
@@ -83,6 +85,24 @@ def detect_script(text: str, plain_ascii_default: Script | None = None) -> Scrip
 
     # Default to IAST for plain ASCII that might be simplified transliteration
     return Script.IAST
+
+
+def strip_nukta(text: str) -> str:
+    """Drop the combining nukta, mapping क़ ख़ ड़ back to their base letters.
+
+    The nukta marks Perso-Arabic sounds Sanskrit does not use, so in a Sanskrit
+    corpus it is a typo -- e.g. पितृ़णां for पितॄणां, 37 times in the Valmiki
+    Ramayana text. Transliteration has no mapping for it and passes it through
+    verbatim, leaving a multi-byte Devanagari character inside an otherwise-ASCII
+    SLP1 string, which panics vidyut's Rust sandhi splitter on a char boundary.
+
+    Precomposed forms are decomposed first so ड़ (U+095C) is handled the same
+    as ड + U+093C.
+    """
+    decomposed = unicodedata.normalize("NFD", text)
+    if _NUKTA not in decomposed:
+        return text
+    return unicodedata.normalize("NFC", decomposed.replace(_NUKTA, ""))
 
 
 def normalize_slp1(text: str, source_script: Script | None = None) -> str:

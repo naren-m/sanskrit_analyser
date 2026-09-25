@@ -33,6 +33,7 @@ from typing import Any
 # deliberate re-exports: downstream callers (ramayanam) import them from here.
 from sanskrit_analyzer.utils.desandhi import desandhi_candidates
 from sanskrit_analyzer.utils.desandhi import visarga_candidates as visarga_candidates
+from sanskrit_analyzer.utils.normalize import strip_nukta
 from sanskrit_analyzer.vidyut_data import VidyutUnavailable
 from sanskrit_analyzer.vidyut_data import is_available as is_available
 from sanskrit_analyzer.vidyut_data import kosha as _kosha
@@ -214,7 +215,8 @@ def slp(text: str, scheme_from: str = "Devanagari") -> str:
     from vidyut.lipi import Scheme, transliterate
 
     src = getattr(Scheme, scheme_from)
-    return transliterate(text, src, Scheme.Slp1)
+    # The nukta has no SLP1 mapping and would survive verbatim (see strip_nukta).
+    return transliterate(strip_nukta(text), src, Scheme.Slp1)
 
 
 def to_iast(slp_text: str | None) -> str | None:

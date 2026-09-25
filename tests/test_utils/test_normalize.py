@@ -12,7 +12,7 @@ plain_ascii_default=Script.SLP1 to resolve the ambiguity.
 import pytest
 
 from sanskrit_analyzer.models.scripts import Script
-from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1
+from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1, strip_nukta
 
 
 class TestDetectScript:
@@ -89,3 +89,22 @@ class TestIso15919Input:
     )
     def test_iso_variants_normalize(self, text, expected):
         assert normalize_slp1(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # The corpus typo that panicked vidyut's splitter (37 Rāmāyaṇa verses).
+        ("पितृ़णां", "पितृणां"),
+        # Precomposed nukta letters decompose to the same base letter.
+        ("ड़", "ड"),
+        ("क़मल", "कमल"),
+        # No nukta: returned unchanged, including non-Devanagari input.
+        ("रामः", "रामः"),
+        ("rAmaH", "rAmaH"),
+        ("", ""),
+    ],
+    ids=["combining-nukta", "precomposed-dda", "precomposed-qa", "plain", "slp1", "empty"],
+)
+def test_strip_nukta(text, expected):
+    assert strip_nukta(text) == expected
