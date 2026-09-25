@@ -125,8 +125,9 @@ def test_identify_prefers_ha_over_han_for_hanam():
 @_needs_resolver
 def test_preferred_root_hook_settles_a_homograph():
     """The hook is meant for a dictionary keyed by stem/lemma, so it must be
-    called with the SLP1 *lemma* (here "rAgi", the base reading vidyut carries
-    for रागः), not the inflected surface ("rAgaH", with its visarga). A hook
+    called with the SLP1 *lemma* (here the stem "rAga", which the ranker puts
+    first for रागः since #572 — before that it was the causative-root reading
+    "rAgi"), not the inflected surface ("rAgaH", with its visarga). A hook
     that only ever sees inflected surfaces would miss on every stem-keyed
     dictionary lookup, defeating its purpose."""
     received: list[str] = []
@@ -138,7 +139,49 @@ def test_preferred_root_hook_settles_a_homograph():
     ident = DhatuIdentifier(preferred_root_fn=preferred_root_fn)
     results = ident.identify("रागः")
 
-    assert received == ["rAgi"], (
+    assert received == ["rAga"], (
         f"hook must receive the SLP1 lemma, not the inflected surface; got {received!r}"
     )
     assert any(r.dhatu and r.dhatu["root"] == "raYj" for r in results)
+
+
+def _derived(root, krt):
+    return {"kind": "derived", "lemma": root, "dhatu": {"root": root},
+            "morphology": {}, "krt": krt}
+
+
+def _avyaya(lemma):
+    return {"kind": "indeclinable", "lemma": lemma, "dhatu": None, "morphology": {}}
+
+
+# (id, candidates in kosha order, expected top lemma). Each row is a word the
+# reader showed with the wrong root before #572; kosha order is kept verbatim.
+RANK_CASES = [
+    ("ca-avyaya-beats-kvip-root-noun",
+     [_derived("ci", "kvi~p"), _derived("capi", "kvi~p"), _nominal("ca"), _avyaya("ca")],
+     "ca"),
+    ("tatas-avyaya-beats-participle-of-tan",
+     [_derived("tan", "kta"), _nominal("tata"), _avyaya("tatas")], "tatas"),
+    ("sa-pronoun-beats-kvip-and-saman",
+     [_derived("sAvi", "kvi~p"), _nominal("sAman"), _nominal("sA"), _nominal("tad")], "tad"),
+    ("tasya-pronoun-beats-imperative-of-tas",
+     [_verb("tas"), _nominal("tad"), _nominal("ta")], "tad"),
+    ("vakyam-stem-beats-root-lemma",
+     [_derived("vac", "Ryat"), _nominal("vAkya")], "vAkya"),
+    ("vanam-stem-beats-kvip-of-van",
+     [_derived("vAni", "kvi~p"), _derived("van", "kvi~p"), _nominal("vana")], "vana"),
+    ("krtva-gerund-beats-krtvan-noun",
+     [_nominal("kftvan"), _derived("kf", "ktvA")], "kf"),
+    ("gatah-participle-beats-kvip",
+     [_derived("gam", "kvi~p"), _derived("gam", "kta")], "gam"),
+]
+
+
+def test_rank_reading_order_table():
+    """Fallback reading order, one row per word class the reader got wrong (#572)."""
+    failures = []
+    for case_id, candidates, want in RANK_CASES:
+        got = rank_analyses(list(candidates))[0]["lemma"]
+        if got != want:
+            failures.append(f"{case_id}: top lemma {got!r}, want {want!r}")
+    assert not failures, "\n".join(failures)
