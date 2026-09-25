@@ -30,6 +30,7 @@ outperforms it on exactly those cases.
 from __future__ import annotations
 
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -66,6 +67,40 @@ def _splitter():
     return Splitter.from_csv(str(rules))
 
 
+_VOWEL_FINAL = re.compile(r"[aAiIuUfFxXeEoO]$")
+# A pada opening on a doubled sibilant (ss, SS, zz) or on r + consonant.
+_DISPLACED_OPENING = re.compile(r"^(?:(ss|SS|zz)|(r)(?=[^aAiIuUfFxXeEoOMH']))")
+
+
+def _normalise_tokens(tokens: list[str]) -> list[str]:
+    """Undo two orthographic habits of the Rāmāyaṇa text before splitting.
+
+    - **Displaced visarga.** The text often writes a word's visarga, as the
+      sibilant or r it becomes in sandhi, at the *start of the next pada*
+      after a space: स्त्रिय स्स्वर्गे is striyaḥ svarge, यक्षा श्श्रूयन्ते is
+      yakṣāḥ śrūyante, महात्मभि र्महर्षि is mahātmabhiḥ maharṣi. Neither half
+      is a word as written. When a vowel-final pada is followed by one opening
+      on ss/śś/ṣṣ or r + consonant, the visarga goes back on the left word.
+      Measured on kandas 1-6: 918 such padas, every one after a vowel.
+    - **Avagraha outside e/o.** The splitter's rules know ऽ only as the
+      elided a after e/o (रामोऽपि). The text also writes it after a long ā
+      (यथाऽगतम्, a vowel merged into ā) and doubled (सोऽऽहं). Those spellings
+      are outside its alphabet, so the whole pada came back unsplit.
+      After e/o the ऽ is left alone; elsewhere it is dropped, which gives the
+      plain sandhi form (yathāgatam) the splitter does know.
+    """
+    out: list[str] = []
+    for tok in tokens:
+        m = _DISPLACED_OPENING.match(tok)
+        if m and out and _VOWEL_FINAL.search(out[-1]):
+            out[-1] += "H"
+            tok = tok[1:]  # ss → s, r + C → C
+        tok = re.sub(r"'{2,}", "'", tok)
+        tok = re.sub(r"(?<![eo])'", "", tok)
+        out.append(tok)
+    return out
+
+
 def is_available() -> bool:
     """True if both the kosha and sandhi data needed to segment are present."""
     data_dir = vidyut_data.resolve_data_dir()
@@ -81,6 +116,14 @@ def _kosha_valid(slp: str) -> bool:
 @lru_cache(maxsize=8192)
 def _solve(s: str) -> tuple[str, ...] | None:
     """Fewest-piece segmentation of SLP1 ``s`` into kosha-valid members.
+
+    Known gap: among equal-count parses the first one the loop finds wins,
+    which is the one with the shortest first piece, so a word-final consonant
+    goes to the next word (``eva · muktas`` for evam uktas, ``tat · astu`` for
+    tatas tu). A "longest leftmost piece" tiebreak fixes those (+1.5 pts pada
+    recall on 300 Rāmāyaṇa verses) but breaks Yoga Sūtra compounds, where the
+    kosha accepts non-words like ``cittavṛttini``/``sthirasu`` as long first
+    pieces. Fixing it needs a lexical-plausibility signal, not a length rule.
 
     Returns a tuple of SLP1 members, or ``None`` if no fully-valid segmentation
     exists. The whole string (kept intact) is always a candidate, so a word that
@@ -132,8 +175,8 @@ def segment(text: str) -> list[str] | None:
         return None
     try:
         members: list[str] = []
-        for token in kosha_engine.tokenize(text):
-            slp = kosha_engine.slp(token)
+        slps = _normalise_tokens([kosha_engine.slp(t) for t in kosha_engine.tokenize(text)])
+        for slp in slps:
             for piece in segment_slp(slp):
                 iast = kosha_engine.to_iast(piece)
                 if iast:
@@ -141,6 +184,11 @@ def segment(text: str) -> list[str] | None:
         return members
     except vidyut_data.VidyutUnavailable:
         return None
-    except Exception as exc:  # segmentation is best-effort; never break the caller
+    except (KeyboardInterrupt, SystemExit, GeneratorExit):
+        raise
+    # BaseException, not Exception: vidyut's splitter is Rust, and pyo3's
+    # PanicException is not an Exception, so a panic on unexpected input would
+    # otherwise escape and break the "never raises for ordinary text" contract.
+    except BaseException as exc:  # segmentation is best-effort; never break the caller
         logger.warning("segmentation failed for %r: %s", text, exc)
         return None
