@@ -2,7 +2,6 @@
 
 import math
 
-import pytest
 import torch
 
 from sanskrit_analyzer.embeddings.training.info_nce import info_nce_loss

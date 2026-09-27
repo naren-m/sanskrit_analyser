@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import pytest
 import torch
 
 from sanskrit_analyzer.embeddings.training.projection_head import (

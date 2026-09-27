@@ -7,7 +7,6 @@ in the ramayanam repo for the design rationale.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import numpy as np
 import torch
@@ -64,7 +63,7 @@ class ByT5SanskritEmbedder:
     def __init__(
         self,
         model_name: str = _DEFAULT_MODEL,
-        device: Optional[str] = None,
+        device: str | None = None,
         max_length: int = 1024,
         normalize: bool = True,
         lazy: bool = False,
@@ -75,8 +74,8 @@ class ByT5SanskritEmbedder:
         self.max_length = max_length
         self.normalize = normalize
         self.revision = revision
-        self._model: Optional[T5ForConditionalGeneration] = None
-        self._tokenizer: Optional[ByT5Tokenizer] = None
+        self._model: T5ForConditionalGeneration | None = None
+        self._tokenizer: ByT5Tokenizer | None = None
         if not lazy:
             self._load()
 

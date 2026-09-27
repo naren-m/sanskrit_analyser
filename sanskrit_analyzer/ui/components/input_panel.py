@@ -1,6 +1,6 @@
 """Input panel component with text input, examples, and history."""
 
-from typing import Callable
+from collections.abc import Callable
 
 import streamlit as st
 

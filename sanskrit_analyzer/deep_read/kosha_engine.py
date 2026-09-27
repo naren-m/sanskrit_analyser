@@ -33,7 +33,7 @@ from typing import Any
 # deliberate re-exports: downstream callers (ramayanam) import them from here.
 from sanskrit_analyzer.utils.desandhi import desandhi_candidates
 from sanskrit_analyzer.utils.desandhi import visarga_candidates as visarga_candidates
-from sanskrit_analyzer.utils.normalize import strip_nukta
+from sanskrit_analyzer.utils.normalize import strip_nukta, strip_zero_width
 from sanskrit_analyzer.vidyut_data import VidyutUnavailable
 from sanskrit_analyzer.vidyut_data import is_available as is_available
 from sanskrit_analyzer.vidyut_data import kosha as _kosha
@@ -52,25 +52,17 @@ _DEVANAGARI_RUN_RE = re.compile(r"[ऀ-ॣॐ-ॣ]+")
 # digits like the "1 1 8" produced by "।।1.1.8।।".
 _HAS_DEVA_LETTER_RE = re.compile(r"[ऄ-ह]")
 
-# gana (verb-class) name -> traditional number. vidyut emits SLP1-ish names
-# such as "BvAdi", "curAdi"; we match case-insensitively.
 # Salience order for presenting candidate analyses: lead with the finite verb
 # (most relevant for a "deep read"), then root-derived nominals, then plain nouns.
 _KIND_ORDER = {"verb": 0, "derived": 1, "nominal": 2, "indeclinable": 3, "unknown": 4}
 
-_GANA_NUMBERS = {
-    "bvadi": 1,
-    "adadi": 2,
-    "juhotyadi": 3,
-    "divadi": 4,
-    "svadi": 5,
-    "tudadi": 6,
-    "ruDadi": 7,
-    "rudhadi": 7,
-    "tanadi": 8,
-    "kryadi": 9,
-    "curadi": 10,
+# vidyut's gaṇa str() form -> traditional class number (1..10). Also used by
+# dhatu.resolver, so there is one table to keep in step with vidyut's spelling.
+GANA_NUMBERS = {
+    "BvAdi": 1, "adAdi": 2, "juhotyAdi": 3, "divAdi": 4, "svAdi": 5,
+    "tudAdi": 6, "ruDAdi": 7, "tanAdi": 8, "kryAdi": 9, "curAdi": 10,
 }
+_GANA_BY_LOWER = {name.lower(): num for name, num in GANA_NUMBERS.items()}
 
 # Small curated English gloss map for very common roots. The authoritative
 # meaning is always the Dhatupatha ``artha_sa`` (Sanskrit); English here is a
@@ -170,7 +162,9 @@ def tokenize(text: str) -> list[str]:
     token. Tokens are trimmed to their Devanagari run.
     """
     tokens: list[str] = []
-    for raw in _TOKEN_SPLIT_RE.split(text or ""):
+    # A ZWJ/ZWNJ inside a word (धर्म‍क्षेत्रे) is not in the Devanagari run
+    # class, so it would cut the token short.
+    for raw in _TOKEN_SPLIT_RE.split(strip_zero_width(text or "")):
         raw = raw.strip()
         if not raw or not _HAS_DEVA_LETTER_RE.search(raw):
             continue  # skip pure digits / punctuation / verse-ref markers
@@ -184,7 +178,7 @@ def tokenize(text: str) -> list[str]:
 def gana_to_number(gana_name: str | None) -> int | None:
     if not gana_name:
         return None
-    return _GANA_NUMBERS.get(gana_name.lower())
+    return _GANA_BY_LOWER.get(gana_name.lower())
 
 
 def english_for_root(root: str | None) -> str | None:
@@ -211,6 +205,9 @@ def slp(text: str, scheme_from: str = "Devanagari") -> str:
 
     ``scheme_from`` is any ``vidyut.lipi.Scheme`` attribute name; passing
     ``"Slp1"`` makes this an identity transform.
+
+    The nukta is stripped first: it has no SLP1 mapping and would survive
+    transliteration verbatim (see :func:`strip_nukta`).
     """
     from vidyut.lipi import Scheme, transliterate
 

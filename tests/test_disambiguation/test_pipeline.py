@@ -2,7 +2,7 @@
 
 import pytest
 
-from sanskrit_analyzer.disambiguation.llm import LLMConfig, LLMDisambiguationResult
+from sanskrit_analyzer.disambiguation.llm import LLMDisambiguationResult
 from sanskrit_analyzer.disambiguation.pipeline import (
     DisambiguationPipeline,
     DisambiguationStage,

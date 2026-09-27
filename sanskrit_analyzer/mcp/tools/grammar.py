@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
 
 from sanskrit_analyzer import Analyzer
 from sanskrit_analyzer.config import Config
@@ -12,9 +12,11 @@ from sanskrit_analyzer.mcp.response import error_response, json_response, text_r
 ToolDispatcher = Callable[[str, dict[str, Any]], Awaitable[list[TextContent] | None]]
 
 
-def build_grammar_tools() -> tuple[list[Tool], ToolDispatcher]:
+def build_grammar_tools(
+    analyzer: Analyzer | None = None,
+) -> tuple[list[Tool], ToolDispatcher]:
     """Build the grammar tool specs and their dispatcher (see build_analysis_tools)."""
-    analyzer = Analyzer(Config())
+    analyzer = analyzer or Analyzer(Config.load())
 
     tools = [
             Tool(

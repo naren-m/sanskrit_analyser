@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
@@ -33,7 +32,7 @@ class ProjectionHeadTrainer:
         hidden_dim: int = 1024,
         temperature: float = 0.05,
         learning_rate: float = 1e-4,
-        device: Optional[str] = None,
+        device: str | None = None,
     ) -> None:
         self.embedder = embedder
         self.temperature = temperature
@@ -103,7 +102,7 @@ class ProjectionHeadTrainer:
         pairs: list[tuple[str, str, int]],
         epochs: int = 10,
         batch_size: int = 16,
-        val_pairs: Optional[list[tuple[str, str, int]]] = None,
+        val_pairs: list[tuple[str, str, int]] | None = None,
     ) -> TrainingHistory:
         for epoch in range(epochs):
             train_loss = self._epoch_loss(pairs, batch_size, train=True)

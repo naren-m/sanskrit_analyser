@@ -1,6 +1,5 @@
 """Tests for configuration module."""
 
-import os
 from pathlib import Path
 
 import pytest
@@ -288,6 +287,15 @@ class TestConfigEnvOverrides:
 
         config = Config.from_file(config_file)
         assert config.disambiguation.openai_api_key == "sk-test-key"
+
+        # A default Analyzer() must see the env var too, and hand the key to
+        # the LLM config; both were dropped, so OpenAI disambiguation never ran.
+        from sanskrit_analyzer.analyzer import Analyzer
+
+        analyzer = Analyzer()
+        assert analyzer.config.disambiguation.openai_api_key == "sk-test-key"
+        pipeline_config = analyzer._create_disambiguation_pipeline()._config
+        assert pipeline_config.llm_config.openai_api_key == "sk-test-key"
 
 
 class TestConfigDefaultCreation:

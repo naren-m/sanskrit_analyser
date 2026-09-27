@@ -36,7 +36,8 @@ from collections.abc import Iterator
 from typing import Any
 
 from sanskrit_analyzer import vidyut_data
-from sanskrit_analyzer.dhatu.dhatupatha import DhatuKosha, strip_anubandhas
+from sanskrit_analyzer.deep_read.kosha_engine import GANA_NUMBERS
+from sanskrit_analyzer.dhatu.dhatupatha import DhatuKosha, get_dhatu_kosha, strip_anubandhas
 
 logger = logging.getLogger(__name__)
 
@@ -55,18 +56,12 @@ class DhatuResolver:
             return self._ready
         try:
             self._kosha = vidyut_data.kosha()
-            self._dhatu_kosha = DhatuKosha()
+            self._dhatu_kosha = get_dhatu_kosha()
             self._ready = True
         except Exception as e:  # missing data bundle
             logger.info("DhatuResolver unavailable: %s", e)
             self._ready = False
         return self._ready
-
-    # Vidyut gaṇa str() form -> traditional dhātu class number (1..10).
-    _GANA_NUM = {
-        "BvAdi": 1, "adAdi": 2, "juhotyAdi": 3, "divAdi": 4, "svAdi": 5,
-        "tudAdi": 6, "ruDAdi": 7, "tanAdi": 8, "kryAdi": 9, "curAdi": 10,
-    }
 
     # Pronoun (sarvanāman) stems in SLP1 — closed class, no verbal root.
     # Backs up the is_avyaya check for stems the Kośa doesn't flag.
@@ -360,7 +355,7 @@ class DhatuResolver:
                 -len(root),
             )
             if best is None or rank > best[0]:
-                gana = self._GANA_NUM.get(str(dhatu.gana)) if dhatu.gana else None
+                gana = GANA_NUMBERS.get(str(dhatu.gana)) if dhatu.gana else None
                 best = (rank, self._pack(
                     root, prefixes, gana, de.artha_sa, verified, is_verb=is_verb,
                 ))
@@ -410,16 +405,16 @@ class DhatuResolver:
         if not self._ensure() or not root_slp1:
             return None
         assert self._dhatu_kosha is not None
-        # The dictionary writes √rañj; the Dhātupāṭha index spells it ranj.
-        entries = (self._dhatu_kosha.lookup(root_slp1)
-                   or self._dhatu_kosha.lookup(root_slp1.replace("Y", "n")))
+        # find_slp1 tries the citation spellings the index is keyed by: √sidh
+        # is filed as ṣidh, √rañj as ranj. The reply must be the living root.
+        entries = self._dhatu_kosha.find_slp1(root_slp1)
         if not entries:
             return None
         best = next((e for e in entries if e.get("curated")), entries[0])
         gana = best.get("gana")
         gana_num = int(gana) if gana is not None and str(gana).isdigit() else None
         return self._pack(
-            best.get("core_root") or root_slp1, [],
+            self._normalize_citation(best.get("core_root") or root_slp1), [],
             gana_num,
             best.get("artha_slp1"), True,
         )

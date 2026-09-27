@@ -1,6 +1,5 @@
 """Tests for the Sanskrit Analyzer UI styles module."""
 
-import pytest
 
 from sanskrit_analyzer.ui.styles import confidence_class, expand_icon
 

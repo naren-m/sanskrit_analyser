@@ -103,9 +103,15 @@ class DhatuKosha:
                 entry["curated"] = False
             self.entries.append(entry)
 
+        # lookup() sits inside the resolver's per-word loops; a scan of 2259
+        # rows per call dominated them.
+        self._by_root: dict[str, list[dict[str, Any]]] = {}
+        for entry in self.entries:
+            self._by_root.setdefault(entry["core_root"], []).append(entry)
+
     def lookup(self, root: str) -> list[dict[str, Any]]:
         """Every entry whose resolved core_root equals ``root`` exactly."""
-        return [e for e in self.entries if e["core_root"] == root]
+        return list(self._by_root.get(root, ()))
 
     def find(self, query: str) -> list[dict[str, Any]]:
         """Look up a root written in any script (Devanagari, IAST or SLP1).
@@ -114,7 +120,14 @@ class DhatuKosha:
         full citation form (so ``ḍukṛñ`` finds √kṛ), and finally the citation
         form with its it-markers stripped.
         """
-        slp = to_slp1_query(query)
+        return self.find_slp1(to_slp1_query(query))
+
+    def find_slp1(self, slp: str) -> list[dict[str, Any]]:
+        """:meth:`find` for a root already in SLP1.
+
+        ``to_slp1_query`` reads plain ASCII as IAST, which lowercases SLP1
+        capitals (Bid -> bid), so a caller holding SLP1 must skip it.
+        """
         if not slp:
             return []
         for candidate in _citation_variants(slp):

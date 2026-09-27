@@ -107,10 +107,11 @@ def is_available() -> bool:
     return data_dir is not None and (Path(data_dir) / "sandhi" / "rules.csv").is_file()
 
 
+@lru_cache(maxsize=65536)
 def _kosha_valid(slp: str) -> bool:
     """True if ``slp`` (after undoing common final sandhi) is a real pada."""
     kosha = vidyut_data.kosha()
-    return any(list(kosha.get(cand)) for cand in desandhi_candidates(slp))
+    return any(kosha.get(cand) for cand in desandhi_candidates(slp))
 
 
 @lru_cache(maxsize=8192)
@@ -155,7 +156,10 @@ def segment_slp(slp: str) -> list[str]:
     Falls back to the whole token if no valid multi-member split is found, so the
     caller always gets at least the original word back.
     """
-    if len(slp) < _MIN_SPLIT_LEN:
+    # Non-ASCII means transliteration left something SLP1 cannot hold (e.g.
+    # the Dravidian short-e sign in केशवॆ); vidyut's splitter slices by byte and
+    # panics mid-character, so keep the token whole rather than lose the line.
+    if len(slp) < _MIN_SPLIT_LEN or not slp.isascii():
         return [slp]
     result = _solve(slp)
     return list(result) if result else [slp]

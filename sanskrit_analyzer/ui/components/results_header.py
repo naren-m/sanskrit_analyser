@@ -1,7 +1,8 @@
 """Results header component showing sentence info and script variants."""
 
 import html
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import streamlit as st
 

@@ -1,7 +1,6 @@
 """Tests for memory LRU cache."""
 
 import threading
-from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 

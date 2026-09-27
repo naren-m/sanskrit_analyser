@@ -15,7 +15,6 @@ no network access is required once the cache is populated.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import numpy as np
 
@@ -67,7 +66,7 @@ class BgeM3Embedder:
     def __init__(
         self,
         model_name: str = _DEFAULT_MODEL,
-        device: Optional[str] = None,
+        device: str | None = None,
         normalize: bool = True,
         lazy: bool = False,
     ) -> None:

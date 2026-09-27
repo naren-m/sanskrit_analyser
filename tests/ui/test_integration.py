@@ -1,10 +1,10 @@
 """Integration tests for the Sanskrit Analyzer UI full flow."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from tests.ui.conftest import MockSessionState
+import pytest
 
+from tests.ui.conftest import MockSessionState
 
 # Sample API response for testing (in API format, will be transformed by client)
 SAMPLE_ANALYSIS_RESPONSE = {
@@ -64,7 +64,7 @@ class TestFullAnalysisFlow:
     @pytest.mark.asyncio
     async def test_analyze_stores_result_in_session(self) -> None:
         """Full flow: input -> API call -> result stored in session state."""
-        from sanskrit_analyzer.ui.api_client import AnalysisResult, SanskritAPIClient
+        from sanskrit_analyzer.ui.api_client import SanskritAPIClient
 
         # Mock successful API response
         mock_response = MagicMock()
@@ -133,6 +133,7 @@ class TestFullAnalysisFlow:
     async def test_error_state_on_connection_failure(self) -> None:
         """Connection errors are captured in result."""
         import httpx
+
         from sanskrit_analyzer.ui.api_client import SanskritAPIClient
 
         with patch("httpx.AsyncClient") as mock_client:

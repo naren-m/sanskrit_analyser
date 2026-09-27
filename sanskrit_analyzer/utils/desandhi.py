@@ -5,6 +5,24 @@ must not import each other.
 """
 from __future__ import annotations
 
+import re
+
+# Stop (sparśa) -> the nasal of its varga. Printed texts write a word-internal
+# nasal before a stop as anusvāra (शंकर, पुंगव, चंद्र) while the kosha keys the
+# homorganic nasal (SaNkara, puNgava, candra).
+_VARGA_NASAL = {
+    **dict.fromkeys("kKgG", "N"),
+    **dict.fromkeys("cCjJ", "Y"),
+    **dict.fromkeys("wWqQ", "R"),
+    **dict.fromkeys("tTdD", "n"),
+    **dict.fromkeys("pPbB", "m"),
+}
+_ANUSVARA_BEFORE_STOP = re.compile(r"M(?=[kKgGcCjJwWqQtTdDpPbB])")
+
+
+def _homorganic(slp: str) -> str:
+    return _ANUSVARA_BEFORE_STOP.sub(lambda m: _VARGA_NASAL[slp[m.end()]], slp)
+
 
 def desandhi_candidates(slp: str) -> list[str]:
     """Generate lookup candidates for a SLP1 form, undoing common final sandhi.
@@ -14,7 +32,9 @@ def desandhi_candidates(slp: str) -> list[str]:
     visarga has already mutated by sandhi — ``-aḥ`` → ``-o`` before a voiced
     sound (रामः → रामो), visarga → ``ś``/``ṣ`` before sibilants, final ``m`` →
     anusvāra ``ṃ``. Without reversing these, almost nothing in connected text
-    resolves. Order is preserved and de-duplicated.
+    resolves. Each candidate is also tried with a word-internal anusvāra before
+    a stop written as its homorganic nasal. Order is preserved and
+    de-duplicated.
     """
     out = [slp]
     if slp:
@@ -27,6 +47,8 @@ def desandhi_candidates(slp: str) -> list[str]:
             out += [stem + "H", stem + "s"]
         elif last == "M":  # final m -> anusvāra ṃ
             out += [stem + "m"]
+    # Spelling variant, not sandhi: try each candidate with the nasal restored.
+    out += [_homorganic(c) for c in out]
     seen: set[str] = set()
     uniq: list[str] = []
     for c in out:

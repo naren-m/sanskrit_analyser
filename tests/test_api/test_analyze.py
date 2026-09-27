@@ -192,7 +192,7 @@ class TestAnalyzeEndpoint:
             json={"text": "test"},
         )
         assert response.status_code == 500
-        assert "Analysis failed" in response.json()["detail"]
+        assert response.json()["detail"] == "Analysis failed"  # no exception text leaked
 
     def test_analyze_bypass_cache(self, client: TestClient, mock_analyzer: MagicMock) -> None:
         """Test analysis bypassing cache."""
@@ -204,51 +204,6 @@ class TestAnalyzeEndpoint:
 
         call_kwargs = mock_analyzer.analyze.call_args[1]
         assert call_kwargs["bypass_cache"] is True
-
-
-class TestGetAnalysisEndpoint:
-    """Tests for GET /api/v1/analyze/{sentence_id}."""
-
-    def test_get_analysis_no_cache(self, client: TestClient) -> None:
-        """Test getting analysis when cache not enabled."""
-        response = client.get("/api/v1/analyze/test-123")
-        assert response.status_code == 404
-        assert "Caching not enabled" in response.json()["detail"]
-
-    def test_get_analysis_not_found(
-        self,
-        config: Config,
-        mock_analyzer: MagicMock,
-    ) -> None:
-        """Test getting analysis that doesn't exist."""
-        # Set up cache with sqlite
-        mock_cache = MagicMock()
-        mock_sqlite = MagicMock()
-        mock_sqlite.get_by_id = MagicMock(return_value=None)
-        mock_cache._sqlite = mock_sqlite
-        mock_analyzer._cache = mock_cache
-
-        app = create_app(config)
-        app.state.analyzer = mock_analyzer
-        app.state.config = config
-        client = TestClient(app)
-
-        response = client.get("/api/v1/analyze/nonexistent")
-        assert response.status_code == 404
-        assert "Analysis not found" in response.json()["detail"]
-
-
-class TestDisambiguateEndpoint:
-    """Tests for POST /api/v1/disambiguate."""
-
-    def test_disambiguate_no_cache(self, client: TestClient) -> None:
-        """Test disambiguation when cache not enabled."""
-        response = client.post(
-            "/api/v1/disambiguate",
-            json={"sentence_id": "test-123", "selected_parse": "p1"},
-        )
-        assert response.status_code == 400
-        assert "Corpus storage not enabled" in response.json()["detail"]
 
 
 class TestResponseStructure:

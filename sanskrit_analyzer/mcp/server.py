@@ -13,14 +13,14 @@ from mcp.types import Resource, TextContent, Tool
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from starlette.routing import Route
+from starlette.routing import Mount, Route
 
+from sanskrit_analyzer.mcp.resources.dhatus import build_dhatu_resources
+from sanskrit_analyzer.mcp.resources.grammar import build_grammar_resources
 from sanskrit_analyzer.mcp.response import error_response
 from sanskrit_analyzer.mcp.tools.analysis import build_analysis_tools
 from sanskrit_analyzer.mcp.tools.dhatu import build_dhatu_tools
 from sanskrit_analyzer.mcp.tools.grammar import build_grammar_tools
-from sanskrit_analyzer.mcp.resources.dhatus import build_dhatu_resources
-from sanskrit_analyzer.mcp.resources.grammar import build_grammar_resources
 
 # Server start time for uptime calculation
 _start_time: float = 0.0
@@ -57,10 +57,16 @@ def create_server() -> Server:
     # every tool/resource group must be aggregated into a single handler.
     # Registering each group's own @server.list_tools()/@server.call_tool()
     # (etc.) would silently overwrite all but the last group.
+    # One Analyzer for every tool group: each one loads vidyut, the kosha and
+    # its own cache tiers.
+    _, analyzer = _shared_components()
     tool_specs: list[Tool] = []
     tool_dispatchers = []
-    for build in (build_analysis_tools, build_dhatu_tools, build_grammar_tools):
-        specs, dispatch = build()
+    for specs, dispatch in (
+        build_analysis_tools(analyzer),
+        build_dhatu_tools(),
+        build_grammar_tools(analyzer),
+    ):
         tool_specs.extend(specs)
         tool_dispatchers.append(dispatch)
 
@@ -98,25 +104,25 @@ def create_server() -> Server:
     return server
 
 
-# Health-probe objects are cached so a monitoring poll doesn't reload the
-# Dhatupatha and Analyzer (an expensive load) on every request.
-_health_kosha: Any = None
-_health_analyzer: Any = None
+# Cached so a monitoring poll doesn't reload the Dhatupatha and Analyzer (an
+# expensive load) on every request. The Analyzer is also the one the tools use.
+_shared_kosha: Any = None
+_shared_analyzer: Any = None
 
 
-def _get_health_probes() -> tuple[Any, Any]:
-    """Lazily build and cache the Dhatupatha/Analyzer used by the health check."""
-    global _health_kosha, _health_analyzer
-    if _health_kosha is None:
+def _shared_components() -> tuple[Any, Any]:
+    """Lazily build and cache the Dhatupatha and Analyzer shared by tools and health."""
+    global _shared_kosha, _shared_analyzer
+    if _shared_kosha is None:
         from sanskrit_analyzer.dhatu.dhatupatha import get_dhatu_kosha
 
-        _health_kosha = get_dhatu_kosha()
-    if _health_analyzer is None:
+        _shared_kosha = get_dhatu_kosha()
+    if _shared_analyzer is None:
         from sanskrit_analyzer import Analyzer
         from sanskrit_analyzer.config import Config
 
-        _health_analyzer = Analyzer(Config())
-    return _health_kosha, _health_analyzer
+        _shared_analyzer = Analyzer(Config.load())
+    return _shared_kosha, _shared_analyzer
 
 
 async def health_check(request: Request) -> JSONResponse:
@@ -130,14 +136,14 @@ async def health_check(request: Request) -> JSONResponse:
 
     # Check the Dhatupatha index
     try:
-        kosha, _ = _get_health_probes()
+        kosha, _ = _shared_components()
         components["dhatupatha"] = {"status": "healthy", "roots": kosha.count()}
     except Exception as e:
         components["dhatupatha"] = {"status": "unhealthy", "error": str(e)}
 
     # Check Analyzer
     try:
-        _get_health_probes()
+        _shared_components()
         components["analyzer"] = {"status": "healthy"}
     except Exception as e:
         components["analyzer"] = {"status": "unhealthy", "error": str(e)}
@@ -191,6 +197,8 @@ def create_app(config: MCPServerConfig | None = None) -> Starlette:
         routes=[
             Route("/health", endpoint=health_check, methods=["GET"]),
             Route("/sse", endpoint=handle_sse),
+            # Clients POST their JSON-RPC messages here; without it no tool call lands.
+            Mount("/messages/", app=sse.handle_post_message),
         ],
     )
 

@@ -216,6 +216,30 @@ class TestAnalyzerAnalyze:
         analyzer._tree_builder.build.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_vocabulary_only_fallback_is_not_confident(self) -> None:
+        """No engine segments -> validator guesses from ~100 words; say so.
+
+        With the vidyut bundle missing, 'yogaScittavfttiniroDaH' came back as
+        yoga|S|citta|vftti|niroDa|H at overall confidence 1.0, labelled
+        'vidyut+validator', so callers could not tell the result was a guess.
+        """
+        analyzer = Analyzer(Config())
+        await analyzer._initialize()
+        if analyzer._split_validator is None:
+            pytest.skip("split validator unavailable")
+        analyzer._cache = None
+        analyzer._runner = MagicMock()
+        analyzer._runner.analyze = AsyncMock(
+            return_value=EngineRunResult(errors=["vidyut: data missing"])
+        )
+
+        tree = await analyzer.analyze("yogaScittavfttiniroDaH")
+
+        assert tree.parse_forest, "fallback should still produce a split"
+        assert tree.confidence.overall <= 0.3
+        assert "vidyut+validator" not in tree.best_parse.engine_votes
+
+    @pytest.mark.asyncio
     async def test_analyze_devanagari_input(
         self,
         analyzer: Analyzer,
@@ -372,7 +396,7 @@ class TestAnalyzerBatch:
         async def mock_analyze(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            from sanskrit_analyzer.models.tree import ConfidenceMetrics, ParseTree
+            from sanskrit_analyzer.models.tree import ConfidenceMetrics
 
             return AnalysisTree(
                 sentence_id=f"test_{call_count}",
@@ -452,29 +476,63 @@ class TestAnalyzerStats:
 
 
 class TestAnalyzerCacheKey:
-    """Tests for cache key generation."""
+    """The cache must not hand one request's result to a different request."""
 
-    def test_make_cache_key(self) -> None:
-        """Test cache key generation."""
-        analyzer = Analyzer()
-        analyzer._cache = MagicMock()
-        analyzer._cache._memory = MagicMock()
-        analyzer._cache._memory.make_key = MagicMock(return_value="test_key")
+    @pytest.mark.asyncio
+    async def test_cache_serves_only_equivalent_requests(self) -> None:
+        """A real memory cache, a two-parse forest, and the knobs that change output.
 
-        key = analyzer._make_cache_key("rAmaH", "production")
+        Regressions pinned: a production-mode call cached the truncated forest,
+        so a later return_all_parses=True got one parse; an engines= override
+        wrote its result under the default key; and CACHE_SCHEMA_VERSION was
+        never folded into the key, so an upgrade kept serving old results.
+        """
+        from sanskrit_analyzer.cache import tiered
+        from sanskrit_analyzer.models.tree import ConfidenceMetrics, ParseTree
 
-        assert key == "test_key"
-        analyzer._cache._memory.make_key.assert_called_once_with("rAmaH", "production")
+        config = Config()
+        config.engines.vidyut = False
+        config.cache.redis_enabled = False
+        config.cache.sqlite_enabled = False
+        config.disambiguation.llm_enabled = False
+        analyzer = Analyzer(config)
+        analyzer._initialized = True
+        analyzer._disambiguation = None
+        analyzer._cache = analyzer._create_cache()
+        analyzer._runner = MagicMock()
+        analyzer._runner.analyze = AsyncMock(return_value=EngineRunResult(segments=[]))
+        analyzer._tree_builder = MagicMock()
+        analyzer._tree_builder.build = MagicMock(side_effect=lambda *a, **k: AnalysisTree(
+            sentence_id="s",
+            original_text="rAmaH",
+            normalized_slp1="rAmaH",
+            scripts=MagicMock(),
+            parse_forest=[ParseTree(parse_id="p1", confidence=0.9),
+                          ParseTree(parse_id="p2", confidence=0.5)],
+            confidence=ConfidenceMetrics(overall=0.9, engine_agreement=0.9),
+        ))
 
-    def test_make_cache_key_no_cache(self) -> None:
-        """Test cache key generation without cache."""
-        analyzer = Analyzer()
-        analyzer._cache = None
+        first = await analyzer.analyze("rAmaH", mode=AnalysisMode.PRODUCTION)
+        full = await analyzer.analyze("rAmaH", mode=AnalysisMode.PRODUCTION,
+                                      return_all_parses=True)
+        await analyzer.analyze("rAmaH", engines=["local_byt5"])
+        again = await analyzer.analyze("rAmaH", return_all_parses=True)
 
-        key = analyzer._make_cache_key("rAmaH", "production")
-
-        assert isinstance(key, str)
-        assert len(key) == 32  # SHA256 truncated
+        failures = []
+        if len(first.parse_forest) != 1:
+            failures.append(f"production call not truncated: {len(first.parse_forest)}")
+        if len(full.parse_forest) != 2:
+            failures.append(f"cache served truncated forest: {len(full.parse_forest)}")
+        if analyzer._runner.analyze.await_count != 2:
+            failures.append(f"runner calls {analyzer._runner.analyze.await_count}, "
+                            "want 2 (first miss + engines override)")
+        if again.cached_at is None:
+            failures.append("default request after engines override missed the cache")
+        key = analyzer._cache.make_key("rAmaH", "production")
+        with patch.object(tiered, "CACHE_SCHEMA_VERSION", tiered.CACHE_SCHEMA_VERSION + 1):
+            if analyzer._cache.make_key("rAmaH", "production") == key:
+                failures.append("schema version bump did not change the key")
+        assert not failures, failures
 
 
 class TestAnalyzerEngines:

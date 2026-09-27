@@ -5,10 +5,10 @@ import unicodedata
 
 from sanskrit_analyzer.models.scripts import Script
 
-
 # Character ranges for script detection
 _DEVANAGARI_RANGE = re.compile(r"[\u0900-\u097F]")
 _NUKTA = "\u093C"  # combining nukta; see strip_nukta
+_NON_ASCII = re.compile(r"[^\x00-\x7f]")
 _IAST_DIACRITICS = re.compile(r"[āīūṛṝḷḹēōṃḥñṅṇṭḍśṣ]", re.IGNORECASE)
 # SLP1-exclusive lowercase letters, or any interior uppercase (see detect_script).
 _SLP1_MARKERS = re.compile(r"[fxzwq]|(?<=[A-Za-z])[A-Z]")
@@ -105,6 +105,30 @@ def strip_nukta(text: str) -> str:
     return unicodedata.normalize("NFC", decomposed.replace(_NUKTA, ""))
 
 
+def strip_zero_width(text: str) -> str:
+    """Drop ZWNJ/ZWJ (U+200C/U+200D).
+
+    Typists use them to force or break a Devanagari conjunct (धर्म‍क्षेत्रे);
+    they carry no phoneme, and a tokenizer matching Devanagari runs would
+    otherwise cut the word at them.
+    """
+    return text.replace("\u200c", "").replace("\u200d", "")
+
+
+def ascii_slp1(slp1: str) -> str:
+    """Make an SLP1 string safe to hand to vidyut's Rust code.
+
+    SLP1 is pure ASCII, but transliteration passes anything it cannot map
+    through verbatim: a nukta, ZWJ/ZWNJ, an em dash, a Dravidian short-e
+    vowel sign. vidyut indexes by byte, so one such codepoint panics it
+    (chandas on any codepoint >= 256, the sandhi splitter on a char
+    boundary), and a pyo3 panic is a BaseException that ordinary
+    ``except Exception`` handlers miss. Dropping them loses nothing SLP1 can
+    represent.
+    """
+    return slp1 if slp1.isascii() else _NON_ASCII.sub("", slp1)
+
+
 def normalize_slp1(text: str, source_script: Script | None = None) -> str:
     """Normalize Sanskrit text to SLP1 script.
 
@@ -130,6 +154,8 @@ def normalize_slp1(text: str, source_script: Script | None = None) -> str:
 
     if not text.strip():
         return text
+
+    text = strip_nukta(text)
 
     if source_script is None:
         source_script = detect_script(text)

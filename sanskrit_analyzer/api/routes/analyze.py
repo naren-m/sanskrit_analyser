@@ -1,11 +1,14 @@
 """Analyze API endpoints for Sanskrit text analysis."""
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from sanskrit_analyzer.config import AnalysisMode
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["Analysis"])
 
@@ -120,13 +123,6 @@ class AnalysisTreeResponse(BaseModel):
     cached_at: str | None = None
     needs_human_review: bool = False
     engine_details: dict[str, Any] | None = None
-
-
-class DisambiguateRequest(BaseModel):
-    """Request to save disambiguation choice."""
-
-    sentence_id: str = Field(..., description="The sentence ID from analysis")
-    selected_parse: str = Field(..., description="The parse_id of the selected interpretation")
 
 
 def _tree_to_response(tree: Any) -> AnalysisTreeResponse:
@@ -289,66 +285,8 @@ async def analyze_text(request: Request, body: AnalyzeRequest) -> AnalysisTreeRe
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Analysis failed: {exc}",
-        ) from exc
+        # Log the cause; don't echo exception text (paths, internals) to clients.
+        logger.exception("Analysis failed")
+        raise HTTPException(status_code=500, detail="Analysis failed") from exc
 
-    return _tree_to_response(tree)
-
-
-@router.get("/analyze/{sentence_id}", response_model=AnalysisTreeResponse)
-async def get_analysis(request: Request, sentence_id: str) -> AnalysisTreeResponse:
-    """Retrieve a cached analysis by sentence ID.
-
-    Returns the previously computed analysis if it exists in cache.
-    """
-    analyzer = request.app.state.analyzer
-
-    # Try to get from cache
-    if analyzer._cache is None:
-        raise HTTPException(status_code=404, detail="Caching not enabled")
-
-    # Look up in SQLite corpus by sentence_id
-    if analyzer._cache._sqlite is None:
-        raise HTTPException(status_code=404, detail="Corpus storage not enabled")
-
-    result = analyzer._cache._sqlite.get_by_id(sentence_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail=f"Analysis not found: {sentence_id}")
-
-    # Reconstruct tree from cached data
-    tree = analyzer._result_to_tree(result, None)
-    return _tree_to_response(tree)
-
-
-@router.post("/disambiguate", response_model=AnalysisTreeResponse)
-async def save_disambiguation(
-    request: Request,
-    body: DisambiguateRequest,
-) -> AnalysisTreeResponse:
-    """Save a human disambiguation choice.
-
-    Updates the corpus with the selected parse interpretation.
-    """
-    analyzer = request.app.state.analyzer
-
-    if analyzer._cache is None or analyzer._cache._sqlite is None:
-        raise HTTPException(status_code=400, detail="Corpus storage not enabled")
-
-    # Get the existing analysis
-    result = analyzer._cache._sqlite.get_by_id(body.sentence_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail=f"Analysis not found: {body.sentence_id}")
-
-    # Update with selected parse
-    analyzer._cache._sqlite.set_disambiguation(
-        body.sentence_id,
-        body.selected_parse,
-        "human",
-    )
-
-    # Return updated tree
-    updated = analyzer._cache._sqlite.get_by_id(body.sentence_id)
-    tree = analyzer._result_to_tree(updated, None)
     return _tree_to_response(tree)

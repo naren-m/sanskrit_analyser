@@ -1,6 +1,6 @@
 """Tests for the word card component helpers."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from sanskrit_analyzer.ui.components.word_card import (
     _meaning_to_str,

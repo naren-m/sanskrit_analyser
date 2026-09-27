@@ -33,6 +33,20 @@ def test_unanalyzable_word_yields_empty_analyses():
 
 
 def test_json_serializable():
+    """Also the no-raise contract: each row once panicked vidyut's chandas."""
     import json
 
-    json.dumps(analyze_verse("गच्छति"))
+    cases = [
+        ("गच्छति", ["gacCati"]),
+        ("rāmaḥ vanaṃ gacchati — iti", ["rAmaH", "vanaM", "gacCati", "iti"]),  # em dash
+        ("पितृ़णां गच्छति", ["pitfRAM", "gacCati"]),  # nukta typo, 37x in Rāmāyaṇa
+        ("धर्म\u200dक्षेत्रे", ["Darmakzetre"]),  # ZWJ inside the word
+    ]
+    failures = []
+    for text, words in cases:
+        rec = analyze_verse(text)
+        json.dumps(rec)
+        got = [p["surface"] for p in rec["padas"]]
+        if got != words:
+            failures.append(f"{text!r}: {got} != {words}")
+    assert not failures, failures

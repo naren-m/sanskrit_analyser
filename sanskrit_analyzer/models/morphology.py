@@ -1,7 +1,8 @@
 """Morphological data models for Sanskrit analysis."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 
 def _tag_value(value):
@@ -153,6 +154,25 @@ class MorphologicalTag:
             "voice": _tag_value(self.voice),
             "raw_tag": self.raw_tag,
         }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "MorphologicalTag":
+        """Inverse of :meth:`to_dict`: string values back to enum members."""
+
+        def member(enum: type[Enum], key: str) -> Any:
+            value = d.get(key)
+            return enum(value) if value is not None else None
+
+        return cls(
+            pos=member(PartOfSpeech, "pos"),
+            gender=member(Gender, "gender"),
+            number=member(Number, "number"),
+            case=member(Case, "case"),
+            person=member(Person, "person"),
+            tense=member(Tense, "tense"),
+            voice=member(Voice, "voice"),
+            raw_tag=d.get("raw_tag"),
+        )
 
     @classmethod
     def noun(
