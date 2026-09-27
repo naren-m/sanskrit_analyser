@@ -66,6 +66,15 @@ def _entries_by_code() -> dict[str, Any]:
     return {e.code: e for e in Data(str(data_dir / "prakriya")).load_dhatu_entries()}
 
 
+@lru_cache(maxsize=1)
+def _vyakarana() -> Any:
+    # Not shared with prakriya.analyzer's copy: dhatu and prakriya must not
+    # import each other.
+    from vidyut.prakriya import Vyakarana
+
+    return Vyakarana()
+
+
 def conjugate(code: str, lakara: str = "lat") -> list[dict[str, Any]]:
     """Derive the tiṅanta paradigm for one Dhātupāṭha entry.
 
@@ -90,9 +99,9 @@ def conjugate(code: str, lakara: str = "lat") -> list[dict[str, Any]]:
     if entry is None:
         raise KeyError(f"unknown dhatupatha code: {code}")
 
-    from vidyut.prakriya import DhatuPada, Lakara, Pada, Prayoga, Purusha, Vacana, Vyakarana
+    from vidyut.prakriya import DhatuPada, Lakara, Pada, Prayoga, Purusha, Vacana
 
-    engine = Vyakarana()
+    engine = _vyakarana()
     lakara_value = getattr(Lakara, _VIDYUT_LAKARA[canonical])
     forms: list[dict[str, Any]] = []
     slots = product(_PADA_ORDER, _PURUSHA_ORDER, _VACANA_ORDER)

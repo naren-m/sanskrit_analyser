@@ -177,8 +177,6 @@ Environment variables override config file settings:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/analyze` | Analyze Sanskrit text |
-| GET | `/api/v1/analyze/{id}` | Get cached analysis |
-| POST | `/api/v1/disambiguate` | Save disambiguation choice |
 | GET | `/api/v1/dhatu/{dhatu}` | Lookup dhatu information |
 | POST | `/api/v1/dhatu/search` | Search dhatus |
 | GET | `/health` | Health check |

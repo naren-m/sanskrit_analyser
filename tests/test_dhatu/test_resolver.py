@@ -105,6 +105,11 @@ class TestCitationSpelledIndexKeys:
         """Verification via the cited key must not leak ṣ/ṇ into the output."""
         info = resolver.resolve("sidDi")
         assert not info["root_slp1"].startswith(("z", "R"))
+        # describe_root (yoga_sutras' fallback for a dictionary-named root)
+        # did an exact index lookup: √sidh/√sic missed, √nah came back as ṇah.
+        for root in ("siD", "sic", "nah"):
+            described = resolver.describe_root(root)
+            assert described and described["root_slp1"] == root, (root, described)
 
 
 class TestLeadingItMarkers:

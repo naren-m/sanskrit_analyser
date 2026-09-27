@@ -1,5 +1,6 @@
 """Vidyut engine wrapper for Paninian grammar-based analysis."""
 
+import asyncio
 import os
 
 from sanskrit_analyzer.engines.base import EngineBase, EngineResult, Segment
@@ -10,6 +11,41 @@ from sanskrit_analyzer.vidyut_data import resolve_data_dir
 
 # Where to download the bundle when no data directory is found.
 DEFAULT_VIDYUT_DATA_PATH = os.path.expanduser("~/.vidyut-data")
+
+# Vidyut enum member names -> models.morphology enum values.
+_LINGA = {"Pum": "masculine", "Stri": "feminine", "Napumsaka": "neuter"}
+_VIBHAKTI = {
+    "Prathama": "nominative",
+    "Dvitiya": "accusative",
+    "Trtiya": "instrumental",
+    "Caturthi": "dative",
+    "Panchami": "ablative",
+    "Sasthi": "genitive",
+    "Saptami": "locative",
+    "Sambodhana": "vocative",
+}
+_VACANA = {"Eka": "singular", "Dvi": "dual", "Bahu": "plural"}
+_PURUSHA = {"Prathama": "third", "Madhyama": "second", "Uttama": "first"}
+_LAKARA = {
+    "Lat": "present",
+    "Lan": "imperfect",
+    "Lot": "imperative",
+    "VidhiLin": "potential",
+    "AshirLin": "benedictive",
+    "Lit": "perfect",
+    "Lun": "aorist",
+    "Lrt": "future",
+    "Lut": "periphrastic_future",
+    "Lrn": "conditional",
+}
+_PRAYOGA = {"Kartari": "active", "Karmani": "passive", "Bhave": "passive"}
+
+
+def _put(result: dict, key: str, table: dict[str, str], value: object) -> None:
+    """Set result[key] from a vidyut enum member, skipping None and unknowns (e.g. Let)."""
+    term = table.get(getattr(value, "name", ""))
+    if term:
+        result[key] = term
 
 
 class VidyutEngine(EngineBase):
@@ -79,99 +115,24 @@ class VidyutEngine(EngineBase):
         return transliterate(text, script, Script.SLP1)
 
     def _parse_pada_data(self, data: object) -> dict:
-        """Parse Vidyut Pada data into a dictionary.
+        """Read a Vidyut PadaEntry into English morphology terms.
 
-        Args:
-            data: Vidyut PadaEntry object.
-
-        Returns:
-            Dictionary with morphological information.
+        Values are the ``models.morphology`` enum values, so the tree builder
+        can map them without guessing at abbreviations.
         """
-        result: dict = {"raw": str(data)}
-
-        data_str = str(data)
-
-        # Extract key information from the string representation
-        if "Subanta" in data_str:
-            result["type"] = "subanta"  # Nominal form
-            if "Linga.Pum" in data_str:
-                result["gender"] = "masculine"
-            elif "Linga.Stri" in data_str:
-                result["gender"] = "feminine"
-            elif "Linga.Napumsaka" in data_str:
-                result["gender"] = "neuter"
-
-            # Extract vibhakti (case)
-            for i, case in enumerate(
-                [
-                    "Prathama",
-                    "Dvitiya",
-                    "Trtiya",
-                    "Caturthi",
-                    "Pancami",
-                    "Sasthi",
-                    "Saptami",
-                    "Sambodhana",
-                ]
-            ):
-                if f"Vibhakti.{case}" in data_str:
-                    result["case"] = case.lower()
-                    result["case_number"] = i + 1
-                    break
-
-            # Extract vacana (number)
-            if "Vacana.Eka" in data_str:
-                result["number"] = "singular"
-            elif "Vacana.Dvi" in data_str:
-                result["number"] = "dual"
-            elif "Vacana.Bahu" in data_str:
-                result["number"] = "plural"
-
-        elif "Tinanta" in data_str:
-            result["type"] = "tinanta"  # Verbal form
-
-            # Extract lakara (tense/mood)
-            lakaras = ["Lat", "Lit", "Lut", "Lrt", "Let", "Lot", "Lan", "Lin", "Lun", "Lrn"]
-            for lakara in lakaras:
-                if f"Lakara.{lakara}" in data_str:
-                    result["lakara"] = lakara.lower()
-                    break
-
-            # Extract purusha (person)
-            if "Purusha.Prathama" in data_str:
-                result["person"] = "third"
-            elif "Purusha.Madhyama" in data_str:
-                result["person"] = "second"
-            elif "Purusha.Uttama" in data_str:
-                result["person"] = "first"
-
-            # Extract vacana
-            if "Vacana.Eka" in data_str:
-                result["number"] = "singular"
-            elif "Vacana.Dvi" in data_str:
-                result["number"] = "dual"
-            elif "Vacana.Bahu" in data_str:
-                result["number"] = "plural"
-
-        # Extract gana if present
-        ganas = [
-            "Bhvadi",
-            "Adadi",
-            "Juhotyadi",
-            "Divadi",
-            "Svadi",
-            "Tudadi",
-            "Rudhadi",
-            "Tanadi",
-            "Kryadi",
-            "Curadi",
-        ]
-        for i, gana in enumerate(ganas):
-            if f"Gana.{gana}" in data_str:
-                result["gana"] = i + 1
-                result["gana_name"] = gana.lower()
-                break
-
+        result: dict = {}
+        name = type(data).__name__
+        if name.endswith("Subanta"):
+            result["type"] = "indeclinable" if data.is_avyaya else "noun"  # type: ignore[attr-defined]
+            _put(result, "gender", _LINGA, data.linga)  # type: ignore[attr-defined]
+            _put(result, "case", _VIBHAKTI, data.vibhakti)  # type: ignore[attr-defined]
+            _put(result, "number", _VACANA, data.vacana)  # type: ignore[attr-defined]
+        elif name.endswith("Tinanta"):
+            result["type"] = "verb"
+            _put(result, "person", _PURUSHA, data.purusha)  # type: ignore[attr-defined]
+            _put(result, "number", _VACANA, data.vacana)  # type: ignore[attr-defined]
+            _put(result, "tense", _LAKARA, data.lakara)  # type: ignore[attr-defined]
+            _put(result, "voice", _PRAYOGA, data.prayoga)  # type: ignore[attr-defined]
         return result
 
     async def analyze(self, text: str) -> EngineResult:
@@ -197,28 +158,14 @@ class VidyutEngine(EngineBase):
 
             # Run segmentation
             segments: list[Segment] = []
-            tokens = self._chedaka.run(slp1_text)  # type: ignore
+            # Chedaka is sync Rust; keep it off the event loop.
+            tokens = await asyncio.to_thread(self._chedaka.run, slp1_text)  # type: ignore
 
             for token in tokens:
                 # Parse morphological data
                 morph_data = self._parse_pada_data(token.data)
 
-                # Build morphology string
-                morph_parts = []
-                if "type" in morph_data:
-                    morph_parts.append(morph_data["type"])
-                if "gender" in morph_data:
-                    morph_parts.append(morph_data["gender"][:3])
-                if "case" in morph_data:
-                    morph_parts.append(morph_data["case"][:3])
-                if "number" in morph_data:
-                    morph_parts.append(morph_data["number"][:2])
-                if "person" in morph_data:
-                    morph_parts.append(morph_data["person"][:3])
-                if "lakara" in morph_data:
-                    morph_parts.append(morph_data["lakara"])
-
-                morph_str = ".".join(morph_parts) if morph_parts else None
+                morph_str = ".".join(morph_data.values()) or None
 
                 segment = Segment(
                     surface=token.text,
@@ -234,7 +181,7 @@ class VidyutEngine(EngineBase):
                 engine=self.name,
                 segments=segments,
                 confidence=0.9 if segments else 0.0,
-                raw_output=str([str(t.data) for t in self._chedaka.run(slp1_text)]),  # type: ignore
+                raw_output=str([str(t.data) for t in tokens]),
             )
 
         except Exception as e:

@@ -1,7 +1,8 @@
 """Tests for the Local ByT5-Sanskrit engine."""
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from sanskrit_analyzer.engines.local_byt5_engine import LocalByT5Engine
 
@@ -227,8 +228,8 @@ class TestLocalByT5EngineIntegration:
     def skip_if_no_transformers(self) -> None:
         """Skip test if transformers not available."""
         try:
-            import transformers
             import torch
+            import transformers
         except ImportError:
             pytest.skip("transformers/torch not installed")
 

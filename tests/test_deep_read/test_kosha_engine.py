@@ -49,6 +49,8 @@ def test_tokenize_splits_on_whitespace():
 
 def test_tokenize_strips_dandas_and_punctuation():
     assert engine.tokenize("गच्छति वनम्॥ राम।") == ["गच्छति", "वनम्", "राम"]
+    # A ZWJ is outside the Devanagari run, so धर्म‍क्षेत्रे used to become धर्म.
+    assert engine.tokenize("धर्म\u200dक्षेत्रे कुरु\u200cक्षेत्रे") == ["धर्मक्षेत्रे", "कुरुक्षेत्रे"]
 
 
 def test_tokenize_empty():
@@ -83,6 +85,8 @@ def test_tokenize_drops_verse_reference_digits():
 def test_gana_to_number():
     assert engine.gana_to_number("BvAdi") == 1
     assert engine.gana_to_number("curAdi") == 10
+    # vidyut spells it ruDAdi; the old table had ruDadi, so gaṇa 7 was None.
+    assert engine.gana_to_number("ruDAdi") == 7
     assert engine.gana_to_number("Gana.Bhvadi".split(".")[-1].lower()) is None  # unknown spelling
     assert engine.gana_to_number(None) is None
 
@@ -117,17 +121,26 @@ def test_participle_resolves_to_dhatu():
 
 
 @requires_vidyut
-def test_visarga_noun_resolves_via_candidate():
-    # रामः (rAmaH) only resolves once we try the -s candidate.
-    res = engine.analyze_word("रामः")
-    assert res["resolved"] is True
+def test_word_resolves_only_via_desandhi_candidate():
+    cases = [
+        ("रामः", "kosha keys rAmas, not pausal rAmaH"),
+        ("रामो", "running-text o-sandhi of रामः"),
+        ("शंकरः", "anusvāra before k-varga; kosha keys SaNkara"),
+        ("पुंगवम्", "anusvāra before g; kosha keys puNgava"),
+        ("चंद्रः", "anusvāra before d; kosha keys candra"),
+    ]
+    failures = [
+        f"{word} ({why})" for word, why in cases
+        if not engine.analyze_word(word)["resolved"]
+    ]
+    assert not failures, failures
 
 
 @requires_vidyut
-def test_sandhi_o_form_resolves_in_running_text():
-    # रामो (running-text sandhi of रामः) must resolve after de-sandhi.
-    res = engine.analyze_word("रामो")
-    assert res["resolved"] is True
+def test_finite_verb_gana_reaches_the_view():
+    """gaṇa 7 through vidyut's real enum string, not a hand-typed name."""
+    res = engine.analyze_word("रुणद्धि")
+    assert [a["dhatu"]["gana_num"] for a in res["analyses"] if a["dhatu"]] == [7]
 
 
 @requires_vidyut

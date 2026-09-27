@@ -3,20 +3,22 @@
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
 
 from sanskrit_analyzer import Analyzer
 from sanskrit_analyzer.config import Config
 from sanskrit_analyzer.mcp.response import error_response, json_response, text_response
 from sanskrit_analyzer.utils.normalize import detect_script
-from sanskrit_analyzer.utils.transliterate import transliterate, Script
+from sanskrit_analyzer.utils.transliterate import Script, transliterate
 
 # A dispatcher returns the tool's result, or None if it does not own ``name``
 # (so the server can try the next tool group).
 ToolDispatcher = Callable[[str, dict[str, Any]], Awaitable[list[TextContent] | None]]
 
 
-def build_analysis_tools() -> tuple[list[Tool], ToolDispatcher]:
+def build_analysis_tools(
+    analyzer: Analyzer | None = None,
+) -> tuple[list[Tool], ToolDispatcher]:
     """Build the analysis tool specs and their dispatcher.
 
     Returns the list of :class:`Tool` specs plus an async dispatcher. The MCP
@@ -24,7 +26,7 @@ def build_analysis_tools() -> tuple[list[Tool], ToolDispatcher]:
     expose its specs/dispatcher for the server to aggregate into a single
     ``list_tools``/``call_tool`` handler rather than registering its own.
     """
-    analyzer = Analyzer(Config())
+    analyzer = analyzer or Analyzer(Config.load())
 
     tools = [
             Tool(

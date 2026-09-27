@@ -289,7 +289,7 @@ class Config:
 
         path = Path(path).expanduser()
         if not path.exists():
-            config = cls()
+            config = cls._apply_env_overrides(cls())
             if validate:
                 config.validate()
             return config

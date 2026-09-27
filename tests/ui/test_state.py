@@ -1,7 +1,8 @@
 """Tests for the Sanskrit Analyzer UI state management."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 class TestStateManagement:
@@ -65,7 +66,7 @@ class TestStateManagement:
         self, mock_streamlit: MagicMock
     ) -> None:
         """add_to_history keeps only MAX_HISTORY_SIZE entries."""
-        from sanskrit_analyzer.ui.state import add_to_history, MAX_HISTORY_SIZE
+        from sanskrit_analyzer.ui.state import MAX_HISTORY_SIZE, add_to_history
 
         mock_streamlit.session_state.history = [
             {"text": f"entry{i}", "mode": "quick", "timestamp": "t"}

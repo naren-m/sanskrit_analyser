@@ -5,6 +5,7 @@ analysis pipeline: normalization -> caching -> engine run -> tree building
 -> disambiguation -> caching -> result return.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +34,10 @@ from sanskrit_analyzer.validation.split_validator import SplitValidator
 from sanskrit_analyzer.validation.vocabulary import Vocabulary
 
 logger = logging.getLogger(__name__)
+
+# Confidence cap for splits made from the curated vocabulary alone, when no
+# engine produced segments (e.g. the vidyut bundle is missing).
+_VOCAB_ONLY_CONFIDENCE = 0.3
 
 
 @dataclass
@@ -82,9 +87,10 @@ class Analyzer:
         """Initialize the analyzer with configuration.
 
         Args:
-            config: Analyzer configuration. If None, uses defaults.
+            config: Analyzer configuration. If None, uses defaults with
+                SANSKRIT_* env var overrides applied.
         """
-        self._config = config or Config()
+        self._config = config or Config._apply_env_overrides(Config())
         self._setup_logging()
 
         # Initialize components (lazy)
@@ -117,16 +123,16 @@ class Analyzer:
 
     def _setup_logging(self) -> None:
         """Configure logging based on config."""
+        # Only the package logger: this is a library, and basicConfig would
+        # install a root handler inside the host app (ramayanam, yoga_sutras).
         log_level = getattr(logging, self._config.log_level.upper(), logging.INFO)
-        logging.basicConfig(
-            level=log_level,
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        )
+        package_logger = logging.getLogger("sanskrit_analyzer")
+        package_logger.setLevel(log_level)
 
         if self._config.log_file:
             handler = logging.FileHandler(self._config.log_file)
             handler.setLevel(log_level)
-            logging.getLogger("sanskrit_analyzer").addHandler(handler)
+            package_logger.addHandler(handler)
 
     async def _initialize(self) -> None:
         """Lazy initialization of components.
@@ -141,8 +147,11 @@ class Analyzer:
         # Initialize the engine runner
         self._runner = self._create_engine_runner()
 
-        # Initialize tiered cache
+        # Initialize tiered cache. initialize() connects Redis; without it the
+        # tier stayed unconnected and every get/set was a silent no-op.
         self._cache = self._create_cache()
+        if self._cache:
+            await self._cache.initialize()
 
         # Initialize disambiguation pipeline
         self._disambiguation = self._create_disambiguation_pipeline()
@@ -244,6 +253,7 @@ class Analyzer:
             provider=provider,
             model=self._config.disambiguation.llm_model,
             ollama_url=self._config.disambiguation.ollama_url,
+            openai_api_key=self._config.disambiguation.openai_api_key,
         )
 
         pipeline_config = PipelineConfig(
@@ -303,23 +313,50 @@ class Analyzer:
 
         logger.debug("Analyzing: %s (script: %s)", normalized_slp1[:50], source_script.value)
 
-        # Generate cache key
-        cache_key = self._make_cache_key(normalized_slp1, mode.value)
+        # Engine and context overrides change the result but are not part of
+        # the key, so those requests neither read nor write the shared cache.
+        cacheable = self._cache is not None and not engines and not context
+        cache_key = self._cache.make_key(normalized_slp1, mode.value) if cacheable else ""
 
-        # Check cache
-        if not bypass_cache and self._cache:
+        tree = None
+        if cacheable and not bypass_cache:
             cached = await self._cache.get(cache_key)
             if cached:
                 logger.debug("Cache hit for: %s", normalized_slp1[:30])
-                tree = self._result_to_tree(
-                    cached,
+                tree = self._result_to_tree(cached, original_text, normalized_slp1, mode.value)
+
+        if tree is None:
+            tree = await self._run_pipeline(original_text, normalized_slp1, mode, engines, context)
+            # Cache the full forest; return_all_parses is applied per request below.
+            if cacheable:
+                await self._cache.set(
+                    cache_key,
                     original_text,
                     normalized_slp1,
                     mode.value,
+                    tree.to_dict(),
                 )
-                return tree
 
-        # Run the configured engines
+        if return_all_parses is None:
+            return_all_parses = mode_config.return_all_parses
+
+        if not return_all_parses and tree.parse_forest:
+            best = tree.best_parse
+            if best:
+                tree.parse_forest = [best]
+                tree.selected_parse = 0
+
+        return tree
+
+    async def _run_pipeline(
+        self,
+        original_text: str,
+        normalized_slp1: str,
+        mode: AnalysisMode,
+        engines: list[str] | None,
+        context: dict[str, Any] | None,
+    ) -> AnalysisTree:
+        """Run engines, validation, tree building and disambiguation (cache miss path)."""
         logger.debug("Cache miss, running engine analysis")
         assert self._runner is not None
 
@@ -337,21 +374,33 @@ class Analyzer:
             if engine_result and engine_result.segments:
                 raw_vidyut_segments = engine_result.segments
 
+        if not run_result.segments and run_result.errors:
+            logger.warning("No engine produced segments: %s", "; ".join(run_result.errors))
+
         if self._split_validator and (
             raw_vidyut_segments is not None or not run_result.segments
         ):
             # Pass empty list when no engine produced segments; the
-            # validator can still split using vocabulary alone.
-            validated_segments = self._split_validator.validate_and_rescore(
+            # validator can still split using vocabulary alone. The validator
+            # is CPU-bound Python (quadratic on long unspaced input), so it runs
+            # off the event loop.
+            validated_segments = await asyncio.to_thread(
+                self._split_validator.validate_and_rescore,
                 raw_vidyut_segments or [],
                 normalized_slp1,
             )
-            # Build tree from validated segments
+            engine_name = "vidyut+validator"
+            if raw_vidyut_segments is None:
+                # A ~100-word vocabulary alone is a guess, not an analysis;
+                # don't let it report the default confidence of 1.0.
+                engine_name = "validator"
+                for seg in validated_segments:
+                    seg.confidence = min(seg.confidence, _VOCAB_ONLY_CONFIDENCE)
             tree = self._tree_builder.build_from_segments(
                 validated_segments,
                 original_text,
                 normalized_slp1,
-                engine_name="vidyut+validator",
+                engine_name=engine_name,
                 mode=mode.value,
             )
         else:
@@ -370,27 +419,6 @@ class Analyzer:
             and tree.confidence.overall < self._config.disambiguation.min_confidence_skip
         ):
             tree = await self._disambiguate_tree(tree, context)
-
-        # Determine return behavior
-        if return_all_parses is None:
-            return_all_parses = mode_config.return_all_parses
-
-        if not return_all_parses and tree.parse_forest:
-            # Keep only best parse
-            best = tree.best_parse
-            if best:
-                tree.parse_forest = [best]
-                tree.selected_parse = 0
-
-        # Store in cache
-        if self._cache:
-            await self._cache.set(
-                cache_key,
-                original_text,
-                normalized_slp1,
-                mode.value,
-                tree.to_dict(),
-            )
 
         return tree
 
@@ -439,23 +467,6 @@ class Analyzer:
                 tree.confidence.overall = result.confidence
 
         return tree
-
-    def _make_cache_key(self, text: str, mode: str) -> str:
-        """Generate a cache key for the given text and mode.
-
-        Args:
-            text: Normalized SLP1 text.
-            mode: Analysis mode.
-
-        Returns:
-            Cache key string.
-        """
-        if self._cache and self._cache._memory:
-            return self._cache._memory.make_key(text, mode)
-        # Fallback key generation
-        import hashlib
-        content = f"{mode}:{text}"
-        return hashlib.sha256(content.encode("utf-8")).hexdigest()[:32]
 
     def _result_to_tree(
         self,
@@ -507,19 +518,8 @@ class Analyzer:
                 base_words: list[BaseWord] = []
                 for bw_dict in sg_dict.get("base_words", []):
                     # Rebuild morphology
-                    morph = None
                     morph_dict = bw_dict.get("morphology")
-                    if morph_dict:
-                        morph = MorphologicalTag(
-                            pos=morph_dict.get("pos"),
-                            gender=morph_dict.get("gender"),
-                            number=morph_dict.get("number"),
-                            case=morph_dict.get("case"),
-                            person=morph_dict.get("person"),
-                            tense=morph_dict.get("tense"),
-                            voice=morph_dict.get("voice"),
-                            raw_tag=morph_dict.get("raw_tag"),
-                        )
+                    morph = MorphologicalTag.from_dict(morph_dict) if morph_dict else None
 
                     # Rebuild dhatu. The serialized form (DhatuInfo.to_dict)
                     # drops the required ``scripts`` field, so reconstruct via
@@ -638,10 +638,9 @@ class Analyzer:
         for text in texts:
             result = await self.analyze(text, mode=mode, context=context)
             results.append(result)
-            # Update context with previous sentence for disambiguation
-            if context is None:
-                context = {}
-            context["previous_sentence"] = text
+            # Update context with previous sentence for disambiguation; copy so
+            # the caller's dict is not mutated.
+            context = {**(context or {}), "previous_sentence": text}
         return results
 
     async def get_corpus_stats(self) -> CorpusStats:
@@ -655,7 +654,6 @@ class Analyzer:
         stats = CorpusStats()
 
         if self._cache:
-            tier_stats = self._cache.stats
             if self._cache._memory:
                 mem_stats = self._cache._memory.stats
                 stats.memory_entries = mem_stats.size

@@ -36,6 +36,45 @@ from sanskrit_analyzer.models.tree import (
 
 logger = logging.getLogger(__name__)
 
+_POS: dict[str, PartOfSpeech] = {p.value: p for p in PartOfSpeech} | {
+    "adj": PartOfSpeech.ADJECTIVE,
+    "adv": PartOfSpeech.ADVERB,
+    "pron": PartOfSpeech.PRONOUN,
+    "avyaya": PartOfSpeech.INDECLINABLE,
+    "ind": PartOfSpeech.INDECLINABLE,
+    "part": PartOfSpeech.PARTICIPLE,
+    "inf": PartOfSpeech.INFINITIVE,
+    "ger": PartOfSpeech.GERUND,
+    "upasarga": PartOfSpeech.PREFIX,
+    # Vidyut's own POS names.
+    "subanta": PartOfSpeech.NOUN,
+    "tinanta": PartOfSpeech.VERB,
+}
+
+# Morphology token -> enum member. Full enum values plus common abbreviations.
+_MORPH_TOKENS: dict[str, Gender | Number | Case | Person | Tense | Voice] = {
+    m.value: m for enum in (Gender, Number, Case, Person, Tense, Voice) for m in enum
+} | {
+    "m": Gender.MASCULINE, "mas": Gender.MASCULINE, "masc": Gender.MASCULINE,
+    "f": Gender.FEMININE, "fem": Gender.FEMININE,
+    "n": Gender.NEUTER, "neu": Gender.NEUTER, "neut": Gender.NEUTER,
+    "sg": Number.SINGULAR, "sing": Number.SINGULAR,
+    "du": Number.DUAL, "pl": Number.PLURAL,
+    "nom": Case.NOMINATIVE, "acc": Case.ACCUSATIVE, "ins": Case.INSTRUMENTAL,
+    "inst": Case.INSTRUMENTAL, "dat": Case.DATIVE, "abl": Case.ABLATIVE,
+    "gen": Case.GENITIVE, "loc": Case.LOCATIVE, "voc": Case.VOCATIVE,
+    "1": Person.FIRST, "2": Person.SECOND, "3": Person.THIRD,
+    "pres": Tense.PRESENT, "impf": Tense.IMPERFECT, "imperf": Tense.IMPERFECT,
+    "impv": Tense.IMPERATIVE, "imper": Tense.IMPERATIVE,
+    "pot": Tense.POTENTIAL, "opt": Tense.POTENTIAL, "optative": Tense.POTENTIAL,
+    "perf": Tense.PERFECT, "aor": Tense.AORIST, "fut": Tense.FUTURE,
+    "laṭ": Tense.PRESENT, "laṅ": Tense.IMPERFECT, "loṭ": Tense.IMPERATIVE,
+    "liṅ": Tense.POTENTIAL, "liṭ": Tense.PERFECT, "luṅ": Tense.AORIST,
+    "lṛṭ": Tense.FUTURE, "luṭ": Tense.PERIPHRASTIC_FUTURE, "lṛṅ": Tense.CONDITIONAL,
+    "act": Voice.ACTIVE, "parasmaipada": Voice.ACTIVE,
+    "mid": Voice.MIDDLE, "ātmanepada": Voice.MIDDLE, "pass": Voice.PASSIVE,
+}
+
 
 @dataclass
 class TreeBuilderConfig:
@@ -299,174 +338,33 @@ class TreeBuilder:
         morphology_str: str | None,
         pos: str | None,
     ) -> MorphologicalTag | None:
-        """Parse a morphology string into a MorphologicalTag.
+        """Parse a dotted morphology string (e.g. ``noun.masculine.nominative.singular``).
 
-        Args:
-            morphology_str: Raw morphology string from engine.
-            pos: Part of speech string.
-
-        Returns:
-            MorphologicalTag or None if unparseable.
+        Tokens are matched whole against enum values and a few abbreviations.
+        Substring matching was tried before and misfired: "m." hit "nom.",
+        "du" hit any token containing it.
         """
-        if not pos:
-            return None
-
-        pos_lower = pos.lower()
-
-        # Determine part of speech
-        pos_enum = self._parse_pos(pos_lower)
+        pos_enum = _POS.get((pos or "").lower())
         if pos_enum is None:
             return None
 
-        # Parse additional morphological features based on POS
-        gender = None
-        number = None
-        case = None
-        person = None
-        tense = None
-        voice = None
+        found: dict[type, object] = {}
+        for token in (morphology_str or "").lower().split("."):
+            value = _MORPH_TOKENS.get(token)
+            if value is not None:
+                found.setdefault(type(value), value)
 
-        if morphology_str:
-            morph_lower = morphology_str.lower()
-
-            # Parse gender
-            if "masculine" in morph_lower or "mas" in morph_lower or "m." in morph_lower:
-                gender = Gender.MASCULINE
-            elif "feminine" in morph_lower or "fem" in morph_lower or "f." in morph_lower:
-                gender = Gender.FEMININE
-            elif "neuter" in morph_lower or "neu" in morph_lower or "n." in morph_lower:
-                gender = Gender.NEUTER
-
-            # Parse number
-            if "singular" in morph_lower or "sing" in morph_lower or "sg" in morph_lower:
-                number = Number.SINGULAR
-            elif "dual" in morph_lower or "du" in morph_lower:
-                number = Number.DUAL
-            elif "plural" in morph_lower or "pl" in morph_lower:
-                number = Number.PLURAL
-
-            # Parse case for nominals
-            if pos_enum in (PartOfSpeech.NOUN, PartOfSpeech.ADJECTIVE, PartOfSpeech.PRONOUN):
-                case = self._parse_case(morph_lower)
-
-            # Parse verb features
-            if pos_enum == PartOfSpeech.VERB:
-                person = self._parse_person(morph_lower)
-                tense = self._parse_tense(morph_lower)
-                voice = self._parse_voice(morph_lower)
-
+        is_verb = pos_enum == PartOfSpeech.VERB
         return MorphologicalTag(
             pos=pos_enum,
-            gender=gender,
-            number=number,
-            case=case,
-            person=person,
-            tense=tense,
-            voice=voice,
+            gender=found.get(Gender),  # type: ignore[arg-type]
+            number=found.get(Number),  # type: ignore[arg-type]
+            case=None if is_verb else found.get(Case),  # type: ignore[arg-type]
+            person=found.get(Person) if is_verb else None,  # type: ignore[arg-type]
+            tense=found.get(Tense) if is_verb else None,  # type: ignore[arg-type]
+            voice=found.get(Voice) if is_verb else None,  # type: ignore[arg-type]
             raw_tag=morphology_str,
         )
-
-    def _parse_pos(self, pos_str: str) -> PartOfSpeech | None:
-        """Parse part of speech from string."""
-        pos_map = {
-            "noun": PartOfSpeech.NOUN,
-            "verb": PartOfSpeech.VERB,
-            "adj": PartOfSpeech.ADJECTIVE,
-            "adjective": PartOfSpeech.ADJECTIVE,
-            "adverb": PartOfSpeech.ADVERB,
-            "adv": PartOfSpeech.ADVERB,
-            "pronoun": PartOfSpeech.PRONOUN,
-            "pron": PartOfSpeech.PRONOUN,
-            "indeclinable": PartOfSpeech.INDECLINABLE,
-            "avyaya": PartOfSpeech.INDECLINABLE,
-            "ind": PartOfSpeech.INDECLINABLE,
-            "participle": PartOfSpeech.PARTICIPLE,
-            "part": PartOfSpeech.PARTICIPLE,
-            "infinitive": PartOfSpeech.INFINITIVE,
-            "inf": PartOfSpeech.INFINITIVE,
-            "gerund": PartOfSpeech.GERUND,
-            "ger": PartOfSpeech.GERUND,
-            "prefix": PartOfSpeech.PREFIX,
-            "upasarga": PartOfSpeech.PREFIX,
-            "particle": PartOfSpeech.PARTICLE,
-        }
-        return pos_map.get(pos_str)
-
-    def _parse_case(self, morph_str: str) -> Case | None:
-        """Parse case from morphology string."""
-        case_map = {
-            "nominative": Case.NOMINATIVE,
-            "nom": Case.NOMINATIVE,
-            "accusative": Case.ACCUSATIVE,
-            "acc": Case.ACCUSATIVE,
-            "instrumental": Case.INSTRUMENTAL,
-            "ins": Case.INSTRUMENTAL,
-            "dative": Case.DATIVE,
-            "dat": Case.DATIVE,
-            "ablative": Case.ABLATIVE,
-            "abl": Case.ABLATIVE,
-            "genitive": Case.GENITIVE,
-            "gen": Case.GENITIVE,
-            "locative": Case.LOCATIVE,
-            "loc": Case.LOCATIVE,
-            "vocative": Case.VOCATIVE,
-            "voc": Case.VOCATIVE,
-        }
-        for key, value in case_map.items():
-            if key in morph_str:
-                return value
-        return None
-
-    def _parse_person(self, morph_str: str) -> Person | None:
-        """Parse person from morphology string."""
-        if "1" in morph_str or "first" in morph_str:
-            return Person.FIRST
-        if "2" in morph_str or "second" in morph_str:
-            return Person.SECOND
-        if "3" in morph_str or "third" in morph_str:
-            return Person.THIRD
-        return None
-
-    def _parse_tense(self, morph_str: str) -> Tense | None:
-        """Parse tense from morphology string."""
-        tense_map = {
-            "present": Tense.PRESENT,
-            "pres": Tense.PRESENT,
-            "laṭ": Tense.PRESENT,
-            "imperfect": Tense.IMPERFECT,
-            "imperf": Tense.IMPERFECT,
-            "laṅ": Tense.IMPERFECT,
-            "imperative": Tense.IMPERATIVE,
-            "imper": Tense.IMPERATIVE,
-            "loṭ": Tense.IMPERATIVE,
-            "potential": Tense.POTENTIAL,
-            "pot": Tense.POTENTIAL,
-            "optative": Tense.POTENTIAL,
-            "liṅ": Tense.POTENTIAL,
-            "perfect": Tense.PERFECT,
-            "perf": Tense.PERFECT,
-            "liṭ": Tense.PERFECT,
-            "aorist": Tense.AORIST,
-            "aor": Tense.AORIST,
-            "luṅ": Tense.AORIST,
-            "future": Tense.FUTURE,
-            "fut": Tense.FUTURE,
-            "lṛṭ": Tense.FUTURE,
-        }
-        for key, value in tense_map.items():
-            if key in morph_str:
-                return value
-        return None
-
-    def _parse_voice(self, morph_str: str) -> Voice | None:
-        """Parse voice from morphology string."""
-        if "active" in morph_str or "parasmaipada" in morph_str or "para" in morph_str:
-            return Voice.ACTIVE
-        if "middle" in morph_str or "ātmanepada" in morph_str or "atma" in morph_str:
-            return Voice.MIDDLE
-        if "passive" in morph_str:
-            return Voice.PASSIVE
-        return None
 
     def _is_verb(
         self,

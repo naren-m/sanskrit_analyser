@@ -104,8 +104,8 @@ class TestEngineRunner:
 
         assert result.primary_engine == "vidyut"
         assert [s.lemma for s in result.segments] == ["first"]
-        # The other engine still ran and is reported for diagnostics.
-        assert set(result.engine_results) == {"vidyut", "local_byt5"}
+        # The slower fallback never runs once the primary has segments.
+        assert set(result.engine_results) == {"vidyut"}
 
     @pytest.mark.asyncio
     async def test_primary_skips_engine_with_no_segments(self, segment: Segment) -> None:

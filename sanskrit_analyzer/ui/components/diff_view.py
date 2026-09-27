@@ -1,7 +1,8 @@
 """Diff view component for comparing parse candidates."""
 
 import html
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import streamlit as st
 

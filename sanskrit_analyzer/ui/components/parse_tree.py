@@ -1,6 +1,7 @@
 """Parse tree component with folder-style expansion."""
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import streamlit as st
 

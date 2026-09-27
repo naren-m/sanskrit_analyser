@@ -2,12 +2,10 @@
 
 from unittest.mock import patch
 
-import pytest
-
 from sanskrit_analyzer.ui.components.diff_view import (
+    _compare_words,
     _compute_differences,
     _flatten_words,
-    _compare_words,
     _render_parse_column,
     render_diff_view,
 )

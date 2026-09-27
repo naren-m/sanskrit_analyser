@@ -16,8 +16,9 @@ Everything runs offline against the ``~/.vidyut-data`` bundle; no network.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from sanskrit_analyzer.deep_read import kosha_engine
 from sanskrit_analyzer.dhatu import segmenter
@@ -254,15 +255,15 @@ class DhatuIdentifier:
         self._preferred_root = preferred_root_fn
 
     @classmethod
-    def with_byt5(cls) -> "DhatuIdentifier":
+    def with_byt5(cls) -> DhatuIdentifier:
         """Build an identifier that uses ByT5 for segmentation + POS ranking.
 
         Falls back to the pure-rule segmenter (and no POS hint) when the ByT5
         model is unavailable, so this is always safe to call.
         """
-        from sanskrit_analyzer.dhatu.byt5_ranker import ByT5Adapter
+        from sanskrit_analyzer.dhatu.byt5_ranker import get_shared_adapter
 
-        adapter = ByT5Adapter()
+        adapter = get_shared_adapter()
         if not adapter.is_available():
             logger.info("ByT5 unavailable; using pure-rule segmenter.")
             return cls()

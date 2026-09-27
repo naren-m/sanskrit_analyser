@@ -5,15 +5,15 @@ Dharmamitra's API is gone and the Heritage HTML parser was never written, so
 the vote always ran with a single engine and the weights never changed an
 outcome.
 
-What is left is a runner: engines run in parallel, the first *configured* one
-that produced segments is the analysis, and every engine's raw result is kept
-in :attr:`EngineRunResult.engine_results` for diagnostics and for callers that
-want a specific engine's output (the split validator asks for vidyut's).
+What is left is a runner: engines run in configured order and the first one
+that produces segments is the analysis; later engines don't run. Every engine
+that did run keeps its raw result in :attr:`EngineRunResult.engine_results`
+for diagnostics and for callers that want a specific engine's output (the
+split validator asks for vidyut's).
 """
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 
 from sanskrit_analyzer.engines.base import EngineBase, EngineResult, Segment
@@ -117,26 +117,22 @@ class EngineRunner:
         if not runnable:
             return EngineRunResult(errors=["No available engines"])
 
-        results = await asyncio.gather(
-            *(self._run_engine(e, text) for e in runnable), return_exceptions=True
-        )
-
+        # Priority order, not "whoever returned the most segments": which engine
+        # is authoritative is a configuration decision, not a race. Stop at the
+        # first engine with segments; later ones (ByT5 costs ~140x vidyut) only
+        # run when the earlier ones come back empty.
         engine_results: dict[str, EngineResult] = {}
         errors: list[str] = []
-        for result in results:
-            if isinstance(result, BaseException):
-                errors.append(str(result))
-                continue
+        primary: EngineResult | None = None
+        for engine in runnable:
+            result = await self._run_engine(engine, text)
             engine_results[result.engine] = result
             if result.error:
                 errors.append(f"{result.engine}: {result.error}")
+            if result.segments:
+                primary = result
+                break
 
-        # Priority order, not "whoever returned the most segments": which engine
-        # is authoritative is a configuration decision, not a race.
-        primary = next(
-            (r for e in runnable if (r := engine_results.get(e.name)) and r.segments),
-            None,
-        )
         if primary is None:
             return EngineRunResult(engine_results=engine_results, errors=errors)
 

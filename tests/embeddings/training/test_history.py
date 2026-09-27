@@ -1,6 +1,5 @@
 """Tests for TrainingHistory."""
 
-import pytest
 
 from sanskrit_analyzer.embeddings.training.history import TrainingHistory
 

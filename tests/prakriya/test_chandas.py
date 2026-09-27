@@ -22,6 +22,10 @@ def test_mandakranta_identified():
     r = identify("kaScitkAntAvirahaguruRA svADikArapramattaH")
     assert r.name == "mandAkrAntA"
     assert r.scans and all(ch in "GL" for ch in r.scans[0])
+    # vidyut's chandas indexes a 256-entry table by codepoint, so a stray em
+    # dash or ZWJ left in the SLP1 used to panic (a BaseException) mid-verse.
+    r = identify("kaScitkAntAvirahaguruRA \u2014 svADikAra\u200dpramattaH")
+    assert r.name == "mandAkrAntA"
 
 
 def test_anushtubh_pathya_fallback():

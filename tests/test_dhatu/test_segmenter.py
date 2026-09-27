@@ -55,6 +55,8 @@ def test_segment_full_line_members():
 def test_segment_slp_short_token_not_split():
     # below the min-split length, returned as-is (no spurious over-segmentation)
     assert segmenter.segment_slp("gam") == ["gam"]
+    # non-ASCII (Dravidian short-e sign) panics the splitter; keep it whole
+    assert segmenter.segment_slp("kezava\u0946rAmo") == ["kezava\u0946rAmo"]
 
 
 # (id, Devanagari line, IAST members that must appear, in order). Each row is a
@@ -83,6 +85,9 @@ SPLIT_CASES = [
     # splitter; the panic escaped every handler and hung the request.
     ("nukta-typo-does-not-panic", "पितृ़णां", ["pitṛṇāṃ"]),
     # Standard avagraha already worked and must keep working.
+    # A Dravidian short-e (केशवॆ) transliterates to a non-ASCII 'è'; its panic
+    # used to drop the whole line rather than leave just that token unsplit.
+    ("dravidian-short-e-keeps-line", "केशवॆ रामो गच्छति", ["rāmo", "gacchati"]),
     ("standard-avagraha-e-o", "रामोऽपि", ["rāmas", "api"]),
 ]
 

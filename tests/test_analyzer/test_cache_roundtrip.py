@@ -17,9 +17,7 @@ Two angles are covered:
 
 import asyncio
 
-import pytest
-
-from sanskrit_analyzer import Analyzer, AnalysisMode
+from sanskrit_analyzer import AnalysisMode, Analyzer
 from sanskrit_analyzer.config import Config
 
 
@@ -60,6 +58,10 @@ def test_common_dhatu_survives_cache_roundtrip(tmp_path):
 
     assert "gam" in first_roots, "live analysis should attach √gam"
     assert "gam" in second_roots, "dhatu must survive the cache round-trip"
+    # Morphology must come back as enums, identical to the live tree. The hit
+    # path once rebuilt it with raw strings, so `tag.case == Case.X` broke.
+    assert [w.morphology for w in _words(second)] == [w.morphology for w in _words(first)]
+    assert any(w.morphology and w.morphology.tense for w in _words(second))
 
 
 def test_noncommon_dhatu_rebuilds_from_cached_dict():

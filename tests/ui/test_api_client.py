@@ -1,12 +1,13 @@
 """Tests for the Sanskrit Analyzer API client."""
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import httpx
+import pytest
 
 from sanskrit_analyzer.ui.api_client import (
-    APIError,
     AnalysisResult,
+    APIError,
     SanskritAPIClient,
     _coerce_confidence,
     _transform_api_response,

@@ -38,7 +38,11 @@ def analyze_verse(text: str, limit_per_word: int = 5) -> dict:
     if n.words and chandas_mod.is_available():
         try:
             record["chandas"] = _chandas_record(chandas_mod.identify(n.slp1))
-        except Exception as exc:
+        except (KeyboardInterrupt, SystemExit, GeneratorExit):
+            raise
+        # BaseException: vidyut's chandas is Rust, and a pyo3 PanicException
+        # is not an Exception. The meter is enrichment; never lose the padas.
+        except BaseException as exc:
             logger.warning("chandas identification failed: %s", exc)
     for word in n.words:
         record["padas"].append(

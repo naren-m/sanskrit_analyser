@@ -24,7 +24,6 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 # Default vocabulary file ships with the package
 _DEFAULT_VOCAB_PATH = Path(__file__).parent.parent / "data" / "yoga_sutra_vocabulary.json"
 

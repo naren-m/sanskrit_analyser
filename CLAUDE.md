@@ -17,6 +17,6 @@ Always run tests after changes:
 uv run pytest
 ```
 
-The full suite (~900 tests) must pass before committing. Everything runs
+The full suite (~1,180 tests) must pass before committing. Everything runs
 offline; tests that need ML model weights are marked `slow` and skip when the
 weights are absent.

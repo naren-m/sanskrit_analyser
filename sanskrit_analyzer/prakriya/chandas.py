@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from sanskrit_analyzer.utils.normalize import ascii_slp1
 from sanskrit_analyzer.vidyut_data import VidyutUnavailable, resolve_data_dir
 
 _METERS_CSV = Path(__file__).resolve().parents[1] / "data" / "meters-full.csv"
@@ -108,7 +109,7 @@ def _classifier():
 
 
 def identify(slp1_verse: str) -> ChandasResult:
-    match = _classifier().classify(slp1_verse.replace(".", " "))
+    match = _classifier().classify(ascii_slp1(slp1_verse).replace(".", " "))
     scans = ["".join(str(a.weight) for a in row) for row in (match.aksharas or [])]
     # vidyut fuzzy-matches even tiny fragments (5 syllables of prose match a
     # short vṛtta); below one pāda's worth of syllables a "meter" is noise.

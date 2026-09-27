@@ -89,6 +89,8 @@ class RedisCache:
                 self._redis_url,  # type: ignore[arg-type]
                 encoding="utf-8",
                 decode_responses=True,
+                # Bound the first-request stall when Redis is configured but unreachable.
+                socket_connect_timeout=2,
             )
             # Test connection
             await self._client.ping()

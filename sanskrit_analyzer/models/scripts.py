@@ -38,8 +38,8 @@ class ScriptVariants:
         Returns:
             ScriptVariants with text converted to all three primary scripts.
         """
-        from sanskrit_analyzer.utils.transliterate import transliterate
         from sanskrit_analyzer.utils.normalize import detect_script
+        from sanskrit_analyzer.utils.transliterate import transliterate
 
         if source_script is None:
             source_script = detect_script(text)

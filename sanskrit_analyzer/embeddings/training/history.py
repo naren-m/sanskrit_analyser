@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -12,10 +11,10 @@ class TrainingHistory:
 
     epochs: list[int] = field(default_factory=list)
     train_loss: list[float] = field(default_factory=list)
-    val_loss: list[Optional[float]] = field(default_factory=list)
+    val_loss: list[float | None] = field(default_factory=list)
 
     def record(
-        self, epoch: int, train_loss: float, val_loss: Optional[float] = None
+        self, epoch: int, train_loss: float, val_loss: float | None = None
     ) -> None:
         self.epochs.append(epoch)
         self.train_loss.append(float(train_loss))

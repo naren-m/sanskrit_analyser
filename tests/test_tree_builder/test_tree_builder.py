@@ -4,7 +4,15 @@ import pytest
 
 from sanskrit_analyzer.engines.base import EngineResult, Segment
 from sanskrit_analyzer.engines.runner import AnalyzedSegment, EngineRunResult
-from sanskrit_analyzer.models.morphology import Case, Gender, Number, PartOfSpeech
+from sanskrit_analyzer.models.morphology import (
+    Case,
+    Gender,
+    Number,
+    PartOfSpeech,
+    Person,
+    Tense,
+    Voice,
+)
 from sanskrit_analyzer.models.tree import CacheTier
 from sanskrit_analyzer.tree_builder import TreeBuilder, TreeBuilderConfig
 
@@ -445,76 +453,65 @@ class TestTreeBuilder:
 class TestMorphologyParsing:
     """Tests for morphology parsing."""
 
-    @pytest.fixture
-    def builder(self) -> TreeBuilder:
-        return TreeBuilder()
+    # (id, morphology string, pos, expected fields or None for "no tag")
+    CASES = [
+        ("english-noun", "noun.masculine.singular.nominative", "noun",
+         {"pos": PartOfSpeech.NOUN, "gender": Gender.MASCULINE,
+          "number": Number.SINGULAR, "case": Case.NOMINATIVE}),
+        ("abbreviated-noun", "mas.sg.nom", "noun",
+         {"gender": Gender.MASCULINE, "number": Number.SINGULAR, "case": Case.NOMINATIVE}),
+        ("english-verb", "third.singular.present.active", "verb",
+         {"pos": PartOfSpeech.VERB, "person": Person.THIRD, "number": Number.SINGULAR,
+          "tense": Tense.PRESENT, "voice": Voice.ACTIVE}),
+        # Exactly what VidyutEngine emits. Before it emitted "tinanta.si.thi.lat"
+        # and the parser returned None for every word Analyzer.analyze produced.
+        ("vidyut-subanta", "noun.masculine.dative.singular", "noun",
+         {"gender": Gender.MASCULINE, "case": Case.DATIVE, "number": Number.SINGULAR}),
+        ("vidyut-tinanta", "verb.third.singular.imperfect.active", "verb",
+         {"person": Person.THIRD, "tense": Tense.IMPERFECT, "voice": Voice.ACTIVE}),
+        ("vidyut-pos-name", "masculine.accusative.plural", "subanta",
+         {"pos": PartOfSpeech.NOUN, "case": Case.ACCUSATIVE, "number": Number.PLURAL}),
+        # Substring matching once read "nom" as masculine ("m") and any "du" as dual.
+        ("no-substring-hits", "feminine.nominative.singular", "noun",
+         {"gender": Gender.FEMININE, "number": Number.SINGULAR}),
+        ("verb-has-no-case", "verb.third.dual.locative", "verb",
+         {"case": None, "number": Number.DUAL}),
+        ("neuter", "neuter", "noun", {"gender": Gender.NEUTER}),
+        ("no-pos", "masculine.singular", None, None),
+        ("unknown-pos", "masculine.singular", "xyz", None),
+    ]
 
-    def test_parse_noun_morphology(self, builder: TreeBuilder) -> None:
-        """Test parsing noun morphology."""
-        morph = builder._parse_morphology(
-            "noun.masculine.singular.nominative",
-            "noun",
-        )
+    def test_parse_morphology_table(self) -> None:
+        builder = TreeBuilder()
+        failures = []
+        for case_id, morph_str, pos, expected in self.CASES:
+            tag = builder._parse_morphology(morph_str, pos)
+            if expected is None:
+                if tag is not None:
+                    failures.append(f"{case_id}: expected None, got {tag}")
+                continue
+            if tag is None:
+                failures.append(f"{case_id}: got None")
+                continue
+            for field, want in expected.items():
+                if getattr(tag, field) != want:
+                    failures.append(f"{case_id}: {field}={getattr(tag, field)} want {want}")
+        assert not failures, "\n".join(failures)
 
-        assert morph is not None
-        assert morph.pos == PartOfSpeech.NOUN
-        assert morph.gender == Gender.MASCULINE
-        assert morph.number == Number.SINGULAR
-        assert morph.case == Case.NOMINATIVE
+    def test_vidyut_output_reaches_the_tree(self) -> None:
+        """End to end through the real engine: every word must carry morphology."""
+        import asyncio
 
-    def test_parse_verb_morphology(self, builder: TreeBuilder) -> None:
-        """Test parsing verb morphology."""
-        morph = builder._parse_morphology(
-            "third.singular.present.active",
-            "verb",
-        )
+        from sanskrit_analyzer.engines.vidyut_engine import VidyutEngine
 
-        assert morph is not None
-        assert morph.pos == PartOfSpeech.VERB
-
-    def test_parse_abbreviated_morphology(self, builder: TreeBuilder) -> None:
-        """Test parsing abbreviated morphology tags."""
-        morph = builder._parse_morphology(
-            "mas.sg.nom",
-            "noun",
-        )
-
-        assert morph is not None
-        assert morph.gender == Gender.MASCULINE
-        assert morph.number == Number.SINGULAR
-        assert morph.case == Case.NOMINATIVE
-
-    def test_parse_morphology_no_pos(self, builder: TreeBuilder) -> None:
-        """Test parsing with no POS."""
-        morph = builder._parse_morphology("masculine.singular", None)
-        assert morph is None
-
-    def test_parse_all_cases(self, builder: TreeBuilder) -> None:
-        """Test parsing all cases."""
-        cases = [
-            ("nominative", Case.NOMINATIVE),
-            ("accusative", Case.ACCUSATIVE),
-            ("instrumental", Case.INSTRUMENTAL),
-            ("dative", Case.DATIVE),
-            ("ablative", Case.ABLATIVE),
-            ("genitive", Case.GENITIVE),
-            ("locative", Case.LOCATIVE),
-            ("vocative", Case.VOCATIVE),
-        ]
-
-        for case_str, expected in cases:
-            result = builder._parse_case(case_str)
-            assert result == expected, f"Failed for {case_str}"
-
-    def test_parse_all_genders(self, builder: TreeBuilder) -> None:
-        """Test parsing all genders."""
-        morph_m = builder._parse_morphology("masculine", "noun")
-        morph_f = builder._parse_morphology("feminine", "noun")
-        morph_n = builder._parse_morphology("neuter", "noun")
-
-        assert morph_m is not None and morph_m.gender == Gender.MASCULINE
-        assert morph_f is not None and morph_f.gender == Gender.FEMININE
-        assert morph_n is not None and morph_n.gender == Gender.NEUTER
+        engine = VidyutEngine()
+        if not engine._available:
+            pytest.skip("vidyut data not available")
+        result = asyncio.run(engine.analyze("devAya aBavat"))
+        builder = TreeBuilder()
+        tags = [builder._parse_morphology(s.morphology, s.pos) for s in result.segments]
+        assert tags[0] is not None and tags[0].case == Case.DATIVE
+        assert tags[1] is not None and tags[1].tense == Tense.IMPERFECT
 
 
 class TestDhatuLookup:

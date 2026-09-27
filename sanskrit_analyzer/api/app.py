@@ -1,8 +1,8 @@
 """FastAPI application factory and configuration."""
 
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -67,10 +67,9 @@ def create_app(
         app.state.analyzer = analyzer
         app.state.config = config
         yield
-        # Shutdown: cleanup resources
+        # Shutdown: close Redis and SQLite
         if analyzer._cache:
-            if hasattr(analyzer._cache, "_redis") and analyzer._cache._redis:
-                await analyzer._cache._redis.close()
+            await analyzer._cache.close()
 
     app = FastAPI(
         title="Sanskrit Analyzer API",
