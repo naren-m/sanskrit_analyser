@@ -7,6 +7,7 @@ analysis pipeline: normalization -> caching -> engine run -> tree building
 
 import asyncio
 import logging
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,11 +24,11 @@ from sanskrit_analyzer.disambiguation.rules import (
     ParseCandidate,
     RuleBasedDisambiguatorConfig,
 )
-from sanskrit_analyzer.engines.base import EngineBase
+from sanskrit_analyzer.engines.base import EngineBase, Segment
 from sanskrit_analyzer.engines.runner import EngineRunner
 from sanskrit_analyzer.models.dhatu import DhatuInfo, Pada
 from sanskrit_analyzer.models.scripts import Script, ScriptVariants
-from sanskrit_analyzer.models.tree import AnalysisTree, CacheTier
+from sanskrit_analyzer.models.tree import AnalysisTree, BaseWord, CacheTier
 from sanskrit_analyzer.tree_builder import TreeBuilder, TreeBuilderConfig
 from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1
 from sanskrit_analyzer.validation.split_validator import SplitValidator
@@ -38,6 +39,25 @@ logger = logging.getLogger(__name__)
 # Confidence cap for splits made from the curated vocabulary alone, when no
 # engine produced segments (e.g. the vidyut bundle is missing).
 _VOCAB_ONLY_CONFIDENCE = 0.3
+
+# How many of the split validator's ranked splits become parses when
+# disambiguation is on. Matches the rules stage's max_candidates_to_keep.
+_MAX_PARSES = 5
+
+
+def _candidate_segment(word: BaseWord) -> dict[str, Any]:
+    """A BaseWord as the disambiguation stages read it.
+
+    The rules and the LLM prompt want top-level ``pos`` and ``surface`` and an
+    IAST lemma (the frequency lists are IAST); ``BaseWord.to_dict`` nests pos
+    under morphology, names the surface ``surface_form`` and keeps SLP1.
+    """
+    seg = word.to_dict()
+    seg["surface"] = word.surface_form
+    seg["pos"] = word.morphology.pos.value if word.morphology else None
+    if word.scripts:
+        seg["lemma"] = word.scripts.iast
+    return seg
 
 
 @dataclass
@@ -384,24 +404,24 @@ class Analyzer:
             # validator can still split using vocabulary alone. The validator
             # is CPU-bound Python (quadratic on long unspaced input), so it runs
             # off the event loop.
-            validated_segments = await asyncio.to_thread(
-                self._split_validator.validate_and_rescore,
+            ranked = await asyncio.to_thread(
+                self._split_validator.rank_candidates,
                 raw_vidyut_segments or [],
                 normalized_slp1,
             )
+            # Without disambiguation only the validator's pick is a parse;
+            # with it, the runner-ups join the forest for the pipeline to rank.
+            ranked = ranked[: _MAX_PARSES if self._config.disambiguation.enabled else 1]
             engine_name = "vidyut+validator"
             if raw_vidyut_segments is None:
                 # A ~100-word vocabulary alone is a guess, not an analysis;
                 # don't let it report the default confidence of 1.0.
                 engine_name = "validator"
-                for seg in validated_segments:
-                    seg.confidence = min(seg.confidence, _VOCAB_ONLY_CONFIDENCE)
-            tree = self._tree_builder.build_from_segments(
-                validated_segments,
-                original_text,
-                normalized_slp1,
-                engine_name=engine_name,
-                mode=mode.value,
+                for _, segs in ranked:
+                    for seg in segs:
+                        seg.confidence = min(seg.confidence, _VOCAB_ONLY_CONFIDENCE)
+            tree = self._build_forest(
+                ranked, original_text, normalized_slp1, engine_name, mode.value
             )
         else:
             # Build parse tree from the engine run (original path)
@@ -412,14 +432,43 @@ class Analyzer:
                 mode.value,
             )
 
-        # Run disambiguation if multiple parses and enabled
-        if (
-            len(tree.parse_forest) > 1
-            and self._disambiguation
-            and tree.confidence.overall < self._config.disambiguation.min_confidence_skip
-        ):
+        # The forest only holds alternatives when disambiguation is enabled.
+        # No gate on tree.confidence.overall: that is the engine's constant
+        # (0.9 vidyut, 1.0 vocabulary), not a measure of ambiguity, and it
+        # skipped every validator-built tree. min_confidence_skip still gates
+        # the LLM stage inside the pipeline.
+        if len(tree.parse_forest) > 1:
             tree = await self._disambiguate_tree(tree, context)
 
+        return tree
+
+    def _build_forest(
+        self,
+        ranked: list[tuple[float, list[Segment]]],
+        original_text: str,
+        normalized_slp1: str,
+        engine_name: str,
+        mode: str,
+    ) -> AnalysisTree:
+        """Build a tree whose forest holds the validator's ranked splits, best first.
+
+        An alternative's confidence is its segment confidence scaled by
+        ``exp(score - best_score)``: a tie keeps the full value, and each point
+        of validator score behind the best costs a factor of e. The rules stage
+        then only moves near-ties, and its 0.3 floor prunes the long tail.
+        """
+        assert self._tree_builder is not None
+        best_score, best_segments = ranked[0] if ranked else (0.0, [])
+        tree = self._tree_builder.build_from_segments(
+            best_segments, original_text, normalized_slp1, engine_name=engine_name, mode=mode
+        )
+        for score, segments in ranked[1:]:
+            alt = self._tree_builder.build_from_segments(
+                segments, original_text, normalized_slp1, engine_name=engine_name, mode=mode
+            ).parse_forest
+            if alt:
+                alt[0].confidence *= math.exp(score - best_score)
+                tree.parse_forest.extend(alt)
         return tree
 
     async def _disambiguate_tree(
@@ -439,11 +488,10 @@ class Analyzer:
         if not self._disambiguation or len(tree.parse_forest) <= 1:
             return tree
 
-        # Convert parses to candidates
         candidates = [
             ParseCandidate(
                 index=i,
-                segments=[w.to_dict() for w in parse.all_words],
+                segments=[_candidate_segment(w) for w in parse.all_words],
                 confidence=parse.confidence,
             )
             for i, parse in enumerate(tree.parse_forest)
@@ -457,10 +505,12 @@ class Analyzer:
             tree.confidence.disambiguation_applied = True
             tree.confidence.disambiguation_stage = result.resolved_at.value
 
-            # Reorder parse forest based on disambiguation
+            # Reorder (and prune) the forest to the pipeline's ranking. The
+            # LLM stage reorders without touching confidence, so selected_parse
+            # pins the pick rather than best_parse's max-confidence fallback.
             if result.candidates:
-                new_order = [c.index for c in result.candidates]
-                tree.parse_forest = [tree.parse_forest[i] for i in new_order if i < len(tree.parse_forest)]
+                forest = tree.parse_forest
+                tree.parse_forest = [forest[c.index] for c in result.candidates]
                 tree.selected_parse = 0
 
                 # Update overall confidence
@@ -613,6 +663,7 @@ class Analyzer:
             normalized_slp1=normalized_slp1,
             scripts=scripts,
             parse_forest=parse_forest,
+            selected_parse=cached.get("selected_parse"),
             confidence=confidence,
             mode=mode,
             cached_at=cache_tier,
