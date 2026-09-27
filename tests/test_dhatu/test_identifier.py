@@ -136,7 +136,7 @@ def _avyaya(lemma):
 
 # (id, candidates in kosha order, expected top lemma). Each row is a word the
 # reader showed with the wrong root before #572; kosha order is kept verbatim.
-RANK_CASES = [
+READING_ORDER_CASES = [
     ("ca-avyaya-beats-kvip-root-noun",
      [_derived("ci", "kvi~p"), _derived("capi", "kvi~p"), _nominal("ca"), _avyaya("ca")],
      "ca"),
@@ -159,9 +159,9 @@ RANK_CASES = [
 
 def test_rank_reading_order_table():
     """Fallback reading order, one row per word class the reader got wrong (#572)."""
-    failures = []
-    for case_id, candidates, want in RANK_CASES:
+
+    def check(candidates, want):
         got = rank_analyses(list(candidates))[0]["lemma"]
-        if got != want:
-            failures.append(f"{case_id}: top lemma {got!r}, want {want!r}")
-    assert not failures, "\n".join(failures)
+        assert got == want, got
+
+    check_cases(READING_ORDER_CASES, check)

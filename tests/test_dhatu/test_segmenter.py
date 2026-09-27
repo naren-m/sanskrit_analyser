@@ -52,7 +52,7 @@ def test_segment_slp_short_token_not_split():
 
 # (id, Devanagari line, IAST members that must appear, in order). Each row is a
 # real Rāmāyaṇa line the segmenter got wrong, and the row id names the cause.
-SPLIT_CASES = [
+SUBSEQUENCE_CASES = [
     # Avagraha after a long vowel (not the standard e/o + ऽ) or doubled ऽऽ is
     # outside the splitter's alphabet, so the whole pada came back unsplit.
     # yathāgatam is itself a kosha word ("as come"), so it may stay whole;
@@ -84,11 +84,11 @@ SPLIT_CASES = [
 
 
 def test_segment_known_failures_table():
-    """Rows the reader (#572 follow-up) showed wrong; all failures reported together."""
-    failures = []
-    for case_id, line, want in SPLIT_CASES:
+    """Rows the reader (#572 follow-up) showed wrong; members must appear in order."""
+
+    def check(line, want):
         got = segmenter.segment(line) or []
         it = iter(got)
-        if not all(any(m == w for m in it) for w in want):
-            failures.append(f"{case_id}: {line} -> {got}, want subsequence {want}")
-    assert not failures, "\n".join(failures)
+        assert all(any(m == w for m in it) for w in want), got
+
+    check_cases(SUBSEQUENCE_CASES, check)
