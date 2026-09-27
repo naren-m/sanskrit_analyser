@@ -156,8 +156,8 @@ class GenderNumberAgreementRule(DisambiguationRule):
             seg2 = segments[i + 1]
 
             # Check if we have an adj-noun pair
-            pos1 = seg1.get("pos", "")
-            pos2 = seg2.get("pos", "")
+            pos1 = seg1.get("pos") or ""
+            pos2 = seg2.get("pos") or ""
 
             if self._is_adjective(pos1) and self._is_noun(pos2):
                 if not self._check_pair_agreement(seg1, seg2):

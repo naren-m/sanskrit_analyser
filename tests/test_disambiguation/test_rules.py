@@ -137,11 +137,21 @@ class TestGenderNumberAgreementRule:
                 ],
                 confidence=0.8,
             ),
+            # Analyzer emits pos=None for words with no POS tag (indeclinables,
+            # vocabulary-only splits). Used to raise AttributeError on .lower().
+            ParseCandidate(
+                index=2,
+                segments=[
+                    {"lemma": "ca", "pos": None, "morphology": None},
+                    {"lemma": "nara", "pos": "noun",
+                     "morphology": {"gender": "masculine", "number": "singular"}},
+                ],
+                confidence=0.7,
+            ),
         ]
         result_candidates, result = rule.apply(candidates)
-        # Only first candidate should pass (gender matches)
-        assert len(result_candidates) == 1
-        assert result_candidates[0].index == 0
+        # Gender mismatch (index 1) is eliminated; untagged pos is not a conflict.
+        assert [c.index for c in result_candidates] == [0, 2]
         assert result.applied is True
         assert 1 in result.eliminated_parses
 

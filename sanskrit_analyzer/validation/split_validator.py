@@ -94,23 +94,38 @@ class SplitValidator:
         Returns:
             The best-scoring list of segments.
         """
+        ranked = self.rank_candidates(segments, original_slp1)
+        return ranked[0][1] if ranked else []
+
+    def rank_candidates(
+        self,
+        segments: list[Segment],
+        original_slp1: str,
+    ) -> list[tuple[float, list[Segment]]]:
+        """Every candidate split with its score, best first.
+
+        Ties keep generation order, so ``ranked[0]`` is exactly the split
+        :meth:`validate_and_rescore` returns. The alternatives feed the parse
+        forest the disambiguation pipeline reranks.
+        """
         if not segments and not original_slp1:
             return []
 
         # 1. Indeclinable shortcut -- never split these
         if self._vocab.is_indeclinable(original_slp1):
-            return [Segment(surface=original_slp1, lemma=original_slp1, pos="indeclinable")]
+            whole = Segment(surface=original_slp1, lemma=original_slp1, pos="indeclinable")
+            return [(0.0, [whole])]
 
         # 2. Generate candidates
         candidates = self._generate_candidates(segments, original_slp1)
 
         if not candidates:
-            return segments  # fallback
+            return [(0.0, segments)]  # fallback
 
-        # 3. Score and pick the best
+        # 3. Score; sorted() is stable, so equal scores keep generation order.
         max_seg_count = max(len(c) for c in candidates)
-        best = max(candidates, key=lambda c: self.score_candidate(c, max_seg_count))
-        return best
+        scored = [(self.score_candidate(c, max_seg_count), c) for c in candidates]
+        return sorted(scored, key=lambda sc: sc[0], reverse=True)
 
     def score_candidate(
         self, segments: list[Segment], max_segments: int | None = None

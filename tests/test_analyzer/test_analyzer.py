@@ -1,5 +1,7 @@
 """Tests for main Analyzer class."""
 
+import json
+import re
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -7,6 +9,7 @@ import pytest
 
 from sanskrit_analyzer.analyzer import Analyzer, CorpusStats
 from sanskrit_analyzer.config import AnalysisMode, Config
+from sanskrit_analyzer.disambiguation.llm import LLMDisambiguator
 from sanskrit_analyzer.engines.base import EngineResult, Segment
 from sanskrit_analyzer.engines.runner import AnalyzedSegment, EngineRunResult
 from sanskrit_analyzer.models.tree import AnalysisTree, CacheTier
@@ -173,7 +176,7 @@ class TestAnalyzerAnalyze:
 
         await analyzer.analyze("rāmaḥ gacchati")
 
-        analyzer._split_validator.validate_and_rescore.assert_not_called()
+        analyzer._split_validator.rank_candidates.assert_not_called()
         analyzer._tree_builder.build_from_segments.assert_not_called()
         analyzer._tree_builder.build.assert_called_once()
 
@@ -201,8 +204,8 @@ class TestAnalyzerAnalyze:
         analyzer._cache = None
         analyzer._disambiguation = None
         analyzer._split_validator = MagicMock()
-        analyzer._split_validator.validate_and_rescore = MagicMock(
-            return_value=vidyut_segments
+        analyzer._split_validator.rank_candidates = MagicMock(
+            return_value=[(0.0, vidyut_segments)]
         )
 
         mock_tree = self._make_mock_tree()
@@ -211,7 +214,7 @@ class TestAnalyzerAnalyze:
 
         await analyzer.analyze("rāmaḥ gacchati")
 
-        analyzer._split_validator.validate_and_rescore.assert_called_once()
+        analyzer._split_validator.rank_candidates.assert_called_once()
         analyzer._tree_builder.build_from_segments.assert_called_once()
         analyzer._tree_builder.build.assert_not_called()
 
@@ -367,6 +370,96 @@ class TestAnalyzerAnalyze:
         assert result is not None
         # Runner should be called despite cache having data
         analyzer._runner.analyze.assert_called_once()
+
+
+class TestDisambiguationWiring:
+    """Analyzer.analyze with config.disambiguation.enabled on and off.
+
+    Before the wiring, tree_builder emitted exactly one parse, so the
+    ``len(parse_forest) > 1`` gate in _run_pipeline never passed and the
+    pipeline built in _initialize never ran. With the flag on, the split
+    validator's runner-up splits become the forest the pipeline ranks.
+    """
+
+    # (row id, text, disambiguation overrides, expectations)
+    # parses: "1" or ">1" (full forest). stage: disambiguation_stage.
+    # pick: "validator" = what validate_and_rescore alone returns;
+    #       "llm-last" = the validator's lowest-ranked parse, which the fake
+    #       LLM (it reverses the order it is given) must promote.
+    CASES = [
+        # Default config must equal pre-wiring behaviour.
+        ("default-off-single-parse", "satyavAkyo", {},
+         {"parses": "1", "stage": None, "pick": "validator"}),
+        # 5 validator candidates -> forest; rules resolve (top conf >= 0.95).
+        ("on-rules-resolve-forest", "satyavAkyo", {"enabled": True},
+         {"parses": ">1", "stage": "rules"}),
+        # Indeclinables short-circuit in the validator: nothing to rank.
+        ("on-indeclinable-stays-single", "ca", {"enabled": True},
+         {"parses": "1", "stage": None, "pick": "validator"}),
+        # Vocabulary-only fallback caps confidence at 0.3 so, with rules off,
+        # the LLM stage runs. Its ranking must set best_parse even though it
+        # leaves confidences alone (audit H7).
+        ("on-llm-ranking-drives-best-parse", "yogaScittavfttiniroDaH",
+         {"enabled": True, "rules_enabled": False, "llm_enabled": True},
+         {"parses": ">1", "stage": "llm", "pick": "llm-last"}),
+    ]
+
+    @staticmethod
+    async def _fake_ollama(prompt: str) -> str:
+        """Network-boundary fake: rank the candidates in reverse."""
+        n = len(re.findall(r"^Candidate \d+:", prompt, flags=re.M))
+        return json.dumps({"ranking": list(range(n - 1, -1, -1))})
+
+    async def _analyze(self, text: str, overrides: dict) -> tuple[Analyzer, list[Segment], AnalysisTree]:
+        config = Config()
+        config.cache.redis_enabled = False
+        config.cache.sqlite_enabled = False
+        config.cache.memory_enabled = False
+        for key, value in overrides.items():
+            setattr(config.disambiguation, key, value)
+        analyzer = Analyzer(config)
+        await analyzer._initialize()
+        if analyzer._split_validator is None:
+            pytest.skip("split validator unavailable")
+        if overrides.get("llm_enabled"):
+            analyzer._runner = MagicMock()
+            analyzer._runner.analyze = AsyncMock(
+                return_value=EngineRunResult(errors=["vidyut: data missing"])
+            )
+            with patch.object(LLMDisambiguator, "_query_ollama", side_effect=self._fake_ollama):
+                tree = await analyzer.analyze(text, return_all_parses=True)
+            return analyzer, [], tree
+        if "vidyut" not in analyzer._runner.available_engines:
+            pytest.skip("vidyut data bundle not installed")
+        run = await analyzer._runner.analyze(text)
+        tree = await analyzer.analyze(text, return_all_parses=True)
+        return analyzer, run.engine_results["vidyut"].segments, tree
+
+    @pytest.mark.asyncio
+    async def test_disambiguation_wiring_table(self) -> None:
+        failures = []
+        for case_id, text, overrides, want in self.CASES:
+            analyzer, vidyut_segments, tree = await self._analyze(text, overrides)
+            count = tree.parse_count
+            if (count > 1) != (want["parses"] == ">1"):
+                failures.append(f"{case_id}: {count} parses, want {want['parses']}")
+                continue
+            stage = tree.confidence.disambiguation_stage
+            if stage != want["stage"]:
+                failures.append(f"{case_id}: stage {stage!r}, want {want['stage']!r}")
+            if want["stage"] and tree.best_parse is not tree.parse_forest[0]:
+                failures.append(f"{case_id}: best_parse is not the pipeline's first pick")
+
+            validator = analyzer._split_validator
+            expected = None
+            if want.get("pick") == "validator":
+                expected = validator.validate_and_rescore(vidyut_segments, text)
+            elif want.get("pick") == "llm-last":
+                expected = validator.rank_candidates([], text)[:count][-1][1]
+            got = [w.surface_form for w in tree.best_parse.all_words]
+            if expected is not None and got != [s.surface for s in expected]:
+                failures.append(f"{case_id}: picked {got}, want {[s.surface for s in expected]}")
+        assert not failures, "\n".join(failures)
 
 
 class TestAnalyzerBatch:

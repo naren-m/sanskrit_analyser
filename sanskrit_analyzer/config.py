@@ -94,11 +94,19 @@ class CacheConfig:
 
 @dataclass
 class DisambiguationConfig:
-    """Configuration for disambiguation pipeline."""
+    """Configuration for disambiguation pipeline.
 
+    ``enabled`` is the master switch: when on, ``Analyzer.analyze`` keeps the
+    split validator's runner-up splits as alternative parses and lets the
+    pipeline rerank and prune them. Off by default -- measured on the gold
+    corpus, the rules never beat the validator's own ranking.
+    The LLM stage additionally needs ``llm_enabled`` and a reachable server.
+    """
+
+    enabled: bool = False
     rules_enabled: bool = True
     min_confidence_skip: float = 0.95
-    llm_enabled: bool = True
+    llm_enabled: bool = False
     llm_provider: str = "ollama"  # ollama | openai
     llm_model: str = "llama3.2"
     ollama_url: str = "http://localhost:11434"
@@ -472,9 +480,10 @@ cache:
 
 # Disambiguation configuration
 disambiguation:
+  enabled: false
   rules_enabled: true
   min_confidence_skip: 0.95
-  llm_enabled: true
+  llm_enabled: false
   llm_provider: ollama  # ollama | openai
   llm_model: llama3.2
   ollama_url: http://localhost:11434
@@ -543,6 +552,7 @@ academic:
                 "sqlite_path": self.cache.sqlite_path,
             },
             "disambiguation": {
+                "enabled": self.disambiguation.enabled,
                 "rules_enabled": self.disambiguation.rules_enabled,
                 "min_confidence_skip": self.disambiguation.min_confidence_skip,
                 "llm_enabled": self.disambiguation.llm_enabled,
