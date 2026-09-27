@@ -8,6 +8,8 @@ nothing is ever fabricated.
 from __future__ import annotations
 
 import logging
+import re
+from collections import Counter
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -108,6 +110,41 @@ def _trace(prakriya) -> list[PrakriyaStep]:
     return steps
 
 
+# Adhyāyas 3–5 sit under the "pratyayaḥ" adhikāra (3.1.1), so a term those
+# sūtras add is a pratyaya. Only Aṣṭādhyāyī codes (a.p.n) qualify.
+_PRATYAYA_SUTRA = re.compile(r"[345]\.\d+\.\d+")
+# Augments (āgama) of the liṅ/tiṅ that 3.4.102-3.4.107 insert as their own
+# terms; they sit inside adhyāya 3 but are not pratyayas.
+_AGAMAS = {"sIyu~w", "yAsu~w", "su~w"}
+
+
+def pratyayas(steps: list[PrakriyaStep]) -> list[dict]:
+    """The pratyayas a derivation introduces, in order, with the sūtra for each.
+
+    Read off the trace, not guessed: a pratyaya is a term inserted by a sūtra
+    in adhyāyas 3–5, or the substitute a 3.4.77 ("lasya") sūtra puts in place
+    of a lakāra once its it-markers are gone (``l`` -> ``tip``). Later edits to
+    a pratyaya (3.4.79 ``ta`` -> ``te``) are not new pratyayas and are skipped.
+    """
+    found: list[dict] = []
+    prev: list[str] = []
+    for step in steps:
+        terms = step.form.split(" + ")
+        if _PRATYAYA_SUTRA.fullmatch(step.code):
+            now, before = Counter(terms), Counter(prev)
+            # vidyut sometimes carries an empty placeholder term; ignore it.
+            added = [t for t in now - before if t and t not in _AGAMAS]
+            grew = len(terms) > len(prev)
+            # A lakāra after it-removal is "l" (la~w) or "la" (laN).
+            replaced_lakara = any(t.startswith("l") for t in before - now)
+            if len(added) == 1 and (grew or replaced_lakara):
+                found.append(
+                    {"pratyaya": added[0], "sutra": step.code, "sutra_text": step.sutra_text}
+                )
+        prev = terms
+    return found
+
+
 def analyze_pada(word_slp1: str, limit: int = 5) -> list[PadaAnalysis]:
     """Return verified analyses (with rule traces) for one SLP1 word."""
     word = (word_slp1 or "").strip().lstrip("'")
@@ -129,10 +166,11 @@ def analyze_pada(word_slp1: str, limit: int = 5) -> list[PadaAnalysis]:
                 logger.debug("derive failed for %s (%s): %s", candidate, kind, exc)
                 continue
             # The kosha keys pre-visarga forms (rAmas) while derive() emits the
-            # pausal surface (rAmaH); either counts as reproducing the word.
-            match = next(
-                (p for p in prakriyas if p.text in (candidate, word)), None
-            )
+            # pausal surface (rAmaH); either counts as reproducing the word. The
+            # pausal form of the candidate counts too, or a sandhi-mutated
+            # surface (rAmo -> rAmas) could never verify against rAmaH.
+            accepted = {candidate, word, re.sub(r"[sr]$", "H", candidate)}
+            match = next((p for p in prakriyas if p.text in accepted), None)
             if match is None:
                 continue  # analysis did not verify — drop, never fabricate
             seen.add(key)
