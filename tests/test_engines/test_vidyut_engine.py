@@ -1,92 +1,48 @@
 """Tests for Vidyut engine wrapper."""
 
+import asyncio
+
 import pytest
 
 from sanskrit_analyzer.engines.vidyut_engine import VidyutEngine
+from tests._cases import check_cases
+
+# (id, input, min segments, lemma that must appear or None)
+CASES = [
+    ("SLP1 verb finds lemma gam", "gacCati", 1, "gam"),
+    ("Devanagari input is analysed", "गच्छति", 1, None),
+    ("IAST input is analysed", "gacchati", 1, None),
+    # rāmo gacchati = rāmaḥ + gacchati (with sandhi)
+    ("sandhi across two words yields two segments", "rAmo gacCati", 2, None),
+]
 
 
-class TestVidyutEngine:
-    """Tests for VidyutEngine class."""
+@pytest.fixture
+def engine() -> VidyutEngine:
+    engine = VidyutEngine()
+    if not engine.is_available:
+        pytest.skip("Vidyut not available")
+    return engine
 
-    @pytest.fixture
-    def engine(self) -> VidyutEngine:
-        """Create a VidyutEngine instance."""
-        return VidyutEngine()
 
-    def test_engine_name(self, engine: VidyutEngine) -> None:
-        """Test engine name property."""
-        assert engine.name == "vidyut"
+def test_engine_name() -> None:
+    assert VidyutEngine().name == "vidyut"
 
-    @pytest.mark.asyncio
-    async def test_analyze_simple_verb(self, engine: VidyutEngine) -> None:
-        """Test analysis of a simple verb form."""
-        if not engine.is_available:
-            pytest.skip("Vidyut not available")
 
-        result = await engine.analyze("gacCati")
-
+def test_analyze(engine: VidyutEngine) -> None:
+    def check(text, min_segments, lemma):
+        result = asyncio.run(engine.analyze(text))
         assert result.success
         assert result.engine == "vidyut"
-        assert len(result.segments) >= 1
-
-        # Check that we found the lemma 'gam'
-        lemmas = [seg.lemma for seg in result.segments]
-        assert "gam" in lemmas
-
-    @pytest.mark.asyncio
-    async def test_analyze_devanagari_input(self, engine: VidyutEngine) -> None:
-        """Test analysis of Devanagari input."""
-        if not engine.is_available:
-            pytest.skip("Vidyut not available")
-
-        result = await engine.analyze("गच्छति")
-
-        assert result.success
-        assert len(result.segments) >= 1
-
-    @pytest.mark.asyncio
-    async def test_analyze_iast_input(self, engine: VidyutEngine) -> None:
-        """Test analysis of IAST input."""
-        if not engine.is_available:
-            pytest.skip("Vidyut not available")
-
-        result = await engine.analyze("gacchati")
-
-        assert result.success
-        assert len(result.segments) >= 1
-
-    @pytest.mark.asyncio
-    async def test_analyze_compound(self, engine: VidyutEngine) -> None:
-        """Test analysis of a compound word."""
-        if not engine.is_available:
-            pytest.skip("Vidyut not available")
-
-        # rāmo gacchati = rāmaḥ + gacchati (with sandhi)
-        result = await engine.analyze("rAmo gacCati")
-
-        assert result.success
-        assert len(result.segments) >= 2
-
-    @pytest.mark.asyncio
-    async def test_analyze_empty_input(self, engine: VidyutEngine) -> None:
-        """Test analysis of empty input."""
-        if not engine.is_available:
-            pytest.skip("Vidyut not available")
-
-        result = await engine.analyze("")
-
-        # Empty input should not crash
-        assert result.engine == "vidyut"
-
-    @pytest.mark.asyncio
-    async def test_confidence_returned(self, engine: VidyutEngine) -> None:
-        """Test that confidence is returned."""
-        if not engine.is_available:
-            pytest.skip("Vidyut not available")
-
-        result = await engine.analyze("gacCati")
-
-        assert result.success
+        assert len(result.segments) >= min_segments, result.segments
+        if lemma is not None:
+            assert lemma in [seg.lemma for seg in result.segments]
+        # Confidence is returned for the result and every segment.
         assert result.confidence > 0
         for seg in result.segments:
             assert seg.confidence > 0
+
+    check_cases(CASES, check)
+
+    # Empty input should not crash.
+    assert asyncio.run(engine.analyze("")).engine == "vidyut"

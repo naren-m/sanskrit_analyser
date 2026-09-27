@@ -21,6 +21,7 @@ pytestmark = pytest.mark.skipif(
     resolve_data_dir() is None, reason="vidyut data bundle not installed"
 )
 
+from tests._cases import check_cases  # noqa: E402
 from tests.corpus.engine import INTERFACES, VerseReport, load_cases, run_cases  # noqa: E402
 
 CASES = load_cases()
@@ -60,14 +61,10 @@ KNOWN_JUNK = {(c.id, "analyzer") for c in CASES if c.source == "ramayanam"} | {
 }
 
 
+
 @pytest.fixture(scope="module")
 def reports() -> dict[str, VerseReport]:
     return {r.case.id: r for r in run_cases(CASES)}
-
-
-def _xfail(request, reason: str | None) -> None:
-    if reason:
-        request.node.add_marker(pytest.mark.xfail(reason=reason, strict=True))
 
 
 def test_gold_covers_both_corpora():
@@ -76,41 +73,50 @@ def test_gold_covers_both_corpora():
     assert all(c.gloss for c in CASES)
 
 
-@pytest.mark.parametrize("case_id", IDS)
-def test_sloka_meter(reports, case_id):
-    rep = reports[case_id]
-    if rep.case.meter is None:
-        pytest.skip("sūtras are prose")
-    assert rep.chandas is not None
-    assert rep.chandas.startswith(rep.case.meter), (
-        f"{rep.case.ref}: expected {rep.case.meter}, got {rep.chandas}"
-    )
+VERSE_ROWS = [(cid, cid) for cid in IDS]
+# One row per (verse, interface); row id is "<verse>/<interface>".
+IFACE_ROWS = [(f"{cid}/{iface}", cid, iface) for cid in IDS for iface in INTERFACES]
 
 
-@pytest.mark.parametrize("case_id", IDS)
-def test_prakriya_analyses_are_verified_with_trace(reports, case_id):
-    rep = reports[case_id]
-    for surface, analysis in rep.prakriya_analyses:
-        assert analysis["verified"] is True, f"{surface}: unverified analysis"
-        assert analysis["prakriya"], f"{surface}: verified but no derivation steps"
+def test_sloka_meter(reports):
+    def check(case_id):
+        rep = reports[case_id]
+        if rep.case.meter is None:
+            pytest.skip("sūtras are prose")
+        assert rep.chandas is not None
+        assert rep.chandas.startswith(rep.case.meter), (
+            f"{rep.case.ref}: expected {rep.case.meter}, got {rep.chandas}"
+        )
+
+    check_cases(VERSE_ROWS, check)
 
 
-@pytest.mark.parametrize("iface", INTERFACES)
-@pytest.mark.parametrize("case_id", IDS)
-def test_no_junk_tokens(request, reports, case_id, iface):
-    if (case_id, iface) in KNOWN_JUNK:
-        _xfail(request, "Analyzer leaks punctuation and sandhi residue as tokens")
-    ir = reports[case_id].interfaces[iface]
-    assert not ir.junk, f"{iface} emitted non-word tokens {ir.junk} for {ir.tokens}"
+def test_prakriya_analyses_are_verified_with_trace(reports):
+    def check(case_id):
+        for surface, analysis in reports[case_id].prakriya_analyses:
+            assert analysis["verified"] is True, f"{surface}: unverified analysis"
+            assert analysis["prakriya"], f"{surface}: verified but no derivation steps"
+
+    check_cases(VERSE_ROWS, check)
 
 
-@pytest.mark.parametrize("iface", INTERFACES)
-@pytest.mark.parametrize("case_id", IDS)
-def test_gloss_recall(request, reports, case_id, iface):
-    _xfail(request, KNOWN_GAPS.get((case_id, iface)))
-    ir = reports[case_id].interfaces[iface]
-    missed = sorted(w for w, hit in ir.hits.items() if not hit)
-    assert ir.recall >= MIN_RECALL, (
-        f"{iface} recall {ir.recall:.2f} on {reports[case_id].case.ref}; "
-        f"missed {missed}; produced {sorted(ir.lemmas)}"
-    )
+def test_no_junk_tokens(reports):
+    def check(case_id, iface):
+        ir = reports[case_id].interfaces[iface]
+        assert not ir.junk, f"{iface} emitted non-word tokens {ir.junk} for {ir.tokens}"
+
+    junk = "Analyzer leaks punctuation and sandhi residue as tokens"
+    check_cases(IFACE_ROWS, check, xfail={f"{cid}/{iface}": junk for cid, iface in KNOWN_JUNK})
+
+
+def test_gloss_recall(reports):
+    def check(case_id, iface):
+        ir = reports[case_id].interfaces[iface]
+        missed = sorted(w for w, hit in ir.hits.items() if not hit)
+        assert ir.recall >= MIN_RECALL, (
+            f"{iface} recall {ir.recall:.2f} on {reports[case_id].case.ref}; "
+            f"missed {missed}; produced {sorted(ir.lemmas)}"
+        )
+
+    gaps = {f"{cid}/{iface}": why for (cid, iface), why in KNOWN_GAPS.items()}
+    check_cases(IFACE_ROWS, check, xfail=gaps)

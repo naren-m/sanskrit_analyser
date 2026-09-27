@@ -1,409 +1,235 @@
 """Tests for tiered cache coordinator."""
 
-import os
-import tempfile
+import asyncio
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from sanskrit_analyzer.cache import tiered as tiered_mod
 from sanskrit_analyzer.cache.tiered import (
     TieredCache,
     TieredCacheConfig,
     TieredCacheStats,
     TierStats,
 )
+from tests._cases import check_cases
+
+P = "PRODUCTION"
+REDIS_URL = "redis://localhost:6379"
+MEM_SQLITE = {"memory_enabled": True, "memory_max_size": 100, "redis_enabled": False,
+              "sqlite_enabled": True}
+ALL_TIERS = {**MEM_SQLITE, "redis_enabled": True, "redis_url": REDIS_URL}
+MEM_REDIS = {**ALL_TIERS, "sqlite_enabled": False}
+NONE = {"memory_enabled": False, "redis_enabled": False, "sqlite_enabled": False}
 
 
-class TestTierStats:
-    """Tests for TierStats dataclass."""
+@pytest.fixture
+def make_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Factory: a TieredCache per row, each with its own SQLite file.
 
-    def test_default_values(self) -> None:
-        """Test default statistics values."""
-        stats = TierStats()
-        assert stats.hits == 0
-        assert stats.misses == 0
-        assert stats.promotions == 0
-        assert stats.errors == 0
+    HOME is redirected so the default-config row never writes the developer's
+    real ~/.sanskrit_analyzer/corpus.db.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    n = iter(range(1000))
 
-    def test_hit_rate_empty(self) -> None:
-        """Test hit rate with no accesses."""
-        stats = TierStats()
-        assert stats.hit_rate == 0.0
-
-    def test_hit_rate_calculation(self) -> None:
-        """Test hit rate calculation."""
-        stats = TierStats(hits=75, misses=25)
-        assert stats.hit_rate == 0.75
-
-
-class TestTieredCacheStats:
-    """Tests for TieredCacheStats dataclass."""
-
-    def test_default_values(self) -> None:
-        """Test default statistics values."""
-        stats = TieredCacheStats()
-        assert stats.total_requests == 0
-        assert stats.memory.hits == 0
-        assert stats.redis.hits == 0
-        assert stats.sqlite.hits == 0
-
-    def test_overall_hit_rate_empty(self) -> None:
-        """Test overall hit rate with no requests."""
-        stats = TieredCacheStats()
-        assert stats.overall_hit_rate == 0.0
-
-    def test_overall_hit_rate(self) -> None:
-        """Test overall hit rate calculation."""
-        stats = TieredCacheStats(total_requests=100)
-        stats.memory.hits = 60
-        stats.redis.hits = 20
-        stats.sqlite.hits = 10
-        # 90 hits out of 100 requests
-        assert stats.overall_hit_rate == 0.9
-
-
-class TestTieredCacheConfig:
-    """Tests for TieredCacheConfig dataclass."""
-
-    def test_defaults(self) -> None:
-        """Test default configuration."""
-        config = TieredCacheConfig()
-        assert config.memory_enabled is True
-        assert config.memory_max_size == 1000
-        assert config.redis_enabled is False
-        assert config.redis_url is None
-        assert config.sqlite_enabled is True
-
-
-class TestTieredCache:
-    """Tests for TieredCache class."""
-
-    @pytest.fixture
-    def temp_db(self) -> str:
-        """Create a temporary database file."""
-        fd, path = tempfile.mkstemp(suffix=".db")
-        os.close(fd)
-        yield path
-        if os.path.exists(path):
-            os.unlink(path)
-
-    @pytest.fixture
-    def config(self, temp_db: str) -> TieredCacheConfig:
-        """Create a test configuration."""
-        return TieredCacheConfig(
-            memory_enabled=True,
-            memory_max_size=100,
-            redis_enabled=False,
-            sqlite_enabled=True,
-            sqlite_path=temp_db,
+    def make(overrides: dict | None) -> TieredCache:
+        if overrides is None:
+            return TieredCache()
+        return TieredCache(
+            TieredCacheConfig(sqlite_path=str(tmp_path / f"t{next(n)}.db"), **overrides)
         )
 
-    @pytest.fixture
-    def cache(self, config: TieredCacheConfig) -> TieredCache:
-        """Create a cache instance."""
-        return TieredCache(config)
+    return make
 
-    def test_init_with_defaults(self) -> None:
-        """Test initialization with default config."""
-        cache = TieredCache()
-        status = cache.get_tier_status()
-        assert status["memory"] is True
-        assert status["redis"] is False
-        assert status["sqlite"] is True
 
-    def test_init_memory_only(self) -> None:
-        """Test initialization with memory only."""
-        config = TieredCacheConfig(
-            memory_enabled=True,
-            redis_enabled=False,
-            sqlite_enabled=False,
-        )
-        cache = TieredCache(config)
-        status = cache.get_tier_status()
-        assert status["memory"] is True
-        assert status["redis"] is False
-        assert status["sqlite"] is False
+def test_hit_rates() -> None:
+    overall = TieredCacheStats(total_requests=100)
+    overall.memory.hits, overall.redis.hits, overall.sqlite.hits = 60, 20, 10
+    cases = [
+        ("tier_no_accesses_is_zero", TierStats().hit_rate, 0.0),
+        ("tier_hits_over_total", TierStats(hits=75, misses=25).hit_rate, 0.75),
+        ("overall_no_requests_is_zero", TieredCacheStats().overall_hit_rate, 0.0),
+        ("overall_sums_hits_across_tiers", overall.overall_hit_rate, 0.9),
+    ]
 
-    def test_make_key(self, cache: TieredCache) -> None:
-        """Test cache key generation."""
-        key1 = cache.make_key("gacchati", "PRODUCTION")
-        key2 = cache.make_key("gacchati", "PRODUCTION")
-        key3 = cache.make_key("gacchati", "ACADEMIC")
+    def check(got, expected):
+        assert got == expected, got
 
-        assert key1 == key2
-        assert key1 != key3
-        assert len(key1) == 32
+    check_cases(cases, check)
 
-    @pytest.mark.asyncio
-    async def test_set_and_get_memory(self, cache: TieredCache) -> None:
-        """Test set and get with memory tier."""
-        result = {"segments": [{"surface": "test"}]}
-        key = cache.make_key("test", "PRODUCTION")
 
-        await cache.set(key, "test", "test", "PRODUCTION", result)
-        retrieved = await cache.get(key)
+def test_tier_status(make_cache) -> None:
+    cases = [
+        ("default_config_memory_and_sqlite", None,
+         {"memory": True, "redis": False, "sqlite": True}),
+        ("memory_only", {**NONE, "memory_enabled": True},
+         {"memory": True, "redis": False, "sqlite": False}),
+    ]
 
-        assert retrieved == result
-        assert cache.stats.memory.hits == 1
+    def check(overrides, expected):
+        assert make_cache(overrides).get_tier_status() == expected
 
-    @pytest.mark.asyncio
-    async def test_get_miss(self, cache: TieredCache) -> None:
-        """Test cache miss."""
-        result = await cache.get("nonexistent")
-        assert result is None
-        assert cache.stats.total_requests == 1
-        assert cache.stats.memory.misses == 1
+    check_cases(cases, check)
 
-    @pytest.mark.asyncio
-    async def test_sqlite_promotion(self, config: TieredCacheConfig) -> None:
-        """Test promotion from SQLite to memory."""
-        cache = TieredCache(config)
 
-        # Store directly in SQLite
-        result = {"segments": [{"surface": "test"}]}
-        key = cache.make_key("test", "PRODUCTION")
-        cache._sqlite.set(key, "test", "test", "PRODUCTION", result)  # type: ignore
+def test_make_key(make_cache) -> None:
+    cache = make_cache(MEM_SQLITE)
+    key = cache.make_key("gacchati", P)
+    assert key == cache.make_key("gacchati", P), "deterministic"
+    assert key != cache.make_key("gacchati", "ACADEMIC"), "mode is part of the key"
+    assert len(key) == 32
 
-        # Clear memory to force SQLite hit
-        cache._memory.clear()  # type: ignore
+    # Bumping CACHE_SCHEMA_VERSION must invalidate every stored key.
+    original = tiered_mod.CACHE_SCHEMA_VERSION
+    try:
+        tiered_mod.CACHE_SCHEMA_VERSION = original + 1
+        assert cache.make_key("gacchati", P) != key
+    finally:
+        tiered_mod.CACHE_SCHEMA_VERSION = original
 
-        # Get should hit SQLite and promote to memory
-        retrieved = await cache.get(key)
-        assert retrieved == result
-        assert cache.stats.sqlite.hits == 1
-        assert cache.stats.memory.promotions == 1
 
-        # Second get should hit memory
-        retrieved = await cache.get(key)
-        assert retrieved == result
-        assert cache.stats.memory.hits == 1
+RESULT = {"segments": [{"surface": "test"}]}
 
-    @pytest.mark.asyncio
-    async def test_delete(self, cache: TieredCache) -> None:
-        """Test deleting from all tiers."""
-        result = {"segments": []}
-        key = cache.make_key("test", "PRODUCTION")
 
-        await cache.set(key, "test", "test", "PRODUCTION", result)
-        assert await cache.exists(key)
+async def _set(cache, result=RESULT) -> str:
+    key = cache.make_key("test", P)
+    await cache.set(key, "test", "test", P, result)
+    return key
 
-        deleted = await cache.delete(key)
-        assert deleted is True
-        assert not await cache.exists(key)
 
-    @pytest.mark.asyncio
-    async def test_exists(self, cache: TieredCache) -> None:
-        """Test exists check."""
-        key = cache.make_key("test", "PRODUCTION")
+async def _set_then_get_hits_memory(cache):
+    key = await _set(cache)
+    assert await cache.get(key) == RESULT
+    assert cache.stats.memory.hits == 1
 
-        assert not await cache.exists(key)
 
-        await cache.set(key, "test", "test", "PRODUCTION", {})
-        assert await cache.exists(key)
+async def _get_miss(cache):
+    assert await cache.get("nonexistent") is None
+    assert cache.stats.total_requests == 1
+    assert cache.stats.memory.misses == 1
 
-    @pytest.mark.asyncio
-    async def test_clear_memory(self, cache: TieredCache) -> None:
-        """Test clearing memory tier only."""
-        result = {"segments": []}
-        key = cache.make_key("test", "PRODUCTION")
 
-        await cache.set(key, "test", "test", "PRODUCTION", result)
+async def _stats_tracking(cache):
+    key = await _set(cache, {"segments": []})
+    await cache.get(key)
+    await cache.get("nonexistent")
+    stats = cache.stats
+    assert (stats.total_requests, stats.memory.hits, stats.memory.misses) == (2, 1, 1)
 
-        await cache.clear_memory()
 
-        # Memory should be empty, but SQLite should still have it
-        assert cache._memory.get(key) is None  # type: ignore
-        assert cache._sqlite.get(key) is not None  # type: ignore
+async def _sqlite_hit_promotes_to_memory(cache):
+    key = cache.make_key("test", P)
+    cache._sqlite.set(key, "test", "test", P, RESULT)
+    cache._memory.clear()
+    assert await cache.get(key) == RESULT
+    assert cache.stats.sqlite.hits == 1
+    assert cache.stats.memory.promotions == 1
+    # Second get is served by memory.
+    assert await cache.get(key) == RESULT
+    assert cache.stats.memory.hits == 1
 
-    @pytest.mark.asyncio
-    async def test_clear_all(self, cache: TieredCache) -> None:
-        """Test clearing all tiers."""
-        result = {"segments": []}
-        key = cache.make_key("test", "PRODUCTION")
 
-        await cache.set(key, "test", "test", "PRODUCTION", result)
+async def _sqlite_read_error_is_a_miss(cache):
+    # A corrupt SQLite row is treated as a miss, not a crash.
+    key = cache.make_key("test", P)
+    cache._sqlite.set(key, "test", "test", P, {"ok": 1})
+    cache._memory.clear()
+    with patch.object(cache._sqlite, "get", side_effect=ValueError("corrupt row")):
+        assert await cache.get(key) is None
+    assert cache.stats.sqlite.errors == 1
 
-        await cache.clear_all()
 
-        assert not await cache.exists(key)
+async def _memory_stores_a_copy(cache):
+    # Mutating the result after set() must not corrupt the cached value.
+    result = {"segments": [{"surface": "test"}]}
+    key = await _set(cache, result)
+    result["segments"][0]["surface"] = "MUTATED"
+    assert await cache.get(key) == {"segments": [{"surface": "test"}]}
 
-    @pytest.mark.asyncio
-    async def test_health_check(self, cache: TieredCache) -> None:
-        """Test health check."""
-        health = await cache.health_check()
 
-        assert health["memory"] is True
-        assert health["redis"] is False
-        assert health["sqlite"] is True
+async def _exists_and_delete(cache):
+    key = cache.make_key("test", P)
+    assert not await cache.exists(key)
+    await _set(cache, {})
+    assert await cache.exists(key)
+    assert await cache.delete(key) is True
+    assert not await cache.exists(key)
 
-    @pytest.mark.asyncio
-    async def test_stats_tracking(self, cache: TieredCache) -> None:
-        """Test statistics tracking."""
-        result = {"segments": []}
-        key = cache.make_key("test", "PRODUCTION")
 
-        # Set
-        await cache.set(key, "test", "test", "PRODUCTION", result)
+async def _clear_memory_keeps_sqlite(cache):
+    key = await _set(cache)
+    await cache.clear_memory()
+    assert cache._memory.get(key) is None
+    assert cache._sqlite.get(key) is not None
 
-        # Hit
-        await cache.get(key)
 
-        # Miss
-        await cache.get("nonexistent")
+async def _clear_all(cache):
+    key = await _set(cache)
+    await cache.clear_all()
+    assert not await cache.exists(key)
 
-        stats = cache.stats
-        assert stats.total_requests == 2
-        assert stats.memory.hits == 1
-        assert stats.memory.misses == 1
 
-    @pytest.mark.asyncio
-    async def test_redis_tier_mocked(self, temp_db: str) -> None:
-        """Test Redis tier with mocked client."""
-        config = TieredCacheConfig(
-            memory_enabled=True,
-            memory_max_size=100,
-            redis_enabled=True,
-            redis_url="redis://localhost:6379",
-            sqlite_enabled=True,
-            sqlite_path=temp_db,
-        )
-        cache = TieredCache(config)
+async def _health_check(cache):
+    assert await cache.health_check() == {"memory": True, "redis": False, "sqlite": True}
 
-        # Mock Redis client
-        mock_redis = AsyncMock()
-        mock_redis.get.return_value = None
-        mock_redis.set.return_value = True
-        mock_redis.exists.return_value = False
-        mock_redis.delete.return_value = 1
-        mock_redis.health_check.return_value = True
-        cache._redis._client = mock_redis
 
-        result = {"segments": []}
-        key = cache.make_key("test", "PRODUCTION")
+async def _no_tiers_is_always_a_miss(cache):
+    assert await cache.get("key") is None
+    await cache.set("key", "test", "test", P, {})  # must not raise
+    assert await cache.get("key") is None
 
-        # Set should store in all tiers
-        await cache.set(key, "test", "test", "PRODUCTION", result)
-        mock_redis.setex.assert_called()
 
-        # Delete should remove from all tiers
-        await cache.delete(key)
-        mock_redis.delete.assert_called()
+async def _redis_written_and_deleted(cache):
+    client = AsyncMock()
+    client.get.return_value = None
+    client.delete.return_value = 1
+    cache._redis._client = client
+    key = await _set(cache, {"segments": []})
+    client.setex.assert_called()
+    await cache.delete(key)
+    client.delete.assert_called()
 
-    @pytest.mark.asyncio
-    async def test_redis_promotion(self, temp_db: str) -> None:
-        """Test promotion from Redis to memory."""
-        config = TieredCacheConfig(
-            memory_enabled=True,
-            memory_max_size=100,
-            redis_enabled=True,
-            redis_url="redis://localhost:6379",
-            sqlite_enabled=False,
-        )
-        cache = TieredCache(config)
 
-        # Mock the entire RedisCache get method
-        result = {"segments": [{"surface": "test"}]}
+async def _redis_hit_promotes_to_memory(cache):
+    async def redis_get(key: str) -> dict:
+        return RESULT
 
-        async def mock_get(key: str) -> dict:
-            return result
+    cache._redis.get = redis_get
+    cache._memory.clear()
+    assert await cache.get(cache.make_key("test", P)) == RESULT
+    assert cache.stats.redis.hits == 1
+    assert cache.stats.memory.promotions == 1
 
-        cache._redis.get = mock_get  # type: ignore
 
-        # Clear memory
-        cache._memory.clear()  # type: ignore
+async def _initialize_and_close_without_redis(cache):
+    # No Redis is listening; initialize() must degrade, not raise.
+    await cache.initialize()
+    await cache.close()
 
-        key = cache.make_key("test", "PRODUCTION")
 
-        # Get should hit Redis and promote to memory
-        retrieved = await cache.get(key)
-        assert retrieved == result
-        assert cache.stats.redis.hits == 1
-        assert cache.stats.memory.promotions == 1
+# (id, TieredCacheConfig overrides, async scenario on a fresh cache)
+SCENARIO_CASES = [
+    ("set_then_get_hits_memory", MEM_SQLITE, _set_then_get_hits_memory),
+    ("get_miss_counts_request_and_miss", MEM_SQLITE, _get_miss),
+    ("stats_tracking", MEM_SQLITE, _stats_tracking),
+    ("sqlite_hit_promotes_to_memory", MEM_SQLITE, _sqlite_hit_promotes_to_memory),
+    ("sqlite_read_error_is_a_miss", MEM_SQLITE, _sqlite_read_error_is_a_miss),
+    ("memory_stores_a_copy", MEM_SQLITE, _memory_stores_a_copy),
+    ("exists_and_delete_span_tiers", MEM_SQLITE, _exists_and_delete),
+    ("clear_memory_keeps_sqlite", MEM_SQLITE, _clear_memory_keeps_sqlite),
+    ("clear_all", MEM_SQLITE, _clear_all),
+    ("health_check_reports_each_tier", MEM_SQLITE, _health_check),
+    ("no_tiers_is_always_a_miss", NONE, _no_tiers_is_always_a_miss),
+    ("redis_written_and_deleted", ALL_TIERS, _redis_written_and_deleted),
+    ("redis_hit_promotes_to_memory", MEM_REDIS, _redis_hit_promotes_to_memory),
+    ("initialize_and_close_without_redis", ALL_TIERS, _initialize_and_close_without_redis),
+]
 
-    @pytest.mark.asyncio
-    async def test_initialize_and_close(self, temp_db: str) -> None:
-        """Test async initialize and close."""
-        config = TieredCacheConfig(
-            memory_enabled=True,
-            redis_enabled=True,
-            redis_url="redis://localhost:6379",
-            sqlite_enabled=True,
-            sqlite_path=temp_db,
-        )
-        cache = TieredCache(config)
 
-        # Initialize should try to connect to Redis
-        # (will fail without real Redis, but shouldn't raise)
-        await cache.initialize()
-
-        # Close should be safe
-        await cache.close()
-
-    @pytest.mark.asyncio
-    async def test_no_tiers_enabled(self) -> None:
-        """Test behavior with no tiers enabled."""
-        config = TieredCacheConfig(
-            memory_enabled=False,
-            redis_enabled=False,
-            sqlite_enabled=False,
-        )
-        cache = TieredCache(config)
-
-        result = await cache.get("key")
-        assert result is None
-
-        # Set should not raise
-        await cache.set("key", "test", "test", "PRODUCTION", {})
-
-        # Still nothing
-        result = await cache.get("key")
-        assert result is None
-
-    def test_make_key_folds_schema_version(self, cache: TieredCache) -> None:
-        """Key changes when the schema version constant changes."""
-        from sanskrit_analyzer.cache import tiered as tiered_mod
-
-        key_v1 = cache.make_key("gacchati", "PRODUCTION")
-        original = tiered_mod.CACHE_SCHEMA_VERSION
-        try:
-            tiered_mod.CACHE_SCHEMA_VERSION = original + 1
-            key_v2 = cache.make_key("gacchati", "PRODUCTION")
-        finally:
-            tiered_mod.CACHE_SCHEMA_VERSION = original
-        assert key_v1 != key_v2
-
-    @pytest.mark.asyncio
-    async def test_sqlite_read_error_is_a_miss(self, config: TieredCacheConfig) -> None:
-        """A corrupt SQLite row is treated as a miss, not a crash."""
-        cache = TieredCache(config)
-        key = cache.make_key("test", "PRODUCTION")
-        cache._sqlite.set(key, "test", "test", "PRODUCTION", {"ok": 1})  # type: ignore
-        cache._memory.clear()  # type: ignore
-
-        with patch.object(
-            cache._sqlite, "get", side_effect=ValueError("corrupt row")
-        ):
-            result = await cache.get(key)
-
-        assert result is None
-        assert cache.stats.sqlite.errors == 1
-
-    @pytest.mark.asyncio
-    async def test_memory_set_stores_copy(self, cache: TieredCache) -> None:
-        """Mutating the result after set() must not corrupt the cached value."""
-        result: dict = {"segments": [{"surface": "test"}]}
-        key = cache.make_key("test", "PRODUCTION")
-
-        await cache.set(key, "test", "test", "PRODUCTION", result)
-        result["segments"][0]["surface"] = "MUTATED"
-
-        retrieved = await cache.get(key)
-        assert retrieved == {"segments": [{"surface": "test"}]}
-
-    def test_get_tier_status(self, cache: TieredCache) -> None:
-        """Test tier status reporting."""
-        status = cache.get_tier_status()
-        assert isinstance(status, dict)
-        assert "memory" in status
-        assert "redis" in status
-        assert "sqlite" in status
+def test_scenarios(make_cache) -> None:
+    check_cases(
+        SCENARIO_CASES,
+        lambda overrides, scenario: asyncio.run(scenario(make_cache(overrides))),
+    )

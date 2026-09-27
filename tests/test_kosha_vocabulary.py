@@ -1,6 +1,7 @@
 import pytest
 
 from sanskrit_analyzer.validation.kosha_vocabulary import KoshaVocabulary
+from tests._cases import check_cases
 
 
 @pytest.fixture(scope="module")
@@ -11,15 +12,23 @@ def vocab():
         pytest.skip("vidyut kosha data not available")
 
 
-def test_contains_known_lemma(vocab):
-    assert vocab.contains("gam")
-    assert vocab.contains("vana")
-    assert not vocab.contains("xyzzqq")
+# (id, method, SLP1 word, expected result; "stem" means any non-None stem)
+LOOKUP_CASES = [
+    ("contains-root-gam", "contains", "gam", True),
+    ("contains-stem-vana", "contains", "vana", True),
+    ("rejects-nonword", "contains", "xyzzqq", False),
+    ("finds-stem-for-inflected-gacCati", "find_stem", "gacCati", "stem"),
+    # indeclinables delegate to the curated vocabulary
+    ("avyaya-ca-delegates-to-curated", "is_indeclinable", "ca", True),
+]
 
 
-def test_find_stem_for_inflected_form(vocab):
-    assert vocab.find_stem("gacCati") is not None
+def test_lookup(vocab):
+    def check(method, word, expected):
+        got = getattr(vocab, method)(word)
+        if expected == "stem":
+            assert got is not None
+        else:
+            assert bool(got) is expected
 
-
-def test_indeclinable_passthrough(vocab):
-    assert isinstance(vocab.is_indeclinable("ca"), bool)
+    check_cases(LOOKUP_CASES, check)

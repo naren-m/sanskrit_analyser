@@ -1,11 +1,13 @@
 """Tests for the engine runner."""
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
 
 from sanskrit_analyzer.engines.base import EngineBase, EngineResult, Segment
 from sanskrit_analyzer.engines.runner import AnalyzedSegment, EngineRunner
+from tests._cases import check_cases
 
 
 class MockEngine(EngineBase):
@@ -37,185 +39,185 @@ class MockEngine(EngineBase):
         )
 
 
-@pytest.fixture
-def segment() -> Segment:
+def _gam() -> Segment:
     return Segment(surface="gacchati", lemma="gam", confidence=0.9)
 
 
-class TestEngineRunner:
-    """Tests for EngineRunner."""
+def _failing(name: str = "failing") -> MockEngine:
+    engine = MockEngine(name)
+    engine.analyze = AsyncMock(side_effect=Exception("Test error"))
+    return engine
 
-    def test_add_engine(self) -> None:
-        runner = EngineRunner()
+
+def _mutate(runner: EngineRunner, op: str) -> list[str]:
+    if op == "add":
         runner.add_engine(MockEngine("test"))
-        assert "test" in runner.engine_names
-
-    def test_remove_engine(self, segment: Segment) -> None:
-        runner = EngineRunner(
-            engines=[MockEngine("vidyut", [segment]), MockEngine("local_byt5", [segment])]
-        )
+        return runner.engine_names
+    if op == "remove":
         runner.remove_engine("vidyut")
-        assert runner.engine_names == ["local_byt5"]
+        return runner.engine_names
+    return runner.available_engines
 
-    def test_available_engines(self) -> None:
-        runner = EngineRunner(
-            engines=[
-                MockEngine("available", available=True),
-                MockEngine("unavailable", available=False),
-            ]
-        )
-        assert runner.available_engines == ["available"]
 
-    @pytest.mark.asyncio
-    async def test_analyze_single_engine(self, segment: Segment) -> None:
-        runner = EngineRunner(engines=[MockEngine("vidyut", [segment])])
+# (id, engines, operation, expected names)
+ENGINE_LIST_CASES = [
+    ("add_engine appends to engine_names", [], "add", ["test"]),
+    (
+        "remove_engine drops only the named engine",
+        [MockEngine("vidyut", [_gam()]), MockEngine("local_byt5", [_gam()])],
+        "remove",
+        ["local_byt5"],
+    ),
+    (
+        "available_engines excludes unavailable ones",
+        [MockEngine("available", available=True), MockEngine("unavailable", available=False)],
+        "available",
+        ["available"],
+    ),
+]
 
-        result = await runner.analyze("gacchati")
-
-        assert result.success
-        assert result.primary_engine == "vidyut"
-        assert [s.lemma for s in result.segments] == ["gam"]
-        assert result.overall_confidence == pytest.approx(0.9)
-
-    @pytest.mark.asyncio
-    async def test_vote_is_the_engines_own_confidence(self, segment: Segment) -> None:
-        """No weighting: the vote is the engine's confidence, not a scaled score."""
-        runner = EngineRunner(engines=[MockEngine("vidyut", [segment])])
-
-        result = await runner.analyze("gacchati")
-
-        assert result.segments[0].engine_votes == {"vidyut": 0.9}
-        assert result.segments[0].agreement_score == 1.0
-
-    @pytest.mark.asyncio
-    async def test_primary_follows_configured_order_not_segment_count(self) -> None:
-        """The first configured engine wins even when a later one splits more."""
-        first = MockEngine("vidyut", [Segment(surface="test", lemma="first", confidence=0.6)])
-        second = MockEngine(
-            "local_byt5",
-            [
-                Segment(surface="te", lemma="second_a", confidence=0.99),
-                Segment(surface="st", lemma="second_b", confidence=0.99),
-            ],
-        )
-        runner = EngineRunner(engines=[first, second])
-
-        result = await runner.analyze("test")
-
-        assert result.primary_engine == "vidyut"
-        assert [s.lemma for s in result.segments] == ["first"]
+# (id, engine factory, analyze kwargs, expected attributes of the result)
+# Expected keys: success, primary, lemmas, confidence, ran (engine_results keys),
+# votes/agreement (first segment), error_in (substring of some error), errors
+# (exact list), names_after (runner.engine_names after the call).
+ANALYZE_CASES = [
+    (
+        "single engine: its segments and confidence are the result",
+        lambda: [MockEngine("vidyut", [_gam()])],
+        {},
+        {"success": True, "primary": "vidyut", "lemmas": ["gam"], "confidence": 0.9},
+    ),
+    (
+        "no weighting: the vote is the engine's own confidence",
+        lambda: [MockEngine("vidyut", [_gam()])],
+        {},
+        {"votes": {"vidyut": 0.9}, "agreement": 1.0},
+    ),
+    (
         # The slower fallback never runs once the primary has segments.
-        assert set(result.engine_results) == {"vidyut"}
-
-    @pytest.mark.asyncio
-    async def test_primary_skips_engine_with_no_segments(self, segment: Segment) -> None:
-        runner = EngineRunner(engines=[MockEngine("empty", []), MockEngine("vidyut", [segment])])
-
-        result = await runner.analyze("gacchati")
-
-        assert result.primary_engine == "vidyut"
-        assert result.success
-
-    @pytest.mark.asyncio
-    async def test_analyze_no_engines(self) -> None:
-        result = await EngineRunner(engines=[]).analyze("test")
-
-        assert not result.success
-        assert "No engines configured" in result.errors
-
-    @pytest.mark.asyncio
-    async def test_analyze_all_unavailable(self) -> None:
-        runner = EngineRunner(engines=[MockEngine("test", available=False)])
-
-        result = await runner.analyze("test")
-
-        assert not result.success
-        assert "No available engines" in result.errors
-
-    @pytest.mark.asyncio
-    async def test_analyze_engine_error_handled(self, segment: Segment) -> None:
-        failing = MockEngine("failing")
-        failing.analyze = AsyncMock(side_effect=Exception("Test error"))
-        runner = EngineRunner(engines=[failing, MockEngine("working", [segment])])
-
-        result = await runner.analyze("test")
-
-        assert result.success
-        assert result.primary_engine == "working"
-        assert any("Test error" in e for e in result.errors)
-
-    @pytest.mark.asyncio
-    async def test_all_engines_failing_reports_errors(self) -> None:
-        failing = MockEngine("failing")
-        failing.analyze = AsyncMock(side_effect=Exception("Test error"))
-        runner = EngineRunner(engines=[failing])
-
-        result = await runner.analyze("test")
-
-        assert not result.success
-        assert any("Test error" in e for e in result.errors)
-
-    def test_create_default(self) -> None:
-        try:
-            runner = EngineRunner.create_default()
-        except ImportError:
-            pytest.skip("Default engines not available")
-        assert runner.engine_names == ["vidyut"]
-
-
-class TestEngineFilter:
-    """``engines=`` restricts a single call without mutating the shared list."""
-
-    @pytest.mark.asyncio
-    async def test_filter_leaves_engine_list_intact(self, segment: Segment) -> None:
-        runner = EngineRunner(
-            engines=[MockEngine("vidyut", [segment]), MockEngine("local_byt5", [segment])]
-        )
-
-        result = await runner.analyze("rAmaH", engines=["local_byt5"])
-
-        assert set(result.engine_results) == {"local_byt5"}
-        assert runner.engine_names == ["vidyut", "local_byt5"]
-
-    @pytest.mark.asyncio
-    async def test_filter_with_no_match_reports_error(self) -> None:
-        runner = EngineRunner(engines=[MockEngine("vidyut", [])])
-
-        result = await runner.analyze("rAmaH", engines=["nope"])
-
-        assert result.errors == ["No engines configured"]
-
-
-class TestAnalyzedSegment:
-    """Tests for the AnalyzedSegment dataclass."""
-
-    def test_from_segment_records_the_engine_vote(self) -> None:
-        analyzed = AnalyzedSegment.from_segment(
-            Segment(
-                surface="test",
-                lemma="lemma",
-                morphology="noun",
-                confidence=0.9,
-                pos="noun",
-                meanings=["meaning"],
+        "first configured engine wins even when a later one splits more",
+        lambda: [
+            MockEngine("vidyut", [Segment(surface="test", lemma="first", confidence=0.6)]),
+            MockEngine(
+                "local_byt5",
+                [
+                    Segment(surface="te", lemma="second_a", confidence=0.99),
+                    Segment(surface="st", lemma="second_b", confidence=0.99),
+                ],
             ),
-            "vidyut",
-        )
+        ],
+        {},
+        {"primary": "vidyut", "lemmas": ["first"], "ran": {"vidyut"}},
+    ),
+    (
+        "primary skips an engine with no segments",
+        lambda: [MockEngine("empty", []), MockEngine("vidyut", [_gam()])],
+        {},
+        {"success": True, "primary": "vidyut"},
+    ),
+    (
+        "no engines configured fails",
+        lambda: [],
+        {},
+        {"success": False, "error_in": "No engines configured"},
+    ),
+    (
+        "all engines unavailable fails",
+        lambda: [MockEngine("test", available=False)],
+        {},
+        {"success": False, "error_in": "No available engines"},
+    ),
+    (
+        "an engine exception is recorded and the next engine is used",
+        lambda: [_failing(), MockEngine("working", [_gam()])],
+        {},
+        {"success": True, "primary": "working", "error_in": "Test error"},
+    ),
+    (
+        "all engines failing reports their errors",
+        lambda: [_failing()],
+        {},
+        {"success": False, "error_in": "Test error"},
+    ),
+    (
+        "engines= filter restricts one call without mutating the shared list",
+        lambda: [MockEngine("vidyut", [_gam()]), MockEngine("local_byt5", [_gam()])],
+        {"engines": ["local_byt5"]},
+        {"ran": {"local_byt5"}, "names_after": ["vidyut", "local_byt5"]},
+    ),
+    (
+        "engines= filter with no match reports no engines",
+        lambda: [MockEngine("vidyut", [])],
+        {"engines": ["nope"]},
+        {"errors": ["No engines configured"]},
+    ),
+]
 
-        assert analyzed.surface == "test"
-        assert analyzed.lemma == "lemma"
-        assert analyzed.morphology == "noun"
-        assert analyzed.pos == "noun"
-        assert analyzed.confidence == 0.9
-        assert analyzed.meanings == ["meaning"]
-        assert analyzed.engine_votes == {"vidyut": 0.9}
-        assert analyzed.agreement_score == 1.0
 
-    def test_from_segment_copies_meanings(self) -> None:
-        """The analyzed segment must not alias the engine's own list."""
-        source = Segment(surface="test", lemma="lemma", meanings=["meaning"])
+def test_engine_list_management() -> None:
+    def check(engines, op, expected):
+        assert _mutate(EngineRunner(engines=engines), op) == expected
 
-        analyzed = AnalyzedSegment.from_segment(source, "vidyut")
-        analyzed.meanings.append("added")
+    check_cases(ENGINE_LIST_CASES, check)
 
-        assert source.meanings == ["meaning"]
+
+def test_create_default() -> None:
+    try:
+        runner = EngineRunner.create_default()
+    except ImportError:
+        pytest.skip("Default engines not available")
+    assert runner.engine_names == ["vidyut"]
+
+
+def test_analyze() -> None:
+    def check(make_engines, kwargs, expect):
+        runner = EngineRunner(engines=make_engines())
+        result = asyncio.run(runner.analyze("gacchati", **kwargs))
+        if "success" in expect:
+            assert result.success is expect["success"], result.errors
+        if "primary" in expect:
+            assert result.primary_engine == expect["primary"]
+        if "lemmas" in expect:
+            assert [s.lemma for s in result.segments] == expect["lemmas"]
+        if "confidence" in expect:
+            assert result.overall_confidence == pytest.approx(expect["confidence"])
+        if "ran" in expect:
+            assert set(result.engine_results) == expect["ran"]
+        if "votes" in expect:
+            assert result.segments[0].engine_votes == expect["votes"]
+            assert result.segments[0].agreement_score == expect["agreement"]
+        if "error_in" in expect:
+            assert any(expect["error_in"] in e for e in result.errors), result.errors
+        if "errors" in expect:
+            assert result.errors == expect["errors"]
+        if "names_after" in expect:
+            assert runner.engine_names == expect["names_after"]
+
+    check_cases(ANALYZE_CASES, check)
+
+
+def test_analyzed_segment_from_segment() -> None:
+    """from_segment records the engine vote and never aliases the engine's list."""
+    source = Segment(
+        surface="test",
+        lemma="lemma",
+        morphology="noun",
+        confidence=0.9,
+        pos="noun",
+        meanings=["meaning"],
+    )
+    analyzed = AnalyzedSegment.from_segment(source, "vidyut")
+
+    assert (analyzed.surface, analyzed.lemma, analyzed.morphology, analyzed.pos) == (
+        "test",
+        "lemma",
+        "noun",
+        "noun",
+    )
+    assert analyzed.confidence == 0.9
+    assert analyzed.meanings == ["meaning"]
+    assert analyzed.engine_votes == {"vidyut": 0.9}
+    assert analyzed.agreement_score == 1.0
+
+    analyzed.meanings.append("added")
+    assert source.meanings == ["meaning"]

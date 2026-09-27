@@ -6,8 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sanskrit_analyzer import __version__
-from sanskrit_analyzer.api.app import create_app
+from sanskrit_analyzer.api.app import _resolve_cors_origins, create_app
 from sanskrit_analyzer.config import Config
+from tests._cases import check_cases
 
 
 @pytest.fixture
@@ -39,167 +40,100 @@ def config() -> Config:
     return config
 
 
-class TestAppCreation:
-    """Tests for app factory."""
-
-    def test_create_app_default(self) -> None:
-        """Test creating app with defaults."""
-        app = create_app()
-        assert app.title == "Sanskrit Analyzer API"
-        assert app.version == __version__
-
-    def test_create_app_with_config(self, config: Config) -> None:
-        """Test creating app with custom config."""
-        app = create_app(config)
-        # Config passed to factory
-        assert app is not None
-
-    def test_create_app_with_cors(self) -> None:
-        """Test creating app with custom CORS origins."""
-        app = create_app(cors_origins=["http://localhost:3000"])
-        # CORS middleware is added
-        assert any("CORSMiddleware" in str(m) for m in app.user_middleware)
+def test_create_app_defaults() -> None:
+    app = create_app()
+    assert app.title == "Sanskrit Analyzer API"
+    assert app.version == __version__
 
 
-class TestHealthEndpoint:
-    """Tests for health check endpoints."""
+@pytest.fixture
+def client(config: Config, mock_analyzer: MagicMock) -> TestClient:
+    """Test client with a mocked analyzer (state set by hand, not by lifespan)."""
+    app = create_app(config)
+    app.state.analyzer = mock_analyzer
+    app.state.config = config
+    return TestClient(app, raise_server_exceptions=True)
 
-    @pytest.fixture
-    def client(self, config: Config, mock_analyzer: MagicMock) -> TestClient:
-        """Create test client with mocked analyzer."""
-        app = create_app(config)
-        # Manually set state instead of relying on lifespan
-        app.state.analyzer = mock_analyzer
-        app.state.config = config
-        return TestClient(app, raise_server_exceptions=True)
 
-    def test_health_check(self, client: TestClient) -> None:
-        """Test basic health check."""
-        response = client.get("/health")
+def test_health_endpoints(client: TestClient) -> None:
+    response = client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert data["version"] == __version__
+    assert isinstance(data["engines"], list)
+    assert isinstance(data["cache_enabled"], bool)
+
+    response = client.get("/health/detailed")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert "disambiguation" in data
+    assert data["engines"] == {"vidyut": True, "local_byt5": False}
+    assert isinstance(data["cache"], dict)
+    assert {"memory", "redis", "sqlite"} <= set(data["cache"])
+
+
+# (row id, path, substring the lowercased page must contain)
+DOC_PAGE_CASES = [
+    ("swagger-ui", "/docs", "swagger"),
+    ("redoc", "/redoc", "redoc"),
+]
+
+
+def test_openapi_docs(config: Config) -> None:
+    client = TestClient(create_app(config))
+
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["info"]["title"] == "Sanskrit Analyzer API"
+    assert data["info"]["version"] == __version__
+    assert "/health" in data["paths"]
+
+    def check(path, needle):
+        response = client.get(path)
         assert response.status_code == 200
+        assert needle in response.text.lower()
 
-        data = response.json()
-        assert data["status"] == "healthy"
-        assert data["version"] == __version__
-        assert isinstance(data["engines"], list)
-        assert isinstance(data["cache_enabled"], bool)
-
-    def test_detailed_health_check(self, client: TestClient) -> None:
-        """Test detailed health check."""
-        response = client.get("/health/detailed")
-        assert response.status_code == 200
-
-        data = response.json()
-        assert data["status"] == "healthy"
-        assert "engines" in data
-        assert "cache" in data
-        assert "disambiguation" in data
-
-        # Check structure
-        assert isinstance(data["engines"], dict)
-        assert data["engines"] == {"vidyut": True, "local_byt5": False}
-
-        assert isinstance(data["cache"], dict)
-        assert "memory" in data["cache"]
-        assert "redis" in data["cache"]
-        assert "sqlite" in data["cache"]
+    check_cases(DOC_PAGE_CASES, check)
 
 
-class TestOpenAPIDocs:
-    """Tests for OpenAPI documentation."""
-
-    @pytest.fixture
-    def client(self, config: Config) -> TestClient:
-        """Create test client."""
-        app = create_app(config)
-        return TestClient(app)
-
-    def test_openapi_json(self, client: TestClient) -> None:
-        """Test OpenAPI JSON endpoint."""
-        response = client.get("/openapi.json")
-        assert response.status_code == 200
-
-        data = response.json()
-        assert data["info"]["title"] == "Sanskrit Analyzer API"
-        assert data["info"]["version"] == __version__
-        assert "paths" in data
-        assert "/health" in data["paths"]
-
-    def test_docs_page(self, client: TestClient) -> None:
-        """Test Swagger docs page."""
-        response = client.get("/docs")
-        assert response.status_code == 200
-        assert "swagger" in response.text.lower()
-
-    def test_redoc_page(self, client: TestClient) -> None:
-        """Test ReDoc page."""
-        response = client.get("/redoc")
-        assert response.status_code == 200
-        assert "redoc" in response.text.lower()
+def _cors(app):
+    return next(m for m in app.user_middleware if "CORSMiddleware" in str(m))
 
 
-class TestCORSMiddleware:
-    """Tests for CORS configuration."""
+def test_cors(config: Config, mock_analyzer: MagicMock) -> None:
+    origin = "http://localhost:3000"
+    app = create_app(config, cors_origins=[origin])
+    app.state.analyzer = mock_analyzer
+    app.state.config = config
+    client = TestClient(app)
 
-    def test_cors_preflight(self) -> None:
-        """Test CORS preflight request."""
-        app = create_app(cors_origins=["http://localhost:3000"])
-        client = TestClient(app)
+    # Preflight and an actual request both carry the allow-origin header.
+    response = client.options(
+        "/health",
+        headers={"Origin": origin, "Access-Control-Request-Method": "GET"},
+    )
+    assert response.status_code == 200
+    assert "access-control-allow-origin" in response.headers
+    response = client.get("/health", headers={"Origin": origin})
+    assert response.status_code == 200
+    assert "access-control-allow-origin" in response.headers
 
-        response = client.options(
-            "/health",
-            headers={
-                "Origin": "http://localhost:3000",
-                "Access-Control-Request-Method": "GET",
-            },
-        )
-        assert response.status_code == 200
-        assert "access-control-allow-origin" in response.headers
+    # Explicit origins enable credentialed CORS; a wildcard origin must not be
+    # combined with credentials.
+    assert _cors(app).kwargs["allow_credentials"] is True
+    assert _cors(create_app(cors_origins=["*"])).kwargs["allow_credentials"] is False
 
-    def test_cors_actual_request(self, config: Config, mock_analyzer: MagicMock) -> None:
-        """Test CORS on actual request."""
-        app = create_app(config, cors_origins=["http://localhost:3000"])
-        app.state.analyzer = mock_analyzer
-        app.state.config = config
-        client = TestClient(app)
 
-        response = client.get(
-            "/health",
-            headers={"Origin": "http://localhost:3000"},
-        )
-        assert response.status_code == 200
-        assert "access-control-allow-origin" in response.headers
+def test_default_cors_origins(monkeypatch: pytest.MonkeyPatch) -> None:
+    # SANSKRIT_CORS_ORIGINS drives the default allowlist.
+    monkeypatch.setenv("SANSKRIT_CORS_ORIGINS", "https://a.example, https://b.example")
+    assert _resolve_cors_origins() == ["https://a.example", "https://b.example"]
 
-    def test_explicit_origins_allow_credentials(self) -> None:
-        """Explicit origins enable credentialed CORS."""
-        from sanskrit_analyzer.api.app import _resolve_cors_origins  # noqa: F401
-
-        app = create_app(cors_origins=["http://localhost:3000"])
-        cors = next(m for m in app.user_middleware if "CORSMiddleware" in str(m))
-        assert cors.kwargs["allow_credentials"] is True
-
-    def test_wildcard_disables_credentials(self) -> None:
-        """A wildcard origin must not be combined with credentials."""
-        app = create_app(cors_origins=["*"])
-        cors = next(m for m in app.user_middleware if "CORSMiddleware" in str(m))
-        assert cors.kwargs["allow_credentials"] is False
-
-    def test_default_origins_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """SANSKRIT_CORS_ORIGINS drives the default allowlist."""
-        from sanskrit_analyzer.api.app import _resolve_cors_origins
-
-        monkeypatch.setenv(
-            "SANSKRIT_CORS_ORIGINS", "https://a.example, https://b.example"
-        )
-        assert _resolve_cors_origins() == ["https://a.example", "https://b.example"]
-
-    def test_default_origins_localhost_fallback(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Without the env var, default origins are localhost dev hosts."""
-        from sanskrit_analyzer.api.app import _resolve_cors_origins
-
-        monkeypatch.delenv("SANSKRIT_CORS_ORIGINS", raising=False)
-        origins = _resolve_cors_origins()
-        assert "*" not in origins
-        assert all(o.startswith("http://") for o in origins)
+    # Without the env var, default origins are localhost dev hosts.
+    monkeypatch.delenv("SANSKRIT_CORS_ORIGINS")
+    origins = _resolve_cors_origins()
+    assert "*" not in origins
+    assert all(o.startswith("http://") for o in origins)

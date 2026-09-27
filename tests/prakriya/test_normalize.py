@@ -1,12 +1,35 @@
 """Input normalization: any script -> clean SLP1 word list."""
 from sanskrit_analyzer.prakriya.normalize import normalize
+from tests._cases import check_cases
+
+# (id, input, expected words, expected script or None to skip, expected slp1 or None)
+WORD_CASES = [
+    ("devanagari-to-slp1", "भवति", ["Bavati"], "devanagari", "Bavati"),
+    # "Bavati" is SLP1 (word-initial aspirate Ba), not an IAST proper noun.
+    ("leading-capital-slp1-not-lowercased", "Bavati", ["Bavati"], "slp1", None),
+    ("empty-input", "   ", [], None, ""),
+    # avagraha is sandhi evidence (rAmo 'sti) — must survive normalization
+    ("avagraha-kept", "रामो ऽस्ति", ["rAmo", "'sti"], None, None),
+    # only '.' used to be stripped, leaving "rAmaH," and '"vanam"' as words
+    ("comma-semicolon-quotes-stripped", 'रामः, गच्छति; "वनम्"',
+     ["rAmaH", "gacCati", "vanam"], None, None),
+    ("em-dash-and-bang-split", "rāmaḥ—vanam!", ["rAmaH", "vanam"], None, None),
+    # non-ASCII left by transliteration panics vidyut downstream
+    ("zwj-and-nukta-removed", "धर्म‍क्षेत्रे पितृ़णां",
+     ["Darmakzetre", "pitfRAM"], None, None),
+]
 
 
-def test_devanagari_to_slp1():
-    n = normalize("भवति")
-    assert n.script == "devanagari"
-    assert n.slp1 == "Bavati"
-    assert n.words == ["Bavati"]
+def test_normalize_words():
+    def check(text, words, script, slp1):
+        n = normalize(text)
+        assert n.words == words
+        if script is not None:
+            assert n.script == script
+        if slp1 is not None:
+            assert n.slp1 == slp1
+
+    check_cases(WORD_CASES, check)
 
 
 def test_iast_verse_with_dandas_and_verse_number():
@@ -14,33 +37,3 @@ def test_iast_verse_with_dandas_and_verse_number():
     assert n.words[0] == "Darmakzetre"
     assert "॥" not in n.slp1 and "।" not in n.slp1
     assert not any(w.strip(".|0123456789") == "" for w in n.words)
-
-
-def test_words_split_on_punctuation_keep_avagraha():
-    cases = [
-        # avagraha is sandhi evidence (rAmo 'sti) — must survive normalization
-        ("रामो ऽस्ति", ["rAmo", "'sti"]),
-        # only '.' used to be stripped, leaving "rAmaH," and '"vanam"' as words
-        ('रामः, गच्छति; "वनम्"', ["rAmaH", "gacCati", "vanam"]),
-        ("rāmaḥ—vanam!", ["rAmaH", "vanam"]),
-        # non-ASCII left by transliteration panics vidyut downstream
-        ("धर्म\u200dक्षेत्रे पितृ़णां", ["Darmakzetre", "pitfRAM"]),
-    ]
-    failures = [
-        f"{text!r}: {normalize(text).words} != {words}"
-        for text, words in cases
-        if normalize(text).words != words
-    ]
-    assert not failures, failures
-
-
-def test_leading_capital_slp1_not_lowercased():
-    # "Bavati" is SLP1 (word-initial aspirate Ba), not an IAST proper noun.
-    n = normalize("Bavati")
-    assert n.script == "slp1"
-    assert n.words == ["Bavati"]
-
-
-def test_empty_input():
-    n = normalize("   ")
-    assert n.words == [] and n.slp1 == ""

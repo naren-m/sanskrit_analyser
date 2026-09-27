@@ -1,42 +1,30 @@
 """Tests for the Sanskrit Analyzer UI styles module."""
 
-
 from sanskrit_analyzer.ui.styles import confidence_class, expand_icon
+from tests._cases import check_cases
+
+CASES = [
+    # confidence_class bands: >=0.8 high, >=0.5 medium, else low.
+    ("1.0 is high", confidence_class, 1.0, "confidence-high"),
+    ("0.95 is high", confidence_class, 0.95, "confidence-high"),
+    ("0.94 top-parse confidence is high", confidence_class, 0.94, "confidence-high"),
+    ("0.80 boundary is high", confidence_class, 0.80, "confidence-high"),
+    ("0.79 is medium", confidence_class, 0.79, "confidence-medium"),
+    ("0.65 is medium", confidence_class, 0.65, "confidence-medium"),
+    ("0.50 boundary is medium", confidence_class, 0.50, "confidence-medium"),
+    ("0.49 is low", confidence_class, 0.49, "confidence-low"),
+    ("0.30 is low", confidence_class, 0.30, "confidence-low"),
+    ("0.10 is low", confidence_class, 0.10, "confidence-low"),
+    ("0.0 is low", confidence_class, 0.0, "confidence-low"),
+    # expand_icon: expanded shows a down arrow, collapsed a right arrow.
+    ("expanded shows down arrow", expand_icon, True, "▼"),
+    ("collapsed shows right arrow", expand_icon, False, "▸"),
+]
 
 
-class TestConfidenceClass:
-    """Tests for confidence_class function."""
+def test_style_helpers() -> None:
+    def check(fn, arg, expected):
+        got = fn(arg)
+        assert got == expected, f"{fn.__name__}({arg!r}) = {got!r}, want {expected!r}"
 
-    def test_high_confidence(self) -> None:
-        """High confidence (>=80%) returns high class."""
-        assert confidence_class(0.95) == "confidence-high"
-        assert confidence_class(0.80) == "confidence-high"
-
-    def test_medium_confidence(self) -> None:
-        """Medium confidence (50-79%) returns medium class."""
-        assert confidence_class(0.79) == "confidence-medium"
-        assert confidence_class(0.50) == "confidence-medium"
-
-    def test_low_confidence(self) -> None:
-        """Low confidence (<50%) returns low class."""
-        assert confidence_class(0.49) == "confidence-low"
-        assert confidence_class(0.10) == "confidence-low"
-        assert confidence_class(0.0) == "confidence-low"
-
-    def test_edge_cases(self) -> None:
-        """Edge cases at boundaries."""
-        assert confidence_class(1.0) == "confidence-high"
-        assert confidence_class(0.8) == "confidence-high"
-        assert confidence_class(0.5) == "confidence-medium"
-
-
-class TestExpandIcon:
-    """Tests for expand_icon function."""
-
-    def test_expanded_returns_down_arrow(self) -> None:
-        """Expanded state shows down arrow."""
-        assert expand_icon(True) == "▼"
-
-    def test_collapsed_returns_right_arrow(self) -> None:
-        """Collapsed state shows right arrow."""
-        assert expand_icon(False) == "▸"
+    check_cases(CASES, check)

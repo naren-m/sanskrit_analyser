@@ -10,6 +10,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 from sanskrit_analyzer.prakriya.analyzer import analyze_pada
+from tests._cases import check_cases
 
 
 def test_bhavati_verified_with_trace():
@@ -27,14 +28,23 @@ def test_bhavati_verified_with_trace():
     assert a.prakriya[-1].form.replace(" + ", "") == "Bavati"
 
 
-def test_final_visarga_form_resolves_via_desandhi():
+# (id, surface, lemma one reading must carry, or None: no readings at all)
+LEMMA_CASES = [
     # kosha keys pausal -H forms as -s; desandhi_candidates bridges that.
-    analyses = analyze_pada("rAmaH")
-    assert any(a.lemma == "rAma" for a in analyses)
+    ("final-visarga-resolves-via-desandhi", "rAmaH", "rAma"),
+    ("gibberish-returns-empty-never-fabricates", "xyzzyq", None),
+]
 
 
-def test_gibberish_returns_empty_never_fabricates():
-    assert analyze_pada("xyzzyq") == []
+def test_pada_lemma():
+    def check(word, lemma):
+        analyses = analyze_pada(word)
+        if lemma is None:
+            assert analyses == []
+        else:
+            assert any(a.lemma == lemma for a in analyses)
+
+    check_cases(LEMMA_CASES, check)
 
 
 def test_dedup_and_limit():

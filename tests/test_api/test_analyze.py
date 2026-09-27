@@ -15,6 +15,7 @@ from sanskrit_analyzer.models.tree import (
     ParseTree,
     SandhiGroup,
 )
+from tests._cases import check_cases
 
 
 @pytest.fixture
@@ -92,170 +93,76 @@ def client(config: Config, mock_analyzer: MagicMock) -> TestClient:
     return TestClient(app)
 
 
-class TestAnalyzeEndpoint:
-    """Tests for POST /api/v1/analyze."""
-
-    def test_analyze_basic(self, client: TestClient) -> None:
-        """Test basic analysis."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "रामः गच्छति"},
-        )
-        assert response.status_code == 200
-
-        data = response.json()
-        assert data["sentence_id"] == "test-123"
-        assert data["original_text"] == "रामः गच्छति"
-        assert data["normalized_slp1"] == "rAmaH gacCati"
-        assert len(data["parse_forest"]) == 1
-
-    def test_analyze_with_mode(self, client: TestClient, mock_analyzer: MagicMock) -> None:
-        """Test analysis with specific mode."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "test", "mode": "educational"},
-        )
-        assert response.status_code == 200
-
-        # Check mode was passed
-        call_kwargs = mock_analyzer.analyze.call_args[1]
-        assert str(call_kwargs["mode"].value) == "educational"
-
-    def test_analyze_with_all_parses(self, client: TestClient, mock_analyzer: MagicMock) -> None:
-        """Test analysis with all parses."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "test", "return_all_parses": True},
-        )
-        assert response.status_code == 200
-
-        call_kwargs = mock_analyzer.analyze.call_args[1]
-        assert call_kwargs["return_all_parses"] is True
-
-    def test_analyze_invalid_mode(self, client: TestClient) -> None:
-        """Test analysis with invalid mode."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "test", "mode": "invalid"},
-        )
-        assert response.status_code == 400
-        assert "Invalid mode" in response.json()["detail"]
-
-    def test_analyze_empty_text(self, client: TestClient) -> None:
-        """Test analysis with empty text."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": ""},
-        )
-        assert response.status_code == 422  # Validation error
-
-    def test_analyze_with_context(self, client: TestClient, mock_analyzer: MagicMock) -> None:
-        """Test analysis with context."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "test", "context": "From Ramayana"},
-        )
-        assert response.status_code == 200
-
-        call_kwargs = mock_analyzer.analyze.call_args[1]
-        assert call_kwargs["context"] == "From Ramayana"
-
-    def test_analyze_with_engines(self, client: TestClient, mock_analyzer: MagicMock) -> None:
-        """Test analysis with specific engines."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "test", "engines": ["vidyut"]},
-        )
-        assert response.status_code == 200
-
-        call_kwargs = mock_analyzer.analyze.call_args[1]
-        assert call_kwargs["engines"] == ["vidyut"]
-
-    def test_analyze_unknown_engine(self, client: TestClient) -> None:
-        """Test analysis with an unknown engine name returns 400."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "test", "engines": ["bogus"]},
-        )
-        assert response.status_code == 400
-        detail = response.json()["detail"]
-        assert "Unknown engine" in detail
-        assert "bogus" in detail
-
-    def test_analyze_engine_failure(
-        self, client: TestClient, mock_analyzer: MagicMock
-    ) -> None:
-        """Test engine failure on valid input maps to a structured 500."""
-        mock_analyzer.analyze = AsyncMock(side_effect=RuntimeError("engine exploded"))
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "test"},
-        )
-        assert response.status_code == 500
-        assert response.json()["detail"] == "Analysis failed"  # no exception text leaked
-
-    def test_analyze_bypass_cache(self, client: TestClient, mock_analyzer: MagicMock) -> None:
-        """Test analysis bypassing cache."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "test", "bypass_cache": True},
-        )
-        assert response.status_code == 200
-
-        call_kwargs = mock_analyzer.analyze.call_args[1]
-        assert call_kwargs["bypass_cache"] is True
+def _post(client: TestClient, **body):
+    return client.post("/api/v1/analyze", json={"text": "test", **body})
 
 
-class TestResponseStructure:
-    """Tests for response structure."""
+def test_analyze_returns_tree(client: TestClient) -> None:
+    response = client.post("/api/v1/analyze", json={"text": "रामः गच्छति"})
+    assert response.status_code == 200
 
-    def test_scripts_in_response(self, client: TestClient) -> None:
-        """Test scripts are properly formatted."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "test"},
-        )
-        assert response.status_code == 200
+    data = response.json()
+    assert data["sentence_id"] == "test-123"
+    assert data["original_text"] == "रामः गच्छति"
+    assert data["normalized_slp1"] == "rAmaH gacCati"
+    assert len(data["parse_forest"]) == 1
 
-        scripts = response.json()["scripts"]
-        assert "devanagari" in scripts
-        assert "iast" in scripts
-        assert "slp1" in scripts
+    assert {"devanagari", "iast", "slp1"} <= set(data["scripts"])
+    assert {"overall", "engine_agreement"} <= set(data["confidence"])
+    parse = data["parse_forest"][0]
+    assert {"parse_id", "confidence", "sandhi_groups"} <= set(parse)
+    group = parse["sandhi_groups"][0]
+    assert {"group_id", "surface_form", "base_words"} <= set(group)
+    assert {"word_id", "lemma", "confidence"} <= set(group["base_words"][0])
 
-    def test_confidence_in_response(self, client: TestClient) -> None:
-        """Test confidence metrics are included."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "test"},
-        )
-        assert response.status_code == 200
 
-        confidence = response.json()["confidence"]
-        assert "overall" in confidence
-        assert "engine_agreement" in confidence
+# (row id, request fields, analyzer kwarg, expected kwarg value); the route
+# translates request JSON into Analyzer.analyze kwargs (mode str -> enum).
+FORWARD_CASES = [
+    ("mode-string-becomes-enum", {"mode": "educational"}, "mode", "educational"),
+    ("return-all-parses", {"return_all_parses": True}, "return_all_parses", True),
+    ("context", {"context": "From Ramayana"}, "context", "From Ramayana"),
+    ("engines", {"engines": ["vidyut"]}, "engines", ["vidyut"]),
+    ("bypass-cache", {"bypass_cache": True}, "bypass_cache", True),
+]
 
-    def test_parse_forest_structure(self, client: TestClient) -> None:
-        """Test parse forest structure."""
-        response = client.post(
-            "/api/v1/analyze",
-            json={"text": "test"},
-        )
-        assert response.status_code == 200
 
-        forest = response.json()["parse_forest"]
-        assert len(forest) > 0
+def test_request_fields_reach_analyzer(
+    client: TestClient, mock_analyzer: MagicMock
+) -> None:
+    def check(body, kwarg, expected):
+        assert _post(client, **body).status_code == 200
+        got = mock_analyzer.analyze.call_args[1][kwarg]
+        if kwarg == "mode":
+            got = str(got.value)
+        # type check keeps the original `is True` strictness for bool flags
+        assert got == expected and type(got) is type(expected), got
 
-        parse = forest[0]
-        assert "parse_id" in parse
-        assert "confidence" in parse
-        assert "sandhi_groups" in parse
+    check_cases(FORWARD_CASES, check)
 
-        group = parse["sandhi_groups"][0]
-        assert "group_id" in group
-        assert "surface_form" in group
-        assert "base_words" in group
 
-        word = group["base_words"][0]
-        assert "word_id" in word
-        assert "lemma" in word
-        assert "confidence" in word
+# (row id, request body, status, substrings the detail must contain)
+REJECT_CASES = [
+    ("invalid-mode-400", {"text": "test", "mode": "invalid"}, 400, ["Invalid mode"]),
+    ("empty-text-422-validation", {"text": ""}, 422, []),
+    ("unknown-engine-400-names-it", {"text": "test", "engines": ["bogus"]}, 400,
+     ["Unknown engine", "bogus"]),
+]
+
+
+def test_bad_requests_rejected(client: TestClient) -> None:
+    def check(body, status, needles):
+        response = client.post("/api/v1/analyze", json=body)
+        assert response.status_code == status
+        for needle in needles:
+            assert needle in response.json()["detail"]
+
+    check_cases(REJECT_CASES, check)
+
+
+def test_analyze_engine_failure(client: TestClient, mock_analyzer: MagicMock) -> None:
+    """Engine failure on valid input maps to a structured 500."""
+    mock_analyzer.analyze = AsyncMock(side_effect=RuntimeError("engine exploded"))
+    response = _post(client)
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Analysis failed"  # no exception text leaked
