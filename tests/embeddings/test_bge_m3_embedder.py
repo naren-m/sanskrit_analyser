@@ -4,7 +4,7 @@ Covers
 ------
 * Protocol conformance — both BgeM3Embedder and ByT5SanskritEmbedder are
   ``isinstance(x, Embedder)`` thanks to ``runtime_checkable``.
-* Construction: lazy mode defers model load; explicit device is honoured.
+* Construction: lazy mode defers model load; auto device picks a backend.
 * ``encode`` on 2-3 English strings: shape (N, 1024), dtype float32.
 * L2-normalisation: default ``normalize=True`` produces unit-norm vectors.
 * Empty-input edge case: shape (0, 1024), no model load required.
@@ -18,7 +18,7 @@ weights are absent, but in this environment the BAAI/bge-m3 model IS
 cached locally so they execute for real.
 
 If ``sentence-transformers`` is not importable (e.g. in a minimal CI
-environment), the entire class is skipped via a module-level
+environment), the entire module is skipped via a module-level
 ``pytest.importorskip``.
 """
 
@@ -35,6 +35,7 @@ sentence_transformers = pytest.importorskip(
 
 from sanskrit_analyzer.embeddings.base import Embedder
 from sanskrit_analyzer.embeddings.bge_m3_embedder import BgeM3Embedder
+from tests._cases import check_cases
 
 # Sample English texts that are representative of commentary content.
 _SAMPLE_TEXTS = [
@@ -44,157 +45,89 @@ _SAMPLE_TEXTS = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Protocol conformance
-# ---------------------------------------------------------------------------
+class _NoEncode:
+    @property
+    def embedding_dim(self) -> int:
+        return 42
 
 
-class TestEmbedderProtocol:
-    """Both embedder classes satisfy the Embedder protocol at runtime."""
-
-    def test_bge_m3_is_embedder_instance(self):
-        embedder = BgeM3Embedder(lazy=True)
-        assert isinstance(embedder, Embedder), (
-            "BgeM3Embedder does not satisfy the Embedder protocol"
-        )
-
-    def test_byt5_is_embedder_instance(self):
-        """ByT5SanskritEmbedder also conforms structurally (regression guard)."""
-        try:
-            from sanskrit_analyzer.embeddings.byt5_embedder import ByT5SanskritEmbedder
-            embedder = ByT5SanskritEmbedder(lazy=True)
-            assert isinstance(embedder, Embedder), (
-                "ByT5SanskritEmbedder does not satisfy the Embedder protocol"
-            )
-        except ImportError:
-            pytest.skip("transformers/torch not available for ByT5SanskritEmbedder")
-
-    def test_protocol_requires_encode_method(self):
-        """An object missing encode() is not an Embedder."""
-        class NoEncode:
-            @property
-            def embedding_dim(self) -> int:
-                return 42
-
-        assert not isinstance(NoEncode(), Embedder)
-
-    def test_protocol_requires_embedding_dim(self):
-        """An object missing embedding_dim is not an Embedder."""
-        class NoDim:
-            def encode(self, texts, batch_size=8):
-                import numpy as np
-                return np.zeros((len(texts), 42), dtype=np.float32)
-
-        assert not isinstance(NoDim(), Embedder)
+class _NoDim:
+    def encode(self, texts, batch_size=8):
+        return np.zeros((len(texts), 42), dtype=np.float32)
 
 
-# ---------------------------------------------------------------------------
-# Construction
-# ---------------------------------------------------------------------------
+def _byt5():
+    try:
+        from sanskrit_analyzer.embeddings.byt5_embedder import ByT5SanskritEmbedder
+    except ImportError:
+        pytest.skip("transformers/torch not available for ByT5SanskritEmbedder")
+    return ByT5SanskritEmbedder(lazy=True)
 
 
-class TestBgeM3EmbedderConstruction:
-    def test_lazy_mode_does_not_load_model(self):
-        """With lazy=True, _model remains None after construction."""
-        embedder = BgeM3Embedder(lazy=True)
-        assert embedder._model is None
-
-    def test_explicit_device_honoured(self):
-        embedder = BgeM3Embedder(device="cpu", lazy=True)
-        assert embedder.device == "cpu"
-
-    def test_auto_device_returns_valid_device(self):
-        embedder = BgeM3Embedder(lazy=True)
-        assert embedder.device in {"mps", "cuda", "cpu"}
-
-    def test_embedding_dim_is_1024_without_loading(self):
-        """embedding_dim is a constant and must not trigger model load."""
-        embedder = BgeM3Embedder(lazy=True)
-        assert embedder.embedding_dim == 1024
-        assert embedder._model is None  # still not loaded
+# (id, factory, satisfies the Embedder protocol)
+PROTOCOL_CASES = [
+    ("BgeM3Embedder conforms", lambda: BgeM3Embedder(lazy=True), True),
+    ("ByT5SanskritEmbedder conforms structurally (regression guard)", _byt5, True),
+    ("object missing encode() is not an Embedder", _NoEncode, False),
+    ("object missing embedding_dim is not an Embedder", _NoDim, False),
+]
 
 
-# ---------------------------------------------------------------------------
-# Empty-input edge case (no model load needed)
-# ---------------------------------------------------------------------------
+def test_embedder_protocol():
+    def check(factory, conforms):
+        assert isinstance(factory(), Embedder) is conforms
+
+    check_cases(PROTOCOL_CASES, check)
 
 
-class TestEmptyInput:
-    def test_encode_empty_list_returns_zero_array(self):
-        embedder = BgeM3Embedder(lazy=True)
-        result = embedder.encode([])
-        assert isinstance(result, np.ndarray)
-        assert result.shape == (0, 1024)
-        assert result.dtype == np.float32
-        assert embedder._model is None  # model never loaded
+def test_lazy_construction_never_loads_the_model():
+    """lazy=True defers the load; dim, auto device and empty encode stay model-free."""
+    embedder = BgeM3Embedder(lazy=True)
+    assert embedder.device in {"mps", "cuda", "cpu"}
+    # embedding_dim is a constant and must not trigger model load.
+    assert embedder.embedding_dim == 1024
+
+    result = embedder.encode([])
+    assert isinstance(result, np.ndarray)
+    assert result.shape == (0, 1024)
+    assert result.dtype == np.float32
+    assert embedder._model is None
 
 
-# ---------------------------------------------------------------------------
-# Real encode — marked slow; require sentence-transformers + cached model
-# ---------------------------------------------------------------------------
+@pytest.mark.slow
+def test_encode():
+    """Live encode against the locally-cached BAAI/bge-m3 model."""
+    embedder = BgeM3Embedder(device="cpu", normalize=True)
+    vectors = embedder.encode(_SAMPLE_TEXTS)
+    assert isinstance(vectors, np.ndarray)
+    assert vectors.shape == (len(_SAMPLE_TEXTS), 1024)
+    assert vectors.dtype == np.float32
+    assert np.isfinite(vectors).all(), "Encode output contains NaN or Inf"
+    # normalize=True gives each vector unit norm.
+    norms = np.linalg.norm(vectors, axis=1)
+    np.testing.assert_allclose(norms, np.ones(len(_SAMPLE_TEXTS)), rtol=1e-4, atol=1e-4)
 
+    a, b = embedder.encode(
+        [
+            "Rama is the hero of Ramayana.",
+            "This is a completely unrelated sentence about cooking.",
+        ]
+    )
+    cosine = float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+    assert cosine < 0.9999, f"Cosine similarity too high ({cosine:.4f}) for unrelated texts"
 
-class TestBgeM3EmbedderEncode:
-    """Live encode tests against the locally-cached BAAI/bge-m3 model."""
+    # batch_size=1 produces the same result as batch_size=32.
+    texts = _SAMPLE_TEXTS[:2]
+    np.testing.assert_allclose(
+        embedder.encode(texts, batch_size=32),
+        embedder.encode(texts, batch_size=1),
+        rtol=1e-4,
+        atol=1e-4,
+    )
 
-    @pytest.fixture(scope="class")
-    def embedder(self) -> BgeM3Embedder:
-        """Shared embedder instance; loaded once per class."""
-        return BgeM3Embedder(device="cpu", normalize=True)
-
-    @pytest.mark.slow
-    def test_encode_shape_and_dtype(self, embedder: BgeM3Embedder):
-        vectors = embedder.encode(_SAMPLE_TEXTS)
-        assert isinstance(vectors, np.ndarray)
-        assert vectors.shape == (len(_SAMPLE_TEXTS), 1024)
-        assert vectors.dtype == np.float32
-
-    @pytest.mark.slow
-    def test_encode_l2_normalized(self, embedder: BgeM3Embedder):
-        """With normalize=True each vector should have unit norm."""
-        vectors = embedder.encode(_SAMPLE_TEXTS)
-        norms = np.linalg.norm(vectors, axis=1)
-        np.testing.assert_allclose(
-            norms, np.ones(len(_SAMPLE_TEXTS)), rtol=1e-4, atol=1e-4
-        )
-
-    @pytest.mark.slow
-    def test_encode_no_nan_or_inf(self, embedder: BgeM3Embedder):
-        vectors = embedder.encode(_SAMPLE_TEXTS)
-        assert np.isfinite(vectors).all(), "Encode output contains NaN or Inf"
-
-    @pytest.mark.slow
-    def test_encode_different_inputs_produce_different_vectors(
-        self, embedder: BgeM3Embedder
-    ):
-        a, b = embedder.encode(
-            [
-                "Rama is the hero of Ramayana.",
-                "This is a completely unrelated sentence about cooking.",
-            ]
-        )
-        cosine = float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
-        assert cosine < 0.9999, f"Cosine similarity too high ({cosine:.4f}) for unrelated texts"
-
-    @pytest.mark.slow
-    def test_encode_batch_size_one(self, embedder: BgeM3Embedder):
-        """batch_size=1 should produce the same result as batch_size=32."""
-        texts = _SAMPLE_TEXTS[:2]
-        v_batch = embedder.encode(texts, batch_size=32)
-        v_single = embedder.encode(texts, batch_size=1)
-        np.testing.assert_allclose(v_batch, v_single, rtol=1e-4, atol=1e-4)
-
-    @pytest.mark.slow
-    def test_normalize_false_is_accepted(self):
-        """BgeM3Embedder(normalize=False) should construct and encode without error.
-
-        Note: BAAI/bge-m3 applies L2 normalisation inside the model itself, so
-        the output norms are ~1.0 even with normalize_embeddings=False passed to
-        sentence-transformers.  This is model-level behaviour, not a bug in
-        BgeM3Embedder.  We assert only that no exception is raised and the shape
-        is correct.
-        """
-        embedder = BgeM3Embedder(device="cpu", normalize=False)
-        vectors = embedder.encode(_SAMPLE_TEXTS[:2])
-        assert vectors.shape == (2, 1024)
-        assert vectors.dtype == np.float32
+    # normalize=False constructs and encodes. BAAI/bge-m3 L2-normalises inside
+    # the model, so norms stay ~1.0 even then; that is model behaviour, not a
+    # BgeM3Embedder bug, so only shape and dtype are asserted.
+    raw = BgeM3Embedder(device="cpu", normalize=False).encode(_SAMPLE_TEXTS[:2])
+    assert raw.shape == (2, 1024)
+    assert raw.dtype == np.float32

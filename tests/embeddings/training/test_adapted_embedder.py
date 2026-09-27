@@ -28,38 +28,21 @@ class _StubEmbedder:
         return rng.standard_normal((len(texts), self._dim)).astype(np.float32)
 
 
-class TestAdaptedEmbedder:
-    def test_encode_returns_projected_dimension(self):
-        embedder = _StubEmbedder(dim=16)
-        head = ProjectionHead(input_dim=16, hidden_dim=8, output_dim=4)
-        adapted = AdaptedEmbedder(embedder, head)
+def test_encode_projects_through_the_head():
+    head = ProjectionHead(input_dim=16, hidden_dim=8, output_dim=4, normalize=True)
+    adapted = AdaptedEmbedder(_StubEmbedder(dim=16), head)
+    assert adapted.embedding_dim == 4
 
-        out = adapted.encode(["a", "b", "c"])
-        assert isinstance(out, np.ndarray)
-        assert out.shape == (3, 4)
-        assert adapted.embedding_dim == 4
+    out = adapted.encode(["a", "b", "c"])
+    assert isinstance(out, np.ndarray)
+    assert out.shape == (3, 4)
+    # The head normalizes, so the adapted output is unit-norm.
+    np.testing.assert_allclose(np.linalg.norm(out, axis=1), np.ones(3), rtol=1e-4, atol=1e-4)
 
-    def test_empty_input_returns_empty_array(self):
-        embedder = _StubEmbedder(dim=16)
-        head = ProjectionHead(input_dim=16, hidden_dim=8, output_dim=4)
-        adapted = AdaptedEmbedder(embedder, head)
+    assert adapted.encode([]).shape == (0, 4)
 
-        out = adapted.encode([])
-        assert out.shape == (0, 4)
 
-    def test_output_is_l2_normalized_when_head_normalizes(self):
-        embedder = _StubEmbedder(dim=16)
-        head = ProjectionHead(
-            input_dim=16, hidden_dim=8, output_dim=4, normalize=True
-        )
-        adapted = AdaptedEmbedder(embedder, head)
-
-        out = adapted.encode(["x", "y"])
-        norms = np.linalg.norm(out, axis=1)
-        np.testing.assert_allclose(norms, np.ones(2), rtol=1e-4, atol=1e-4)
-
-    def test_dim_mismatch_raises(self):
-        embedder = _StubEmbedder(dim=16)
-        head = ProjectionHead(input_dim=8, hidden_dim=8, output_dim=4)
-        with pytest.raises(ValueError, match="does not match"):
-            AdaptedEmbedder(embedder, head)
+def test_dim_mismatch_raises():
+    head = ProjectionHead(input_dim=8, hidden_dim=8, output_dim=4)
+    with pytest.raises(ValueError, match="does not match"):
+        AdaptedEmbedder(_StubEmbedder(dim=16), head)

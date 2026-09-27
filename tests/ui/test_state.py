@@ -1,241 +1,230 @@
-"""Tests for the Sanskrit Analyzer UI state management."""
+"""Tests for the Sanskrit Analyzer UI session state management.
 
+Each row starts from a fresh session state, applies ``setup`` attributes,
+runs ``action`` against the state module, and checks the return value and the
+resulting state. ``history`` is compared as ``(text, mode)`` pairs because
+timestamps are wall-clock.
+"""
+
+from typing import Any
 from unittest.mock import MagicMock
 
-import pytest
-
-
-class TestStateManagement:
-    """Tests for session state management functions."""
-
-    @pytest.fixture(autouse=True)
-    def setup_mock(self, mock_streamlit: MagicMock) -> None:
-        """Use shared mock_streamlit fixture."""
-        self.mock_st = mock_streamlit
-
-    def test_init_state_creates_defaults(self, mock_streamlit: MagicMock) -> None:
-        """init_state creates all required state keys."""
-        from sanskrit_analyzer.ui.state import init_state
-
-        # Simulate missing keys
-        delattr(mock_streamlit.session_state, "history")
-
-        init_state()
-
-        assert mock_streamlit.session_state.history == []
-
-    def test_get_history_returns_list(self, mock_streamlit: MagicMock) -> None:
-        """get_history returns the history list."""
-        from sanskrit_analyzer.ui.state import get_history
-
-        mock_streamlit.session_state.history = [{"text": "test", "mode": "quick"}]
-
-        history = get_history()
-
-        assert len(history) == 1
-        assert history[0]["text"] == "test"
-
-    def test_add_to_history_adds_entry(self, mock_streamlit: MagicMock) -> None:
-        """add_to_history adds new entry to front."""
-        from sanskrit_analyzer.ui.state import add_to_history
-
-        mock_streamlit.session_state.history = []
-
-        add_to_history("रामः गच्छति", "educational")
-
-        assert len(mock_streamlit.session_state.history) == 1
-        assert mock_streamlit.session_state.history[0]["text"] == "रामः गच्छति"
-        assert mock_streamlit.session_state.history[0]["mode"] == "educational"
-
-    def test_add_to_history_removes_duplicates(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """add_to_history removes duplicate entries."""
-        from sanskrit_analyzer.ui.state import add_to_history
-
-        mock_streamlit.session_state.history = [
-            {"text": "test", "mode": "quick", "timestamp": "old"}
-        ]
-
-        add_to_history("test", "educational")
-
-        assert len(mock_streamlit.session_state.history) == 1
-        assert mock_streamlit.session_state.history[0]["mode"] == "educational"
-
-    def test_add_to_history_enforces_max_size(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """add_to_history keeps only MAX_HISTORY_SIZE entries."""
-        from sanskrit_analyzer.ui.state import MAX_HISTORY_SIZE, add_to_history
-
-        mock_streamlit.session_state.history = [
-            {"text": f"entry{i}", "mode": "quick", "timestamp": "t"}
-            for i in range(MAX_HISTORY_SIZE)
-        ]
-
-        add_to_history("new entry", "educational")
-
-        assert len(mock_streamlit.session_state.history) == MAX_HISTORY_SIZE
-        assert mock_streamlit.session_state.history[0]["text"] == "new entry"
-
-    def test_clear_history_empties_list(self, mock_streamlit: MagicMock) -> None:
-        """clear_history removes all entries."""
-        from sanskrit_analyzer.ui.state import clear_history
-
-        mock_streamlit.session_state.history = [{"text": "test"}]
-
-        clear_history()
-
-        assert mock_streamlit.session_state.history == []
-
-    def test_set_analysis_result_stores_data(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """set_analysis_result stores the result."""
-        from sanskrit_analyzer.ui.state import set_analysis_result
-
-        set_analysis_result({"parses": []})
-
-        assert mock_streamlit.session_state.analysis_result == {"parses": []}
-
-    def test_set_analysis_result_clears_with_none(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """set_analysis_result can clear the result."""
-        from sanskrit_analyzer.ui.state import set_analysis_result
-
-        mock_streamlit.session_state.analysis_result = {"old": "data"}
-
-        set_analysis_result(None)
-
-        assert mock_streamlit.session_state.analysis_result is None
-
-    def test_get_analysis_result_returns_stored(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """get_analysis_result returns stored result."""
-        from sanskrit_analyzer.ui.state import get_analysis_result
-
-        mock_streamlit.session_state.analysis_result = {"parses": []}
-
-        result = get_analysis_result()
-
-        assert result == {"parses": []}
-
-    def test_set_and_get_selected_parse_id(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """Selected parse id round-trips through session state."""
-        from sanskrit_analyzer.ui.state import (
-            get_selected_parse_id,
-            set_selected_parse_id,
-        )
-
-        assert get_selected_parse_id() is None
-
-        set_selected_parse_id("parse_2")
-
-        assert get_selected_parse_id() == "parse_2"
-
-    def test_set_analysis_result_resets_selection(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """Storing a new result clears any previous parse selection."""
-        from sanskrit_analyzer.ui.state import (
-            get_selected_parse_id,
-            set_analysis_result,
-            set_selected_parse_id,
-        )
-
-        set_selected_parse_id("parse_2")
-        set_analysis_result({"parses": []})
-
-        assert get_selected_parse_id() is None
-
-    def test_toggle_parse_expanded_adds_id(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """toggle_parse_expanded adds ID when not present."""
-        from sanskrit_analyzer.ui.state import toggle_parse_expanded
-
-        mock_streamlit.session_state.expanded_parses = set()
-
-        toggle_parse_expanded("parse_1")
-
-        assert "parse_1" in mock_streamlit.session_state.expanded_parses
-
-    def test_toggle_parse_expanded_removes_id(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """toggle_parse_expanded removes ID when present."""
-        from sanskrit_analyzer.ui.state import toggle_parse_expanded
-
-        mock_streamlit.session_state.expanded_parses = {"parse_1"}
-
-        toggle_parse_expanded("parse_1")
-
-        assert "parse_1" not in mock_streamlit.session_state.expanded_parses
-
-    def test_is_parse_expanded_returns_true(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """is_parse_expanded returns True when expanded."""
-        from sanskrit_analyzer.ui.state import is_parse_expanded
-
-        mock_streamlit.session_state.expanded_parses = {"parse_1"}
-
-        assert is_parse_expanded("parse_1") is True
-
-    def test_is_parse_expanded_returns_false(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """is_parse_expanded returns False when not expanded."""
-        from sanskrit_analyzer.ui.state import is_parse_expanded
-
-        mock_streamlit.session_state.expanded_parses = set()
-
-        assert is_parse_expanded("parse_1") is False
-
-    def test_toggle_word_expanded_adds_id(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """toggle_word_expanded adds ID when not present."""
-        from sanskrit_analyzer.ui.state import toggle_word_expanded
-
-        mock_streamlit.session_state.expanded_words = set()
-
-        toggle_word_expanded("word_1")
-
-        assert "word_1" in mock_streamlit.session_state.expanded_words
-
-    def test_toggle_word_expanded_removes_id(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """toggle_word_expanded removes ID when present."""
-        from sanskrit_analyzer.ui.state import toggle_word_expanded
-
-        mock_streamlit.session_state.expanded_words = {"word_1"}
-
-        toggle_word_expanded("word_1")
-
-        assert "word_1" not in mock_streamlit.session_state.expanded_words
-
-    def test_is_word_expanded_returns_true(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """is_word_expanded returns True when expanded."""
-        from sanskrit_analyzer.ui.state import is_word_expanded
-
-        mock_streamlit.session_state.expanded_words = {"word_1"}
-
-        assert is_word_expanded("word_1") is True
-
-    def test_is_word_expanded_returns_false(
-        self, mock_streamlit: MagicMock
-    ) -> None:
-        """is_word_expanded returns False when not expanded."""
-        from sanskrit_analyzer.ui.state import is_word_expanded
-
-        mock_streamlit.session_state.expanded_words = set()
-
-        assert is_word_expanded("word_1") is False
+from sanskrit_analyzer.ui import state as S  # noqa: N812
+from tests._cases import check_cases
+from tests.ui.conftest import MockSessionState
+
+_UNSET = object()
+DELETE = object()
+
+
+def _history(n: int) -> list[dict[str, str]]:
+    return [{"text": f"entry{i}", "mode": "quick", "timestamp": "t"} for i in range(n)]
+
+
+def _toggle_twice(toggle, is_expanded, item_id):
+    toggle(item_id)
+    first = is_expanded(item_id)
+    toggle(item_id)
+    return (first, is_expanded(item_id))
+
+
+HISTORY_CASES = [
+    (
+        "init_state restores a missing history key",
+        {"history": DELETE},
+        S.init_state,
+        _UNSET,
+        {"history": []},
+    ),
+    (
+        "get_history returns the stored list",
+        {"history": [{"text": "test", "mode": "quick"}]},
+        S.get_history,
+        [{"text": "test", "mode": "quick"}],
+        {},
+    ),
+    (
+        "add_to_history puts text and mode on the list",
+        {},
+        lambda: S.add_to_history("रामः गच्छति", "educational"),
+        _UNSET,
+        {"history": [("रामः गच्छति", "educational")]},
+    ),
+    (
+        "add_to_history replaces a duplicate text with the new mode",
+        {"history": [{"text": "test", "mode": "quick", "timestamp": "old"}]},
+        lambda: S.add_to_history("test", "educational"),
+        _UNSET,
+        {"history": [("test", "educational")]},
+    ),
+    (
+        "add_to_history drops the oldest entry past MAX_HISTORY_SIZE",
+        {"history": _history(S.MAX_HISTORY_SIZE)},
+        lambda: S.add_to_history("new entry", "educational"),
+        _UNSET,
+        {
+            "history": [("new entry", "educational")]
+            + [(f"entry{i}", "quick") for i in range(S.MAX_HISTORY_SIZE - 1)]
+        },
+    ),
+    (
+        "clear_history empties the list",
+        {"history": [{"text": "test"}]},
+        S.clear_history,
+        _UNSET,
+        {"history": []},
+    ),
+]
+
+RESULT_CASES = [
+    (
+        "set_analysis_result stores the result",
+        {},
+        lambda: S.set_analysis_result({"parses": []}),
+        _UNSET,
+        {"analysis_result": {"parses": []}},
+    ),
+    (
+        "set_analysis_result(None) clears the result",
+        {"analysis_result": {"old": "data"}},
+        lambda: S.set_analysis_result(None),
+        _UNSET,
+        {"analysis_result": None},
+    ),
+    (
+        "get_analysis_result returns the stored result",
+        {"analysis_result": {"parses": []}},
+        S.get_analysis_result,
+        {"parses": []},
+        {},
+    ),
+    (
+        "selected parse id starts None and round-trips",
+        {},
+        lambda: (
+            S.get_selected_parse_id(),
+            S.set_selected_parse_id("parse_2"),
+            S.get_selected_parse_id(),
+        )[::2],
+        (None, "parse_2"),
+        {},
+    ),
+    (
+        "a fresh analysis result clears the previous parse selection",
+        {},
+        lambda: (
+            S.set_selected_parse_id("parse_2"),
+            S.set_analysis_result({"parses": []}),
+            S.get_selected_parse_id(),
+        )[2],
+        None,
+        {},
+    ),
+]
+
+EXPANSION_CASES = [
+    (
+        "toggle_parse_expanded adds a missing id",
+        {"expanded_parses": set()},
+        lambda: S.toggle_parse_expanded("parse_1"),
+        _UNSET,
+        {"expanded_parses": {"parse_1"}},
+    ),
+    (
+        "toggle_parse_expanded removes a present id",
+        {"expanded_parses": {"parse_1"}},
+        lambda: S.toggle_parse_expanded("parse_1"),
+        _UNSET,
+        {"expanded_parses": set()},
+    ),
+    (
+        "is_parse_expanded true when present",
+        {"expanded_parses": {"parse_1"}},
+        lambda: S.is_parse_expanded("parse_1"),
+        True,
+        {},
+    ),
+    (
+        "is_parse_expanded false when absent",
+        {"expanded_parses": set()},
+        lambda: S.is_parse_expanded("parse_1"),
+        False,
+        {},
+    ),
+    (
+        "toggle_word_expanded adds a missing id",
+        {"expanded_words": set()},
+        lambda: S.toggle_word_expanded("word_1"),
+        _UNSET,
+        {"expanded_words": {"word_1"}},
+    ),
+    (
+        "toggle_word_expanded removes a present id",
+        {"expanded_words": {"word_1"}},
+        lambda: S.toggle_word_expanded("word_1"),
+        _UNSET,
+        {"expanded_words": set()},
+    ),
+    (
+        "is_word_expanded true when present",
+        {"expanded_words": {"word_1"}},
+        lambda: S.is_word_expanded("word_1"),
+        True,
+        {},
+    ),
+    (
+        "is_word_expanded false when absent",
+        {"expanded_words": set()},
+        lambda: S.is_word_expanded("word_1"),
+        False,
+        {},
+    ),
+    (
+        "parse toggle round-trips expanded then collapsed",
+        {},
+        lambda: _toggle_twice(S.toggle_parse_expanded, S.is_parse_expanded, "parse_1"),
+        (True, False),
+        {},
+    ),
+    (
+        "word toggle round-trips expanded then collapsed",
+        {},
+        lambda: _toggle_twice(S.toggle_word_expanded, S.is_word_expanded, "word_1"),
+        (True, False),
+        {},
+    ),
+]
+
+
+def _checker(mock_streamlit: MagicMock):
+    def check(setup: dict[str, Any], action, returns, expected: dict[str, Any]) -> None:
+        state = MockSessionState()
+        for key, value in setup.items():
+            if value is DELETE:
+                delattr(state, key)
+            else:
+                setattr(state, key, value)
+        mock_streamlit.session_state = state
+
+        got = action()
+        if returns is not _UNSET:
+            assert got == returns, f"returned {got!r}, want {returns!r}"
+        for key, want in expected.items():
+            have = getattr(state, key)
+            if key == "history" and want:
+                have = [(h["text"], h["mode"]) for h in have]
+            assert have == want, f"{key} = {have!r}, want {want!r}"
+
+    return check
+
+
+def test_history(mock_streamlit: MagicMock) -> None:
+    check_cases(HISTORY_CASES, _checker(mock_streamlit))
+
+
+def test_analysis_result_and_selection(mock_streamlit: MagicMock) -> None:
+    check_cases(RESULT_CASES, _checker(mock_streamlit))
+
+
+def test_expansion_toggles(mock_streamlit: MagicMock) -> None:
+    check_cases(EXPANSION_CASES, _checker(mock_streamlit))

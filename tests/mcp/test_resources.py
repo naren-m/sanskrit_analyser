@@ -17,18 +17,14 @@ from sanskrit_analyzer.mcp.resources.grammar import (
 class TestDhatuResources:
     """Tests for dhatu resource provider."""
 
-    def test_overview_returns_valid_json(self) -> None:
-        """Test that dhatus overview returns valid JSON with expected fields."""
-        result = _get_overview(get_dhatu_kosha())
-        data = json.loads(result)
+    def test_overview_and_gana_resources(self) -> None:
+        """The overview covers all ten gaṇas; a gaṇa resource lists only its own."""
+        data = json.loads(_get_overview(get_dhatu_kosha()))
         assert data["total_dhatus"] > 2000
         assert len(data["gana_distribution"]) == 10
         assert sum(g["count"] for g in data["gana_distribution"]) == data["total_dhatus"]
 
-    def test_gana_resource_returns_dhatus(self) -> None:
-        """Test that gana resource returns dhatus list."""
-        result = _get_gana_dhatus(get_dhatu_kosha(), 1)
-        data = json.loads(result)
+        data = json.loads(_get_gana_dhatus(get_dhatu_kosha(), 1))
         assert data["gana"] == 1
         assert all(d["gana"] == 1 for d in data["dhatus"])
 

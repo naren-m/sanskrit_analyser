@@ -1,4 +1,10 @@
-"""End-to-end verse facade: normalize -> chandas -> per-word verified analyses."""
+"""End-to-end verse facade: normalize -> chandas -> per-word verified analyses.
+
+Also holds the BG 2.47 pāda a golden verse (hand-verified expectations,
+design doc §5), formerly ``test_golden.py``.
+"""
+import json
+
 import pytest
 
 vidyut = pytest.importorskip("vidyut")
@@ -10,6 +16,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 from sanskrit_analyzer.prakriya import analyze_verse
+from tests._cases import check_cases
+
+BG_2_47_A = "कर्मण्येवाधिकारस्ते मा फलेषु कदाचन"
 
 
 def test_devanagari_word_end_to_end():
@@ -32,21 +41,35 @@ def test_unanalyzable_word_yields_empty_analyses():
     assert rec["padas"][0]["analyses"] == []
 
 
-def test_json_serializable():
-    """Also the no-raise contract: each row once panicked vidyut's chandas."""
-    import json
+# (id, input, expected pada surfaces). Also the no-raise contract: each row
+# once panicked vidyut's chandas.
+SERIALIZABLE_CASES = [
+    ("devanagari-word", "गच्छति", ["gacCati"]),
+    ("iast-with-em-dash", "rāmaḥ vanaṃ gacchati — iti", ["rAmaH", "vanaM", "gacCati", "iti"]),
+    ("nukta-typo-37x-in-ramayana", "पितृ़णां गच्छति", ["pitfRAM", "gacCati"]),
+    ("zwj-inside-word", "धर्म‍क्षेत्रे", ["Darmakzetre"]),
+]
 
-    cases = [
-        ("गच्छति", ["gacCati"]),
-        ("rāmaḥ vanaṃ gacchati — iti", ["rAmaH", "vanaM", "gacCati", "iti"]),  # em dash
-        ("पितृ़णां गच्छति", ["pitfRAM", "gacCati"]),  # nukta typo, 37x in Rāmāyaṇa
-        ("धर्म\u200dक्षेत्रे", ["Darmakzetre"]),  # ZWJ inside the word
-    ]
-    failures = []
-    for text, words in cases:
+
+def test_json_serializable():
+    def check(text, words):
         rec = analyze_verse(text)
         json.dumps(rec)
-        got = [p["surface"] for p in rec["padas"]]
-        if got != words:
-            failures.append(f"{text!r}: {got} != {words}")
-    assert not failures, failures
+        assert [p["surface"] for p in rec["padas"]] == words
+
+    check_cases(SERIALIZABLE_CASES, check)
+
+
+def test_bg_2_47_structure():
+    rec = analyze_verse(BG_2_47_A)
+    surfaces = [p["surface"] for p in rec["padas"]]
+    assert "Palezu" in surfaces
+    phalesu = next(p for p in rec["padas"] if p["surface"] == "Palezu")
+    assert any(
+        a["lemma"] == "Pala" and a["verified"] for a in phalesu["analyses"]
+    ), "Palezu must verify as saptamī bahuvacana of Pala"
+    for pada in rec["padas"]:
+        for a in pada["analyses"]:
+            assert a["verified"]
+            assert a["prakriya"], f"verified analysis of {pada['surface']} lacks trace"
+            assert all(s["code"] for s in a["prakriya"])

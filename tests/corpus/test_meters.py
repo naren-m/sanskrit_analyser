@@ -19,6 +19,7 @@ vidyut = pytest.importorskip("vidyut")
 
 from sanskrit_analyzer.deep_read.kosha_engine import resolve_data_dir  # noqa: E402
 from sanskrit_analyzer.prakriya import analyze_verse  # noqa: E402
+from tests._cases import check_cases  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     resolve_data_dir() is None, reason="vidyut data bundle not installed"
@@ -34,13 +35,13 @@ KNOWN_GAPS = {
 }
 
 
-@pytest.mark.parametrize("case", CASES, ids=[c["id"] for c in CASES])
-def test_meter_identified(request, case):
-    if case["id"] in KNOWN_GAPS:
-        request.node.add_marker(pytest.mark.xfail(reason=KNOWN_GAPS[case["id"]], strict=True))
-    chandas = analyze_verse(case["text"])["chandas"]
-    got = chandas["name"] if chandas else None
-    assert got == case["meter"], f"{case['ref']}: expected {case['meter']}, got {got}"
+def test_meter_identified():
+    def check(case):
+        chandas = analyze_verse(case["text"])["chandas"]
+        got = chandas["name"] if chandas else None
+        assert got == case["meter"], f"{case['ref']}: expected {case['meter']}, got {got}"
+
+    check_cases(CASES, check, xfail=KNOWN_GAPS)
 
 
 def test_gold_covers_every_meter_valmiki_uses():

@@ -16,6 +16,7 @@ import pytest
 
 from sanskrit_analyzer.prakriya import sutra_index
 from sanskrit_analyzer.vidyut_data import resolve_data_dir
+from tests._cases import check_cases
 
 DATA = Path(__file__).resolve().parents[2] / "sanskrit_analyzer" / "data"
 
@@ -66,9 +67,11 @@ def _cited_sutra_codes() -> list[str]:
     return sorted(codes - NON_ATOMIC_CITATIONS)
 
 
-@pytest.mark.parametrize("code", _cited_sutra_codes())
-def test_sandhi_csv_cites_real_sutra(index, code):
-    assert index.lookup(code) is not None, f"no sūtra {code}"
+def test_sandhi_csv_cites_real_sutra(index):
+    def check(code):
+        assert index.lookup(code) is not None, f"no sūtra {code}"
+
+    check_cases([(code, code) for code in _cited_sutra_codes()], check)
 
 
 def test_meters_csv_matches_vidyut():

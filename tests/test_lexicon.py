@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from sanskrit_analyzer import lexicon
+from tests._cases import check_cases
 
 pytestmark = pytest.mark.skipif(
     not lexicon.is_available(), reason="Layer B TSVs not present"
@@ -21,14 +22,32 @@ def test_all_five_sources_present():
     ]
 
 
+# (id, query, key every entry must carry or None for "no entries").
 # "rāma" is spelt differently in all three encodings, unlike "yoga" whose IAST
-# and SLP1 forms are the same string.
-@pytest.mark.parametrize("word", ["राम", "rāma", "rAma"])
-def test_lookup_accepts_any_script(word):
-    """Devanāgarī, IAST and SLP1 all normalise to the same SLP1 key."""
-    entries = lexicon.lookup(word)
-    assert entries
-    assert all(e.key == "rAma" for e in entries)
+# and SLP1 forms are the same string: Devanāgarī, IAST and SLP1 all normalise
+# to the same SLP1 key.
+LOOKUP_CASES = [
+    ("devanagari-rama-to-slp1-key", "राम", "rAma"),
+    ("iast-rama-to-slp1-key", "rāma", "rAma"),
+    ("slp1-rama-key", "rAma", "rAma"),
+    ("unknown-word-empty", "qqqqqqzzzz", None),
+    ("empty-word-empty", "", None),
+    ("whitespace-word-empty", "   ", None),
+]
+
+
+def test_lookup_normalises_key():
+    def check(word, key):
+        entries = lexicon.lookup(word)
+        if key is None:
+            assert entries == []
+            return
+        assert entries
+        assert all(e.key == key for e in entries)
+        # promoted columns never leak back into .fields
+        assert not any({"key", "page", "lnum"} & set(e.fields) for e in entries)
+
+    check_cases(LOOKUP_CASES, check)
 
 
 def test_devanagari_and_slp1_agree():
@@ -66,25 +85,11 @@ def test_repeated_keys_are_all_returned():
     assert len(entries) > 1
 
 
-def test_unknown_word_returns_empty():
-    assert lexicon.lookup("qqqqqqzzzz") == []
-
-
-def test_empty_word_returns_empty():
-    assert lexicon.lookup("") == []
-    assert lexicon.lookup("   ") == []
-
-
 def test_unknown_source_raises():
     with pytest.raises(KeyError, match="unknown Layer B source"):
         lexicon.lookup("rAma", sources=["nosuchdict"])
     with pytest.raises(KeyError, match="unknown Layer B source"):
         lexicon.is_available("nosuchdict")
-
-
-def test_entries_never_carry_promoted_columns_in_fields():
-    for e in lexicon.lookup("rAma"):
-        assert not {"key", "page", "lnum"} & set(e.fields)
 
 
 def test_is_available_per_source():

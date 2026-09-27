@@ -21,16 +21,13 @@ requires_resolver = pytest.mark.skipif(
 )
 
 
-def test_analyze_returns_typed_result():
+def test_analyze_returns_typed_result_with_legacy_shape():
     dr = DeepRead()
     res = dr.analyze("रामः", use_dharmamitra=False)
     assert isinstance(res, DeepReadResult)
     assert res.engine in ("vidyut-kosha", "sanskrit-analyzer")
 
-
-def test_analyze_to_dict_shape():
-    dr = DeepRead()
-    out = dr.analyze("रामः", use_dharmamitra=False).to_dict()
+    out = res.to_dict()
     assert set(out) >= {"input", "slp1", "engine", "tokens", "notes"}
     assert isinstance(out["tokens"], list) and len(out["tokens"]) == 1
     tok = out["tokens"][0]
@@ -39,11 +36,9 @@ def test_analyze_to_dict_shape():
     assert {"kind", "lemma", "dhatu", "morphology"} <= set(tok["analyses"][0])
     assert out["notes"]  # honesty notes are present
 
-
-def test_analyze_empty():
-    dr = DeepRead()
-    out = dr.analyze("", use_dharmamitra=False).to_dict()
-    assert out["tokens"] == []
+    assert dr.analyze("", use_dharmamitra=False).to_dict()["tokens"] == []
+    # Empty input short-circuits to None without any network call.
+    assert dr.analyze_via_dharmamitra("") is None
 
 
 @requires_vidyut
@@ -89,11 +84,6 @@ def test_analyze_via_segmenter_resolves_clean_root():
     ]
     assert "yuj" in roots
     assert "yoji" not in roots
-
-
-def test_via_dharmamitra_returns_none_when_disabled_input_empty():
-    # Empty input short-circuits to None without any network call.
-    assert DeepRead().analyze_via_dharmamitra("") is None
 
 
 @requires_vidyut

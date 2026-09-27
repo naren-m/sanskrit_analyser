@@ -39,9 +39,6 @@ def test_adapter_segment_and_pos_hint_with_fake_engine():
     assert adapter.pos_hint("rāmaḥ") == "noun"
     assert adapter.pos_hint("gacchati") == "verb"
     assert adapter.pos_hint("unseen") is None
-
-
-def test_adapter_segment_empty():
     assert ByT5Adapter(engine=_FakeEngine()).segment("") == []
 
 

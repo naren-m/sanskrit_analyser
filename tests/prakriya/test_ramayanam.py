@@ -28,6 +28,7 @@ pytestmark = pytest.mark.skipif(
 
 from sanskrit_analyzer.prakriya import analyze_verse
 from sanskrit_analyzer.prakriya.analyzer import PadaAnalysis, analyze_pada
+from tests._cases import check_cases
 
 # The opening śloka in Devanagari, exactly as stored in the corpus (daṇḍas and all).
 OPENING_SLOKA = (
@@ -61,141 +62,106 @@ def _find(word: str, lemma: str, kind: str | None = None) -> PadaAnalysis | None
 
 # --- verse-level: Devanagari normalization + meter ------------------------------
 
-
-def test_opening_sloka_scans_as_anushtubh():
-    # The whole verse is an anuṣṭubh (śloka); the classifier labels the pathyā/
-    # vipulā form. This also exercises Devanagari -> SLP1 normalization and
-    # daṇḍa stripping through the public facade.
-    record = analyze_verse(OPENING_SLOKA)
-    assert record["chandas"] is not None
-    assert record["chandas"]["name"].startswith("anuzwuB")
-
-
-def test_opening_sloka_yields_padas():
-    record = analyze_verse(OPENING_SLOKA)
-    surfaces = {p["surface"] for p in record["padas"]}
-    # Post-normalization SLP1 word tokens (sandhi is left intact by design).
-    assert "tapasvI" in surfaces
-    assert "nAradaM" in surfaces
+# (id, verse, pada surfaces that must appear, (surface, lemma) readings required)
+# Both verses are anuṣṭubh (śloka); the classifier labels the pathyā/vipulā form.
+# This exercises Devanagari -> SLP1 normalization and daṇḍa stripping through
+# the public facade. Sandhi is left intact by design, so surfaces are the
+# post-normalization SLP1 tokens.
+VERSE_CASES = [
+    ("bala-1.1.1-opening-sloka", OPENING_SLOKA, {"tapasvI", "nAradaM"}, []),
+    # A second, independently-sourced anuṣṭubh guards against over-fitting to
+    # the BalaKanda verse. Its finite verb iyeṣa (perfect of √iṣ, "desired")
+    # must survive forward-synthesis verification.
+    ("sundara-1.1.1-perfect-verb-iyeza", SUNDARA_SLOKA, {"iyeza"}, [("iyeza", "iz")]),
+]
 
 
-def test_every_analysis_on_the_verse_is_verified_with_a_trace():
-    # The engine's core invariant on real text: nothing is fabricated. Every
-    # returned reading verified by forward synthesis and carries a rule trace.
-    record = analyze_verse(OPENING_SLOKA)
-    analyses = [a for p in record["padas"] for a in p["analyses"]]
-    assert analyses, "at least some words in the verse must analyze"
-    for a in analyses:
-        assert a["verified"] is True
-        assert a["prakriya"], f"{a['lemma']} verified but has no derivation steps"
+def test_verse_scans_as_anushtubh_with_verified_padas():
+    def check(verse, surfaces, readings):
+        record = analyze_verse(verse)
+        assert record["chandas"] is not None
+        assert record["chandas"]["name"].startswith("anuzwuB")
+        padas = {p["surface"]: p for p in record["padas"]}
+        assert surfaces <= padas.keys(), f"missing {surfaces - padas.keys()}"
+        for surface, lemma in readings:
+            assert any(a["lemma"] == lemma for a in padas[surface]["analyses"])
+        # The engine's core invariant on real text: nothing is fabricated. Every
+        # returned reading verified by forward synthesis and carries a rule trace.
+        analyses = [a for p in record["padas"] for a in p["analyses"]]
+        assert analyses, "at least some words in the verse must analyze"
+        for a in analyses:
+            assert a["verified"] is True
+            assert a["prakriya"], f"{a['lemma']} verified but has no derivation steps"
+
+    check_cases(VERSE_CASES, check)
 
 
-def test_sundara_kanda_opening_scans_and_finds_the_perfect_verb():
-    # A second, independently-sourced anuṣṭubh (SundaraKanda 1.1.1) guards against
-    # over-fitting to the BalaKanda verse. Its finite verb iyeṣa (perfect of √iṣ,
-    # "desired") must survive forward-synthesis verification.
-    record = analyze_verse(SUNDARA_SLOKA)
-    assert record["chandas"]["name"].startswith("anuzwuB")
-    iyesha = next(p for p in record["padas"] if p["surface"] == "iyeza")
-    assert any(a["lemma"] == "iz" for a in iyesha["analyses"])
+# --- word-level: the first matching reading, tied to the corpus gloss -----------
 
-
-# --- word-level: each tied to the corpus gloss ----------------------------------
-
-
-def test_tapasvin_nominative():
+# (id, surface, lemma, kind filter for _find or None, kind the reading must
+# have or None, morph substrings, exact morph or None).
+# vidyut's internal lakāra tags: la~N = imperfect (laṄ), li~w = perfect (liṭ),
+# lf~w = future (lṛṭ). ktvā-gerunds ("having Xed") are avyaya — the engine must
+# tag them indeclinable rather than inflect them.
+READING_CASES = [
     # तपस्वी — "ascetic" (Vālmīki), the subject: masc. nominative singular.
-    a = _find("tapasvI", "tapasvin")
-    assert a is not None
-    assert a.kind == "Subanta"
-    assert "praTamA" in a.morph  # nominative
-
-
-def test_narada_is_the_accusative_object():
+    ("tapasvin-nominative", "tapasvI", "tapasvin", None, "Subanta", ["praTamA"], None),
     # नारदम् — "Nārada", whom Vālmīki enquired of: accusative (dvitīyā).
-    a = _find("nAradaM", "nArada")
-    assert a is not None
-    assert a.kind == "Subanta"
-    assert "dvitIyA" in a.morph
-
-
-def test_valmiki_identified():
+    ("narada-accusative-object", "nAradaM", "nArada", None, "Subanta", ["dvitIyA"], None),
     # वाल्मीकि: — the sage's name; nominative singular.
-    a = _find("vAlmIkiH", "vAlmIki")
-    assert a is not None
-    assert "praTamA" in a.morph
-
-
-def test_finite_verb_abravit():
+    ("valmiki-nominative", "vAlmIkiH", "vAlmIki", None, None, ["praTamA"], None),
     # अब्रवीत् (1.1.6) — "(he) spoke": root brū, imperfect (laṄ), 3rd person sg.
-    a = _find("abravIt", "brU")
-    assert a is not None
-    assert a.kind == "Tinanta"
-    assert "la~N" in a.morph  # laṄ = imperfect
-
-
-# --- ktvā-gerunds: indeclinable, root-lemma'd -----------------------------------
-
-# (surface, root). ktvā-gerunds ("having Xed") are avyaya — the engine must tag
-# them indeclinable rather than inflect them. śrutvā is from BalaKanda 1.1.6.
-GERUNDS = [
-    ("SrutvA", "Sru"),   # having heard
-    ("muktvA", "muc"),   # having released
+    ("abravit-bru-imperfect", "abravIt", "brU", None, "Tinanta", ["la~N"], None),
+    ("uvaca-vac-perfect-said", "uvAca", "vac", "Tinanta", None, ["li~w"], None),
+    ("jagama-gam-perfect-went", "jagAma", "gam", "Tinanta", None, ["li~w"], None),
+    # iyeṣa is SundaraKanda 1.1.1
+    ("iyeza-iz-perfect-desired", "iyeza", "iz", "Tinanta", None, ["li~w"], None),
+    # vakṣyāmi is BalaKanda 1.1.7
+    ("vakzyami-vac-future-shall-tell", "vakzyAmi", "vac", "Tinanta", None, ["lf~w"], None),
+    # śrutvā is from BalaKanda 1.1.6
+    ("srutva-ktva-gerund-indeclinable", "SrutvA", "Sru", None, None, [], "avyaya"),
+    ("muktva-ktva-gerund-indeclinable", "muktvA", "muc", None, None, [], "avyaya"),
 ]
 
 
-@pytest.mark.parametrize("word,root", GERUNDS)
-def test_ktva_gerund_is_indeclinable(word, root):
-    a = _find(word, root)
-    assert a is not None, f"{word}: no reading with root {root!r}"
-    assert a.morph == "avyaya"
+def test_word_reading():
+    def check(word, lemma, kind_filter, kind, feats, morph):
+        a = _find(word, lemma, kind=kind_filter)
+        assert a is not None, f"{word}: no reading with root {lemma!r}"
+        if kind is not None:
+            assert a.kind == kind
+        for f in feats:
+            assert f in a.morph, f"{word}: expected {f} in morph {a.morph!r}"
+        if morph is not None:
+            assert a.morph == morph
 
-
-# --- finite verbs: root + lakāra (tense/mood) across the corpus ------------------
-
-# (surface, root, lakāra-tag). vidyut's internal lakāra tags:
-#   la~N = imperfect (laṄ), li~w = perfect (liṭ), lf~w = future (lṛṭ).
-# abravīt is BalaKanda 1.1.6; vakṣyāmi is 1.1.7; iyeṣa is SundaraKanda 1.1.1.
-FINITE_VERBS = [
-    ("uvAca",    "vac", "li~w"),   # said            (perfect)
-    ("jagAma",   "gam", "li~w"),   # went            (perfect)
-    ("iyeza",    "iz",  "li~w"),   # desired         (perfect)
-    ("vakzyAmi", "vac", "lf~w"),   # shall tell      (future)
-]
-
-
-@pytest.mark.parametrize("word,root,lakara", FINITE_VERBS)
-def test_finite_verb_root_and_tense(word, root, lakara):
-    a = _find(word, root, kind="Tinanta")
-    assert a is not None, f"{word}: no Tinanta reading with root {root!r}"
-    assert lakara in a.morph, f"{word}: expected {lakara} in morph {a.morph!r}"
+    check_cases(READING_CASES, check)
 
 
 # --- nominals: case (vibhakti) and number recovered from the surface ------------
 
-# (surface, lemma, required-feature-substrings). Each is a declined word from the
-# opening ślokas or other kāṇḍas, with the case its corpus gloss implies:
+# (id, surface, lemma, required-feature-substrings). Each is a declined word from
+# the opening ślokas or other kāṇḍas, with the case its corpus gloss implies:
 #   tftIyA = instrumental, zazWI = genitive, saptamI = locative; eka/bahu = sg/pl.
 NOMINAL_CASES = [
-    ("Baratena", "Barata", ["tftIyA", "eka"]),   # "by Bharata" (instr. sg)
-    ("janEH",    "jana",   ["tftIyA", "bahu"]),  # "by people"  (instr. pl)
-    ("sItAyAH",  "sItA",   ["strI", "zazWI"]),   # "of Sītā"    (gen. fem.)
-    ("paTi",     "paTin",  ["saptamI"]),         # "on the path"(loc.)
-    ("guRAH",    "guRa",   ["praTamA", "bahu"]),  # "qualities"  (nom. pl)
+    ("Baratena-by-bharata-instr-sg", "Baratena", "Barata", ["tftIyA", "eka"]),
+    ("janEH-by-people-instr-pl", "janEH", "jana", ["tftIyA", "bahu"]),
+    ("sItAyAH-of-sita-gen-fem", "sItAyAH", "sItA", ["strI", "zazWI"]),
+    ("paTi-on-the-path-loc", "paTi", "paTin", ["saptamI"]),
+    ("guRAH-qualities-nom-pl", "guRAH", "guRa", ["praTamA", "bahu"]),
 ]
 
 
-@pytest.mark.parametrize("word,lemma,feats", NOMINAL_CASES)
-def test_nominal_case_and_number(word, lemma, feats):
-    hits = [
-        a
-        for a in analyze_pada(word)
-        if a.lemma == lemma and all(f in a.morph for f in feats)
-    ]
-    assert hits, (
-        f"{word}: no {lemma!r} reading with all of {feats}; "
-        f"got {[(a.lemma, a.morph) for a in analyze_pada(word)]}"
-    )
+def test_nominal_case_and_number():
+    def check(word, lemma, feats):
+        analyses = analyze_pada(word)
+        hits = [a for a in analyses if a.lemma == lemma and all(f in a.morph for f in feats)]
+        assert hits, (
+            f"{word}: no {lemma!r} reading with all of {feats}; "
+            f"got {[(a.lemma, a.morph) for a in analyses]}"
+        )
+
+    check_cases(NOMINAL_CASES, check)
 
 
 # --- corpus gloss alignment (data-driven) ---------------------------------------
@@ -223,9 +189,12 @@ CORPUS_GLOSSES = {
 }
 
 
-@pytest.mark.parametrize("word,lemma", sorted(CORPUS_GLOSSES.items()))
-def test_engine_lemma_matches_corpus_gloss(word, lemma):
-    lemmas = _lemmas(word)
-    assert lemma in lemmas, (
-        f"{word}: expected lemma {lemma!r} from the corpus gloss, got {lemmas}"
-    )
+def test_engine_lemma_matches_corpus_gloss():
+    def check(word, lemma):
+        lemmas = _lemmas(word)
+        assert lemma in lemmas, (
+            f"{word}: expected lemma {lemma!r} from the corpus gloss, got {lemmas}"
+        )
+
+    rows = [(f"{word}={lemma}", word, lemma) for word, lemma in sorted(CORPUS_GLOSSES.items())]
+    check_cases(rows, check)

@@ -8,6 +8,7 @@ from sanskrit_analyzer.deep_read import kosha_engine
 from sanskrit_analyzer.dhatu import DhatuIdentifier
 from sanskrit_analyzer.dhatu.identifier import rank_analyses
 from sanskrit_analyzer.dhatu.resolver import get_dhatu_resolver
+from tests._cases import check_cases
 
 # --- ranking: pure, no vidyut data needed --------------------------------------
 
@@ -19,29 +20,22 @@ def _nominal(lemma):
     return {"kind": "nominal", "lemma": lemma, "dhatu": None, "morphology": {}}
 
 
-def test_rank_demotes_short_root_verb_when_nominal_exists():
+# (row id, analyses, pos_hint, expected kind of the top analysis)
+RANK_CASES = [
     # रामः-style: a 2-char-root finite verb must fall below an available nominal.
-    ranked = rank_analyses([_verb("rA"), _nominal("rAma")])
-    assert ranked[0]["kind"] == "nominal"
-
-
-def test_rank_keeps_long_root_verb_first():
+    ("short-root-verb-demoted-below-nominal", [_verb("rA"), _nominal("rAma")], None, "nominal"),
     # गच्छति-style: √gam (3 chars) stays verb-first even with a nominal present.
-    ranked = rank_analyses([_verb("gam"), _nominal("gama")])
-    assert ranked[0]["kind"] == "verb"
+    ("long-root-verb-stays-first", [_verb("gam"), _nominal("gama")], None, "verb"),
+    ("pos-hint-noun-floats-nominal", [_verb("gam"), _nominal("gama")], "noun", "nominal"),
+    ("pos-hint-verb-floats-verb", [_nominal("rAma"), _verb("rA")], "verb", "verb"),
+]
 
 
-def test_rank_pos_hint_noun_floats_nominal():
-    ranked = rank_analyses([_verb("gam"), _nominal("gama")], pos_hint="noun")
-    assert ranked[0]["kind"] == "nominal"
+def test_rank_analyses():
+    def check(analyses, pos_hint, kind):
+        assert rank_analyses(analyses, pos_hint=pos_hint)[0]["kind"] == kind
 
-
-def test_rank_pos_hint_verb_floats_verb():
-    ranked = rank_analyses([_nominal("rAma"), _verb("rA")], pos_hint="verb")
-    assert ranked[0]["kind"] == "verb"
-
-
-def test_rank_empty():
+    check_cases(RANK_CASES, check)
     assert rank_analyses([]) == []
 
 
@@ -54,25 +48,17 @@ _needs_data = pytest.mark.skipif(
 
 
 @_needs_data
-def test_identify_empty():
+def test_identify():
     assert DhatuIdentifier().identify("") == []
 
-
-@_needs_data
-def test_identify_verb_root():
     results = DhatuIdentifier().identify("गच्छति")
     assert len(results) == 1
     assert (results[0].dhatu or {}).get("root") == "gam"
 
-
-@_needs_data
-def test_identify_perfect_resolves_to_root():
+    # the perfect resolves to its root
     results = DhatuIdentifier().identify("जगाम")
     assert (results[0].dhatu or {}).get("root") == "gam"
 
-
-@_needs_data
-def test_identify_splits_compound_and_identifies_members():
     results = DhatuIdentifier().identify("इक्ष्वाकुवंशप्रभवो रामो नाम जनैः श्रुतः")
     # the fused compound expanded into >= 7 padas
     assert len(results) >= 7
@@ -80,9 +66,6 @@ def test_identify_splits_compound_and_identifies_members():
     roots = {(r.dhatu or {}).get("root") for r in results}
     assert "Sru" in roots
 
-
-@_needs_data
-def test_identify_rama_not_spurious_finite_verb():
     # रामः must not be top-ranked as a bare short-root finite verb (√rā).
     results = DhatuIdentifier().identify("रामः")
     top = results[0].analyses[0]
@@ -96,29 +79,26 @@ _needs_resolver = pytest.mark.skipif(
     reason="vidyut data bundle not available for DhatuResolver",
 )
 
-
-@_needs_resolver
-def test_identify_gives_clean_roots_not_anubandha_residue():
+# (row id, word, root that must be among the identified roots)
+RESOLVED_ROOT_CASES = [
     # योगः must resolve to the clean root yuj, not the Kośa's raw yoji residue.
-    results = DhatuIdentifier().identify("योगः")
-    roots = [r.dhatu["root"] for r in results if r.dhatu]
-    assert "yuj" in roots
-
-
-@_needs_resolver
-def test_identify_peels_upasarga():
+    ("yoga-clean-root-not-anubandha-residue", "योगः", "yuj"),
     # अनुशासनम् is filed by the Kośa as a plain, unlinked nominal; the resolver
     # peels the anu- upasarga and resolves the remainder to √śās.
-    results = DhatuIdentifier().identify("अनुशासनम्")
-    assert any(r.dhatu and r.dhatu["root"] == "SAs" for r in results)
+    ("anuSAsana-peels-upasarga", "अनुशासनम्", "SAs"),
+    # hānam is 'abandonment' (√hā), not 'killing' (√han).
+    ("hAnam-prefers-hA-over-han", "हानम्", "hA"),
+]
 
 
 @_needs_resolver
-def test_identify_prefers_ha_over_han_for_hanam():
-    """hānam is 'abandonment' (√hā), not 'killing' (√han)."""
-    results = DhatuIdentifier().identify("हानम्")
-    roots = [r.dhatu["root"] for r in results if r.dhatu]
-    assert "hA" in roots
+def test_identify_resolves_roots():
+    def check(word, root):
+        roots = [r.dhatu["root"] for r in DhatuIdentifier().identify(word) if r.dhatu]
+        assert root in roots, roots
+
+    check_cases(RESOLVED_ROOT_CASES, check)
+    roots = [r.dhatu["root"] for r in DhatuIdentifier().identify("हानम्") if r.dhatu]
     assert roots[0] != "han"
 
 
@@ -156,7 +136,7 @@ def _avyaya(lemma):
 
 # (id, candidates in kosha order, expected top lemma). Each row is a word the
 # reader showed with the wrong root before #572; kosha order is kept verbatim.
-RANK_CASES = [
+READING_ORDER_CASES = [
     ("ca-avyaya-beats-kvip-root-noun",
      [_derived("ci", "kvi~p"), _derived("capi", "kvi~p"), _nominal("ca"), _avyaya("ca")],
      "ca"),
@@ -179,9 +159,9 @@ RANK_CASES = [
 
 def test_rank_reading_order_table():
     """Fallback reading order, one row per word class the reader got wrong (#572)."""
-    failures = []
-    for case_id, candidates, want in RANK_CASES:
+
+    def check(candidates, want):
         got = rank_analyses(list(candidates))[0]["lemma"]
-        if got != want:
-            failures.append(f"{case_id}: top lemma {got!r}, want {want!r}")
-    assert not failures, "\n".join(failures)
+        assert got == want, got
+
+    check_cases(READING_ORDER_CASES, check)

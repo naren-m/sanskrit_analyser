@@ -6,6 +6,7 @@ import pytest
 
 from sanskrit_analyzer.dhatu import conjugation
 from sanskrit_analyzer.mcp.tools.dhatu import build_dhatu_tools
+from tests._cases import check_cases
 
 needs_vidyut = pytest.mark.skipif(
     not conjugation.is_available(), reason="vidyut data bundle not available"
@@ -24,108 +25,82 @@ async def _call(dispatch, name: str, **arguments):
     return result[0].text
 
 
-class TestToolSpecs:
-    """The advertised tools."""
-
-    def test_all_four_tools_are_advertised(self) -> None:
-        tools, _ = build_dhatu_tools()
-        assert {t.name for t in tools} == {
-            "lookup_dhatu",
-            "search_dhatu",
-            "conjugate_verb",
-            "list_gana",
-        }
+def test_all_four_tools_are_advertised() -> None:
+    tools, _ = build_dhatu_tools()
+    assert {t.name for t in tools} == {
+        "lookup_dhatu",
+        "search_dhatu",
+        "conjugate_verb",
+        "list_gana",
+    }
 
 
-class TestLookupDhatu:
-    """Tests for dhatu lookup."""
-
-    @pytest.mark.asyncio
-    async def test_lookup_known_dhatu(self, dispatch) -> None:
-        entries = json.loads(await _call(dispatch, "lookup_dhatu", dhatu="gam"))
-        assert [e["code"] for e in entries] == ["01.1137"]
-        assert entries[0]["gana"] == 1
-        assert entries[0]["artha_iast"] == "gatau"
-
-    @pytest.mark.asyncio
-    async def test_lookup_devanagari(self, dispatch) -> None:
-        entries = json.loads(await _call(dispatch, "lookup_dhatu", dhatu="पच्"))
-        assert all(e["root_slp1"] == "pac" for e in entries)
-
-    @pytest.mark.asyncio
-    async def test_lookup_unknown_dhatu(self, dispatch) -> None:
-        assert "not found" in (await _call(dispatch, "lookup_dhatu", dhatu="xyznot")).lower()
-
-    @pytest.mark.asyncio
-    async def test_lookup_requires_dhatu(self, dispatch) -> None:
-        assert (await _call(dispatch, "lookup_dhatu")).startswith("Error")
+# (row id, tool, arguments, substring the error text must contain)
+ERROR_CASES = [
+    ("lookup-requires-dhatu", "lookup_dhatu", {}, "Error"),
+    ("search-requires-query", "search_dhatu", {}, "Error"),
+    ("list-gana-rejects-out-of-range", "list_gana", {"gana": 11}, "Error"),
+    ("conjugate-rejects-unknown-lakara", "conjugate_verb",
+     {"dhatu": "gam", "lakara": "nope"}, "lakara"),
+    ("conjugate-requires-dhatu", "conjugate_verb", {}, "Error"),
+]
 
 
-class TestSearchDhatu:
-    """Tests for dhatu search."""
+async def test_bad_arguments_return_errors(dispatch) -> None:
+    # Dispatch is async and check_cases is sync: call every row first, then
+    # check the collected texts row by row.
+    rows = [
+        (row_id, await _call(dispatch, tool, **arguments), needle)
+        for row_id, tool, arguments, needle in ERROR_CASES
+    ]
 
-    @pytest.mark.asyncio
-    async def test_search_returns_matches(self, dispatch) -> None:
-        results = json.loads(await _call(dispatch, "search_dhatu", query="gatau"))
-        assert results
-        assert all("gatau" in r["artha_iast"] for r in results)
+    def check(text, needle):
+        assert text.startswith("Error"), text
+        assert needle in text, text
 
-    @pytest.mark.asyncio
-    async def test_search_respects_limit(self, dispatch) -> None:
-        results = json.loads(await _call(dispatch, "search_dhatu", query="a", limit=3))
-        assert len(results) == 3
-
-    @pytest.mark.asyncio
-    async def test_search_requires_query(self, dispatch) -> None:
-        assert (await _call(dispatch, "search_dhatu")).startswith("Error")
+    check_cases(rows, check)
+    # An unknown root is a not-found message, not an error.
+    assert "not found" in (await _call(dispatch, "lookup_dhatu", dhatu="xyznot")).lower()
 
 
-class TestListGana:
-    """Tests for listing dhatus by gana."""
+async def test_lookup_dhatu(dispatch) -> None:
+    entries = json.loads(await _call(dispatch, "lookup_dhatu", dhatu="gam"))
+    assert [e["code"] for e in entries] == ["01.1137"]
+    assert entries[0]["gana"] == 1
+    assert entries[0]["artha_iast"] == "gatau"
 
-    @pytest.mark.asyncio
-    async def test_list_gana(self, dispatch) -> None:
-        results = json.loads(await _call(dispatch, "list_gana", gana=2, limit=10))
-        assert len(results) == 10
-        assert all(r["gana"] == 2 for r in results)
-
-    @pytest.mark.asyncio
-    async def test_list_gana_accepts_string(self, dispatch) -> None:
-        """The low-level server does not coerce against the schema."""
-        results = json.loads(await _call(dispatch, "list_gana", gana="3", limit=2))
-        assert all(r["gana"] == 3 for r in results)
-
-    @pytest.mark.asyncio
-    async def test_list_gana_rejects_out_of_range(self, dispatch) -> None:
-        assert (await _call(dispatch, "list_gana", gana=11)).startswith("Error")
+    entries = json.loads(await _call(dispatch, "lookup_dhatu", dhatu="पच्"))
+    assert all(e["root_slp1"] == "pac" for e in entries)
 
 
-class TestConjugateVerb:
-    """Tests for conjugation, derived by the Pāṇinian engine."""
+async def test_search_dhatu(dispatch) -> None:
+    results = json.loads(await _call(dispatch, "search_dhatu", query="gatau"))
+    assert results
+    assert all("gatau" in r["artha_iast"] for r in results)
 
-    @pytest.mark.asyncio
-    @needs_vidyut
-    async def test_conjugate_lat(self, dispatch) -> None:
-        results = json.loads(await _call(dispatch, "conjugate_verb", dhatu="gam"))
-        assert len(results) == 1
-        assert results[0]["padas"] == ["parasmaipada"]
-        forms = {
-            (f["purusha"], f["vacana"]): f["forms_iast"] for f in results[0]["forms"]
-        }
-        assert forms[("prathama", "eka")] == ["gacchati"]
+    results = json.loads(await _call(dispatch, "search_dhatu", query="a", limit=3))
+    assert len(results) == 3
 
-    @pytest.mark.asyncio
-    @needs_vidyut
-    async def test_conjugate_reports_both_padas(self, dispatch) -> None:
-        """√nah is ubhayapada, so both padas are derived."""
-        results = json.loads(await _call(dispatch, "conjugate_verb", dhatu="nah"))
-        assert any(r["padas"] == ["parasmaipada", "ātmanepada"] for r in results)
 
-    @pytest.mark.asyncio
-    async def test_conjugate_rejects_unknown_lakara(self, dispatch) -> None:
-        text = await _call(dispatch, "conjugate_verb", dhatu="gam", lakara="nope")
-        assert text.startswith("Error") and "lakara" in text
+async def test_list_gana(dispatch) -> None:
+    results = json.loads(await _call(dispatch, "list_gana", gana=2, limit=10))
+    assert len(results) == 10
+    assert all(r["gana"] == 2 for r in results)
 
-    @pytest.mark.asyncio
-    async def test_conjugate_requires_dhatu(self, dispatch) -> None:
-        assert (await _call(dispatch, "conjugate_verb")).startswith("Error")
+    # The low-level server does not coerce against the schema.
+    results = json.loads(await _call(dispatch, "list_gana", gana="3", limit=2))
+    assert all(r["gana"] == 3 for r in results)
+
+
+@needs_vidyut
+async def test_conjugate_verb(dispatch) -> None:
+    """Conjugation, derived by the Pāṇinian engine."""
+    results = json.loads(await _call(dispatch, "conjugate_verb", dhatu="gam"))
+    assert len(results) == 1
+    assert results[0]["padas"] == ["parasmaipada"]
+    forms = {(f["purusha"], f["vacana"]): f["forms_iast"] for f in results[0]["forms"]}
+    assert forms[("prathama", "eka")] == ["gacchati"]
+
+    # √nah is ubhayapada, so both padas are derived.
+    results = json.loads(await _call(dispatch, "conjugate_verb", dhatu="nah"))
+    assert any(r["padas"] == ["parasmaipada", "ātmanepada"] for r in results)

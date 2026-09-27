@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
+from tests._cases import check_cases
 
 PKG = Path(__file__).resolve().parents[1] / "sanskrit_analyzer"
 
@@ -26,11 +26,14 @@ def _imports(path: Path) -> set[str]:
     return found
 
 
-@pytest.mark.parametrize("package,forbidden", FORBIDDEN.items())
-def test_package_does_not_import(package, forbidden):
-    offenders = []
-    for path in (PKG / package).rglob("*.py"):
-        for mod in _imports(path):
-            if mod.startswith(forbidden):
-                offenders.append(f"{path.relative_to(PKG)} -> {mod}")
-    assert not offenders, "\n".join(offenders)
+def test_package_does_not_import():
+    def check(package, forbidden):
+        offenders = [
+            f"{path.relative_to(PKG)} -> {mod}"
+            for path in (PKG / package).rglob("*.py")
+            for mod in _imports(path)
+            if mod.startswith(forbidden)
+        ]
+        assert not offenders, "\n".join(offenders)
+
+    check_cases([(pkg, pkg, forbidden) for pkg, forbidden in FORBIDDEN.items()], check)
