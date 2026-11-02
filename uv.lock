@@ -958,8 +958,8 @@ wheels = [
 
 [[package]]
 name = "homelab-observability"
-version = "0.1.0"
-source = { git = "https://github.com/naren-m/homelab-observability.git?subdirectory=python&rev=v0.1.0#056731166b90d57fee65f4da1f54d549ba2efb1b" }
+version = "0.2.1"
+source = { git = "https://github.com/naren-m/homelab-observability.git?subdirectory=python&rev=v0.2.1#dac4cc86f5d838d7657641a98d2258d8dd1dcf8f" }
 dependencies = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-grpc" },
@@ -3149,7 +3149,7 @@ ui = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.104.0" },
-    { name = "homelab-observability", marker = "extra == 'api'", git = "https://github.com/naren-m/homelab-observability.git?subdirectory=python&rev=v0.1.0" },
+    { name = "homelab-observability", marker = "extra == 'api'", git = "https://github.com/naren-m/homelab-observability.git?subdirectory=python&rev=v0.2.1" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.25.0" },
     { name = "indic-transliteration", specifier = ">=2.3.0" },
     { name = "mcp", specifier = ">=1.26.0" },

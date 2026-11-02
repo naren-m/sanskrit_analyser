@@ -177,7 +177,14 @@ def segment(text: str) -> list[str] | None:
         members: list[str] = []
         slps = _normalise_tokens([kosha_engine.slp(t) for t in kosha_engine.tokenize(text)])
         for slp in slps:
-            for piece in segment_slp(slp):
+            try:
+                pieces = segment_slp(slp)
+            except RecursionError:
+                # _solve recurses once per member; a token past ~500 members
+                # keeps whole rather than costing the line its segmentation.
+                logger.warning("token too long to segment (%d chars)", len(slp))
+                pieces = [slp]
+            for piece in pieces:
                 iast = kosha_engine.to_iast(piece)
                 if iast:
                     members.append(iast)

@@ -26,12 +26,13 @@ class PrakriyaStep:
     source: str             # "ashtadhyayi", "dhatupatha", ...
     sutra_text: str | None
     kashika: str | None
+    english: str | None = None
 
     def to_dict(self) -> dict:
         return {
             "step": self.step, "form": self.form, "code": self.code,
             "source": self.source, "sutra_text": self.sutra_text,
-            "kashika": self.kashika,
+            "kashika": self.kashika, "english": self.english,
         }
 
 
@@ -103,6 +104,7 @@ def _trace(prakriya) -> list[PrakriyaStep]:
                 source=str(s.source),
                 sutra_text=sutra.text if sutra else None,
                 kashika=sutra.kashika if sutra else None,
+                english=sutra.english if sutra else None,
             )
         )
     return steps
