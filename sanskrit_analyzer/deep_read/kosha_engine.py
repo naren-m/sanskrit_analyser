@@ -33,7 +33,7 @@ from typing import Any
 # deliberate re-exports: downstream callers (ramayanam) import them from here.
 from sanskrit_analyzer.utils.desandhi import desandhi_candidates
 from sanskrit_analyzer.utils.desandhi import visarga_candidates as visarga_candidates
-from sanskrit_analyzer.utils.normalize import strip_nukta
+from sanskrit_analyzer.utils.normalize import clean_devanagari
 from sanskrit_analyzer.vidyut_data import VidyutUnavailable
 from sanskrit_analyzer.vidyut_data import is_available as is_available
 from sanskrit_analyzer.vidyut_data import kosha as _kosha
@@ -170,7 +170,7 @@ def tokenize(text: str) -> list[str]:
     token. Tokens are trimmed to their Devanagari run.
     """
     tokens: list[str] = []
-    for raw in _TOKEN_SPLIT_RE.split(text or ""):
+    for raw in _TOKEN_SPLIT_RE.split(clean_devanagari(text or "")):
         raw = raw.strip()
         if not raw or not _HAS_DEVA_LETTER_RE.search(raw):
             continue  # skip pure digits / punctuation / verse-ref markers
@@ -215,8 +215,8 @@ def slp(text: str, scheme_from: str = "Devanagari") -> str:
     from vidyut.lipi import Scheme, transliterate
 
     src = getattr(Scheme, scheme_from)
-    # The nukta has no SLP1 mapping and would survive verbatim (see strip_nukta).
-    return transliterate(strip_nukta(text), src, Scheme.Slp1)
+    # Nukta, svaras and joiners have no SLP1 mapping (see clean_devanagari).
+    return transliterate(clean_devanagari(text), src, Scheme.Slp1)
 
 
 def to_iast(slp_text: str | None) -> str | None:

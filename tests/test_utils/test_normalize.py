@@ -12,7 +12,7 @@ plain_ascii_default=Script.SLP1 to resolve the ambiguity.
 import pytest
 
 from sanskrit_analyzer.models.scripts import Script
-from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1, strip_nukta
+from sanskrit_analyzer.utils.normalize import clean_devanagari, detect_script, normalize_slp1
 
 
 class TestDetectScript:
@@ -74,21 +74,32 @@ class TestEngineNormalization:
         assert engine._normalize_to_iast("Bavati") == "bhavati"
 
 
-class TestIso15919Input:
-    """ISO 15919 variants (ṁ, r̥, ē) are read as their IAST equivalents."""
-
-    @pytest.mark.parametrize(
-        "text,expected",
-        [
-            ("saṁskṛtam", "saMskftam"),
-            ("kr̥ṣṇa", "kfzRa"),
-            ("pitr̥̄n", "pitFn"),
-            ("kl̥ptam", "kxptam"),
-            ("dēva", "deva"),
-        ],
-    )
-    def test_iso_variants_normalize(self, text, expected):
-        assert normalize_slp1(text) == expected
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        # ISO 15919 variants (ṁ, r̥, ē) are read as their IAST equivalents.
+        ("saṁskṛtam", "saMskftam"),
+        ("kr̥ṣṇa", "kfzRa"),
+        ("pitr̥\u0304n", "pitFn"),
+        ("kl̥ptam", "kxptam"),
+        ("dēva", "deva"),
+        # Decomposed IAST (a + U+0304) is what macOS paste and many PDFs give.
+        # detect_script saw no precomposed diacritic and passed it through
+        # untouched as "rāma".
+        ("ra\u0304ma", "rAma"),
+        # The nukta has no SLP1 mapping; the Analyzer path turned it into the
+        # digit 0 ("k0amala") while the kosha path stripped it.
+        ("\u0958मल", "kamala"),
+        # A ZWJ survived into SLP1 as an invisible char inside the word.
+        ("क्\u200dषत्रियः", "kzatriyaH"),
+        # Vedic svara marks came through as "\" and "^" (a\gnimI^Le).
+        ("अ\u0952ग्निमी\u0951ळे", "agnimIqe"),
+    ],
+    ids=["iso-anusvara", "iso-r-ring", "iso-long-r-ring", "iso-l-ring", "iso-e",
+         "nfd-iast", "nukta", "zwj", "vedic-svaras"],
+)
+def test_normalize_slp1_input_variants(text, expected):
+    assert normalize_slp1(text) == expected
 
 
 @pytest.mark.parametrize(
@@ -97,14 +108,28 @@ class TestIso15919Input:
         # The corpus typo that panicked vidyut's splitter (37 Rāmāyaṇa verses).
         ("पितृ़णां", "पितृणां"),
         # Precomposed nukta letters decompose to the same base letter.
-        ("ड़", "ड"),
-        ("क़मल", "कमल"),
+        ("\u095c", "ड"),
+        ("\u0958मल", "कमल"),
         # No nukta: returned unchanged, including non-Devanagari input.
         ("रामः", "रामः"),
         ("rAmaH", "rAmaH"),
         ("", ""),
+        # Joiners and soft hyphens only steer rendering; they are not letters.
+        ("क्\u200dष", "क्ष"),
+        ("क्\u200cष", "क्ष"),
+        ("धर्म\u00adक्षेत्रे", "धर्मक्षेत्रे"),
+        ("\ufeffरामः", "रामः"),
+        # Udātta/anudātta marks carry pitch, not spelling: no kosha key has them.
+        ("अ\u0952ग्नि\u0951", "अग्नि"),
+        # Vedic ळ/ळ्ह are the intervocalic forms of ड/ढ.
+        ("ईळे", "ईडे"),
+        ("मीळ्हुषे", "मीढुषे"),
+        # Chandrabindu is the anunāsika; classical spelling is the anusvāra.
+        ("हँसः", "हंसः"),
     ],
-    ids=["combining-nukta", "precomposed-dda", "precomposed-qa", "plain", "slp1", "empty"],
+    ids=["combining-nukta", "precomposed-dda", "precomposed-qa", "plain", "slp1", "empty",
+         "zwj", "zwnj", "soft-hyphen", "bom", "svaras", "vedic-lla", "vedic-llha",
+         "chandrabindu"],
 )
-def test_strip_nukta(text, expected):
-    assert strip_nukta(text) == expected
+def test_clean_devanagari(text, expected):
+    assert clean_devanagari(text) == expected

@@ -43,17 +43,27 @@ def test_to_devanagari_and_to_iast_handle_none():
 
 # --------------------------- pure helpers ---------------------------------
 
-def test_tokenize_splits_on_whitespace():
-    assert engine.tokenize("रामो विग्रहवान् धर्मः") == ["रामो", "विग्रहवान्", "धर्मः"]
+TOKENIZE_CASES = [
+    ("whitespace", "रामो विग्रहवान् धर्मः", ["रामो", "विग्रहवान्", "धर्मः"]),
+    ("dandas-and-punctuation", "गच्छति वनम्॥ राम।", ["गच्छति", "वनम्", "राम"]),
+    ("empty", "", []),
+    ("only-danda", "   ॥ ", []),
+    # A token is trimmed to its first Devanagari run, so a ZWJ/ZWNJ (used to
+    # force a half-form) cut the word there: क्<ZWJ>षत्रियः came back
+    # as क् and was then "resolved" as a form of √ci.
+    ("zwj-does-not-truncate", "क्\u200dषत्रियः", ["क्षत्रियः"]),
+    ("zwnj-does-not-truncate", "क्\u200cषत्रियः", ["क्षत्रियः"]),
+    ("soft-hyphen-does-not-truncate", "धर्म\u00adक्षेत्रे", ["धर्मक्षेत्रे"]),
+]
 
 
-def test_tokenize_strips_dandas_and_punctuation():
-    assert engine.tokenize("गच्छति वनम्॥ राम।") == ["गच्छति", "वनम्", "राम"]
-
-
-def test_tokenize_empty():
-    assert engine.tokenize("") == []
-    assert engine.tokenize("   ॥ ") == []
+def test_tokenize_table():
+    failures = [
+        f"{case_id}: {text!r} -> {got}, want {want}"
+        for case_id, text, want in TOKENIZE_CASES
+        if (got := engine.tokenize(text)) != want
+    ]
+    assert not failures, "\n".join(failures)
 
 
 def test_visarga_candidates_expands_terminal_visarga():

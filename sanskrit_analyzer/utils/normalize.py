@@ -5,10 +5,14 @@ import unicodedata
 
 from sanskrit_analyzer.models.scripts import Script
 
-
 # Character ranges for script detection
 _DEVANAGARI_RANGE = re.compile(r"[\u0900-\u097F]")
-_NUKTA = "\u093C"  # combining nukta; see strip_nukta
+# Chars with no Sanskrit spelling value, dropped by clean_devanagari:
+# ZWNJ/ZWJ and soft hyphen (rendering hints), BOM/word joiner, the nukta, and
+# Vedic svara marks (udātta, anudātta, grave/acute, Vedic Extensions tones).
+_DROP_RE = re.compile("[\u200c\u200d\u00ad\ufeff\u2060\u093c\u0951-\u0954\u1cd0-\u1ce8]")
+# Vedic ळ/ळ्ह are intervocalic ड/ढ; chandrabindu is spelled as anusvāra.
+_VEDIC_TO_CLASSICAL = (("ळ्ह", "ढ"), ("ळ", "ड"), ("ँ", "ं"))
 _IAST_DIACRITICS = re.compile(r"[āīūṛṝḷḹēōṃḥñṅṇṭḍśṣ]", re.IGNORECASE)
 # SLP1-exclusive lowercase letters, or any interior uppercase (see detect_script).
 _SLP1_MARKERS = re.compile(r"[fxzwq]|(?<=[A-Za-z])[A-Z]")
@@ -87,22 +91,26 @@ def detect_script(text: str, plain_ascii_default: Script | None = None) -> Scrip
     return Script.IAST
 
 
-def strip_nukta(text: str) -> str:
-    """Drop the combining nukta, mapping क़ ख़ ड़ back to their base letters.
+def clean_devanagari(text: str) -> str:
+    """Reduce text to the letters a kosha key is spelled with, NFC-composed.
 
-    The nukta marks Perso-Arabic sounds Sanskrit does not use, so in a Sanskrit
-    corpus it is a typo -- e.g. पितृ़णां for पितॄणां, 37 times in the Valmiki
-    Ramayana text. Transliteration has no mapping for it and passes it through
-    verbatim, leaving a multi-byte Devanagari character inside an otherwise-ASCII
-    SLP1 string, which panics vidyut's Rust sandhi splitter on a char boundary.
+    - The nukta marks Perso-Arabic sounds Sanskrit does not use, so in a
+      Sanskrit corpus it is a typo -- e.g. पितृ़णां for पितॄणां, 37 times in
+      the Valmiki Ramayana text. Transliteration passes it through verbatim,
+      leaving a multi-byte char inside ASCII SLP1, which panics vidyut's Rust
+      sandhi splitter on a char boundary. Precomposed क़ ड़ are decomposed
+      first so they lose the nukta too.
+    - ZWJ/ZWNJ and soft hyphens sit inside words to steer rendering; the
+      tokenizer took them for word ends and dropped the rest of the word.
+    - Vedic svara marks and ळ/chandrabindu spellings have no kosha keys, so
+      accented or Vedic text never resolved.
 
-    Precomposed forms are decomposed first so ड़ (U+095C) is handled the same
-    as ड + U+093C.
+    Safe on any script: non-Devanagari text only gets NFC composition.
     """
-    decomposed = unicodedata.normalize("NFD", text)
-    if _NUKTA not in decomposed:
-        return text
-    return unicodedata.normalize("NFC", decomposed.replace(_NUKTA, ""))
+    text = _DROP_RE.sub("", unicodedata.normalize("NFD", text))
+    for vedic, classical in _VEDIC_TO_CLASSICAL:
+        text = text.replace(vedic, classical)
+    return unicodedata.normalize("NFC", text)
 
 
 def normalize_slp1(text: str, source_script: Script | None = None) -> str:
@@ -131,6 +139,7 @@ def normalize_slp1(text: str, source_script: Script | None = None) -> str:
     if not text.strip():
         return text
 
+    text = clean_devanagari(text)
     if source_script is None:
         source_script = detect_script(text)
 

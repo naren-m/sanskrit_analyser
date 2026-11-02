@@ -84,6 +84,17 @@ SPLIT_CASES = [
     ("nukta-typo-does-not-panic", "पितृ़णां", ["pitṛṇāṃ"]),
     # Standard avagraha already worked and must keep working.
     ("standard-avagraha-e-o", "रामोऽपि", ["rāmas", "api"]),
+    # A ZWJ after the virama cut the token at the first Devanagari run, so
+    # only "dhar" reached the splitter.
+    ("zwj-inside-compound", "धर्\u200dमक्षेत्रे", ["dharmakṣetre"]),
+    # Rigveda 1.1.1: svara marks became "\" and "^" in SLP1 and ळ (Vedic ḍ)
+    # matched no kosha key, so nothing split.
+    ("vedic-svaras-and-lla", "अ\u0952ग्निमी\u0951ळे", ["agnim", "īḍe"]),
+    ("chandrabindu", "हँसः", ["haṃsaḥ"]),
+    # _solve recurses once per member; a token with ~500 members hit the
+    # recursion limit and segment() returned None for the WHOLE line, so the
+    # caller dropped to unsegmented output for every word, not just this one.
+    ("over-long-token-keeps-the-line", "रामो" * 600 + " वनं गच्छति", ["vanaṃ", "gacchati"]),
 ]
 
 
