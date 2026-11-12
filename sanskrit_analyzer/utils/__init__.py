@@ -5,6 +5,8 @@ from sanskrit_analyzer.utils.entity_keys import (
     fold_virama,
     is_near_spelling_variant,
     keys_match,
+    lemma_keys,
+    lemma_keys_match,
 )
 from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1
 
@@ -35,4 +37,7 @@ __all__ = [
     "fold_virama",
     "is_near_spelling_variant",
     "keys_match",
+    # Kosha stem keys (#33)
+    "lemma_keys",
+    "lemma_keys_match",
 ]

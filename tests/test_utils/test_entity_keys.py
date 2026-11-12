@@ -6,11 +6,16 @@ scripture apps (Yoga Sutras, ...) can rely on.
 """
 from __future__ import annotations
 
+import pytest
+
+from sanskrit_analyzer import vidyut_data
 from sanskrit_analyzer.utils.entity_keys import (
     canonical_key,
     fold_virama,
     is_near_spelling_variant,
     keys_match,
+    lemma_keys,
+    lemma_keys_match,
 )
 
 
@@ -87,3 +92,44 @@ def test_is_near_spelling_variant_guards():
     assert not is_near_spelling_variant("aardvark", "bardvark")
     # Different lengths (insertion/deletion) -> not a variant.
     assert not is_near_spelling_variant("laksmana", "laksana")
+
+
+# (id, name_a, name_b, same entity?) — #33. The ids say what each row proves.
+LEMMA_MATCH_CASES = [
+    ("vowel length separates king Sagara from the ocean", "सगर", "सागर", False),
+    ("instrumental keeps the king's stem", "सगर", "सगरेण", True),
+    ("accusative folds onto the stem", "सागर", "सागरम्", True),
+    ("visarga nominative is looked up as final s", "सागर", "सागरः", True),
+    ("genitive folds onto the stem", "सागरम्", "सागरस्य", True),
+    ("final anusvara equals final m", "भयम्", "भयं", True),
+    ("mid-word anusvara equals the class nasal", "स्वयम्भू", "स्वयंभु", True),
+    ("singular and plural share a stem", "वानरः", "वानराः", True),
+    ("visarga sandhi -o is also read as -as", "हरयो", "हरि", True),
+    ("a participle root does not join hara and hAra", "हर", "हार", False),
+    ("mountain is not serpent", "नागः", "नगाः", False),
+    ("arm is not many", "बाहुभिः", "बहुभिः", False),
+    ("conduct is not rock", "शील", "शिला", False),
+    ("gender pair merges by default", "रम्भ", "रम्भा", True),
+    ("IAST input reaches the same stem", "sāgaram", "सागर", True),
+    ("a name with no kosha entry never matches", "हरियूथपः", "हरियूथपाः", False),
+    ("empty input never matches", "", "राम", False),
+]
+
+
+def test_lemma_keys():
+    """Stem keys keep vowel length and fold case endings (#33).
+
+    A new function, not a row in an existing table: this is the only test here
+    that needs the vidyut kosha data, so it carries its own skip.
+    """
+    if not vidyut_data.is_available():
+        pytest.skip("vidyut kosha data not available")
+    failures = [
+        f"{case_id}: {a} vs {b} -> {got}, want {want}"
+        for case_id, a, b, want in LEMMA_MATCH_CASES
+        if (got := lemma_keys_match(a, b)) != want
+    ]
+    assert lemma_keys("सागरस्य") == frozenset({"sAgara"})
+    assert lemma_keys("रम्भ", prefer_exact=True) == frozenset({"ramBa"})
+    assert not lemma_keys_match("रम्भ", "रम्भा", prefer_exact=True)
+    assert not failures, "\n".join(failures)
