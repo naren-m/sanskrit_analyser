@@ -12,6 +12,7 @@ is the dominant fragmentation mode in an extracted graph.
 """
 from __future__ import annotations
 
+import functools
 import re
 import unicodedata
 
@@ -96,3 +97,89 @@ def keys_match(key_a: str, key_b: str) -> bool:
     if fold_virama(key_a) == fold_virama(key_b):
         return True
     return is_near_spelling_variant(key_a, key_b)
+
+
+# --- Stem keys (#33) ---------------------------------------------------------
+#
+# ``canonical_key`` drops vowel length, so सगर (king Sagara) and सागर (ocean)
+# share the key ``sagara`` and a graph merges them. The functions below key a
+# name on its dictionary stem (prātipadika) from the vidyut kosha instead. The
+# stem keeps vowel length and aspiration, and still folds case endings.
+
+#: Anusvāra before a stop becomes that stop's class nasal (स्वयंभु → svayamBu),
+#: the spelling the kosha indexes.
+_CLASS_NASALS = (
+    ("kKgG", "N"), ("cCjJ", "Y"), ("wWqQ", "R"), ("tTdD", "n"), ("pPbB", "m"),
+)
+
+
+def _kosha_form(name: str) -> str:
+    """Any-script surface form → the SLP1 spelling the kosha indexes.
+
+    The kosha stores word-final ``s`` and ``m``, not the visarga and anusvāra
+    that written text uses. Without this step every visarga form misses
+    (सागरः, वानरः).
+    """
+    from sanskrit_analyzer.utils.normalize import normalize_slp1
+
+    form = normalize_slp1(normalize_brahmic(name.strip()))
+    form = re.sub(r"M$", "m", form)
+    form = re.sub(r"H$", "s", form)
+    for stops, nasal in _CLASS_NASALS:
+        form = re.sub(f"M(?=[{stops}])", nasal, form)
+    return form
+
+
+@functools.lru_cache(maxsize=50_000)
+def lemma_keys(name: str, *, prefer_exact: bool = False) -> frozenset[str]:
+    """The nominal stems (SLP1) the kosha gives for *name*.
+
+    ``सागरम्``, ``सागरस्य`` and ``सागरः`` all return ``{"sAgara"}``;
+    ``सगरेण`` returns ``{"sagara"}``. An ambiguous form returns every stem
+    (``रम्भ`` → ``{"ramBa", "ramBA"}``).
+
+    A stem that is a verb root is skipped. A participle's lemma is its root, so
+    हर and हार would otherwise both carry ``hf`` and match.
+
+    ``prefer_exact`` narrows the set to the form itself when the form is one of
+    its own stems (``रम्भ`` → ``{"ramBa"}``). It separates gender pairs
+    (रम्भ / रम्भा) at the cost of splitting stem / nominative pairs of one
+    name (त्रिशिर / त्रिशिरा).
+
+    Returns an empty set when the kosha has no entry (compounds, misspellings)
+    or the kosha data is not installed. The caller chooses the fallback.
+    """
+    if not name.strip():
+        return frozenset()
+    from sanskrit_analyzer import vidyut_data
+
+    try:
+        form = _kosha_form(name)
+        kosha = vidyut_data.kosha()
+        entries = list(kosha.get(form))
+        if form.endswith("o"):
+            # Visarga sandhi writes -aḥ as -o before a voiced sound (हरयो,
+            # रामो). Read it both ways; the union keeps the form ambiguous.
+            entries += kosha.get(form[:-1] + "as")
+    except Exception:  # missing data bundle, or a form vidyut cannot parse
+        return frozenset()
+    stems = set()
+    for entry in entries:
+        stem = getattr(entry, "pratipadika_entry", None)
+        lemma = getattr(entry, "lemma", None)
+        if stem is not None and lemma and getattr(stem, "dhatu_entry", None) is None:
+            stems.add(lemma)
+    if prefer_exact and form in stems:
+        return frozenset({form})
+    return frozenset(stems)
+
+
+def lemma_keys_match(name_a: str, name_b: str, *, prefer_exact: bool = False) -> bool:
+    """True when two names share a kosha stem.
+
+    False when either name has no stem: "unknown" is not evidence of identity.
+    """
+    return bool(
+        lemma_keys(name_a, prefer_exact=prefer_exact)
+        & lemma_keys(name_b, prefer_exact=prefer_exact)
+    )
