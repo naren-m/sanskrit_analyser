@@ -1,0 +1,114 @@
+{
+  "repo": "ashtadhyayi-com/data",
+  "commit": "5744762f010d677cfb43f347a42d02796cf615d6",
+  "files": {
+    "sutraani/data.txt": {
+      "bytes": 3979366,
+      "sha256": "6a22591f418cd924ba4bd621944de2359cc06721b5ada79ef08d70f17a07bcc6"
+    },
+    "sutraani/kashika.txt": {
+      "bytes": 3806703,
+      "sha256": "ccd6d554d10acbe89fd566730a59731ace38b2aad982becbbd653b77cca93254"
+    },
+    "sutraani/bhashya.txt": {
+      "bytes": 6213939,
+      "sha256": "6ce286c683dadaf8d88891699add7c0f3139095c782adb799c6d198e7e49f954"
+    },
+    "sutraani/nyaas.txt": {
+      "bytes": 9286920,
+      "sha256": "09766f127e9523d911179065fed777a17c4f832b336e745f13c0b2cebc76c0ce"
+    },
+    "sutraani/padamanjari.txt": {
+      "bytes": 7828904,
+      "sha256": "93b817859e7333f326b0aaec7f17b03d83ff3d34cf3200402e929e8a21ce28cc"
+    },
+    "sutraani/kaumudi.txt": {
+      "bytes": 2057933,
+      "sha256": "c1938e832ddc2e148ae36257448ee3391f71cdac28be19dc4bfdc3881f3b457d"
+    },
+    "sutraani/laghukaumudi.txt": {
+      "bytes": 433216,
+      "sha256": "ac02643c3e389022710ef9cb0c21fc8f94876f67d28956c214078297ff088862"
+    },
+    "sutraani/balamanorama.txt": {
+      "bytes": 6995341,
+      "sha256": "0810e4c59d1642122186e1f0838af15859ea2d48487f6ee5e9006cf5302e9238"
+    },
+    "sutraani/tattvabodhini.txt": {
+      "bytes": 4769767,
+      "sha256": "6784a8d4f84de1f7b5653851ab5ff52ca88b3b28204b9515b74f0b75a9d3c2b4"
+    },
+    "sutraani/praudhamanorama.txt": {
+      "bytes": 825568,
+      "sha256": "a70d823399dffb76b4dd12d950f72588a397dceabd16a4a59f587792334be0fa"
+    },
+    "sutraani/laghushabdendushekhar.txt": {
+      "bytes": 316400,
+      "sha256": "a15f701551c3d44a6135fc99925191c287de8ab46eee534b7087abaea89586be"
+    },
+    "sutraani/sudha.txt": {
+      "bytes": 903225,
+      "sha256": "a792ef16fbb30ee5a25db7421f6ebce2f1cc64b618bcf2089d30f6e6f9413efe"
+    },
+    "sutraani/sarala.txt": {
+      "bytes": 205473,
+      "sha256": "54aa8c8498a0434e59e17c9a175f7aa3306083a561400b4b753049af8ee56a9c"
+    },
+    "sutraani/prakriyasarvasvam.txt": {
+      "bytes": 2237275,
+      "sha256": "78750fdd7372dcb0bf9c3a098542783404537e2e9114832ffe6138e47b8293c9"
+    },
+    "sutraani/sutrartha.txt": {
+      "bytes": 10864022,
+      "sha256": "cb6229b3e91c8c1a2dd65f8dfaace1a6d44fcdcb65d900d507bfbda20921b35b"
+    },
+    "sutraani/sutrartha_english.txt": {
+      "bytes": 221149,
+      "sha256": "2134792ab774a41a6b00d2694bf388a20a20085d14b6156718d8412cb8a5f3bf"
+    },
+    "sutraani/vasu_english.txt": {
+      "bytes": 4660923,
+      "sha256": "4ec4f9519581d508fa2e341ba8c8403b4fff852cec48ae306c4fdadbb47912e1"
+    },
+    "sutraani/vasu_english_summary.txt": {
+      "bytes": 729779,
+      "sha256": "52ad58c2c9cde9d7b2a984b4ae4c63bc68675fc1e8f2a57a12a4d876b14257ae"
+    },
+    "sutraani/vartika.txt": {
+      "bytes": 136938,
+      "sha256": "8a518ad629fb8bfeec3f702385a9c611b3cda79f49a77c64d73d95d97c4f3926"
+    },
+    "sutraani/sutra_prayogas.txt": {
+      "bytes": 2372939,
+      "sha256": "6e27e413f1523a82a986bdd409f199f0f0d7e31afcc8ef9e134afbc40e83bf09"
+    },
+    "shivasutra/data.txt": {
+      "bytes": 99514,
+      "sha256": "0f0cda95f46a05e1f56a664413da128a1f098b12e07b8cb18461fd1a4347552d"
+    },
+    "pratyahara/data.txt": {
+      "bytes": 13417,
+      "sha256": "e1bdd1d16b5ccb77af6ee6ce5fbeaaa8ab8f3f593787b82a12db6fcee8e783ca"
+    },
+    "ganapath/data.txt": {
+      "bytes": 178564,
+      "sha256": "4b69d16c434de95c56a97311fd3186e55ba2cbd71776a0ef9e75f4ec6660e542"
+    },
+    "dhatu/data.txt": {
+      "bytes": 2505028,
+      "sha256": "e8c0e929294c4ab68455b461ee81234e7a0febac1b72e6873ea832354a28b641"
+    },
+    "unaadi/data.txt": {
+      "bytes": 208129,
+      "sha256": "00a2f267a103bf34f92fb627fe90f9bdceb3962e261f3cb78afda2a22b790020"
+    },
+    "linganushasanam/data.txt": {
+      "bytes": 63299,
+      "sha256": "c994bd3230cd9d2183b58379b19c99707a0452971daf45568fbdfe1afe55a112"
+    },
+    "fit/data.txt": {
+      "bytes": 32195,
+      "sha256": "c87d9c488a99dcae00d4e6bfbf3051f824995219b38eb61b0bab62d38704bf77"
+    }
+  }
+}

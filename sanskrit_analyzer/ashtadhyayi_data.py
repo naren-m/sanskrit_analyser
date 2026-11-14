@@ -4,19 +4,20 @@ The vidyut bundle carries the bare sūtrapāṭha but only a 9-row Kāśikā stu
 and no translation. The ashtadhyayi.com repo has the Kāśikā for all 3983
 sūtras, Vasu's English, and a dozen more commentaries. Its README: "You are
 free to use this data in your own projects provided that appropriate credits
-are mentioned" -- so the files are fetched at install/build time, never
-vendored, and SOURCE.md next to them carries the credit.
+are mentioned", so the repo vendors all of it under ``data/ashtadhyayi`` with
+the credit in SOURCE.md. The wheel ships only CORE_FILES (see pyproject.toml);
+the rest (~65 MB) is in a source checkout only.
 
 Resolution order for the data directory:
 
 1. ``ASHTADHYAYI_DATA_DIR`` environment variable
-2. ``~/.sanskrit-data/ashtadhyayi``
+2. ``sanskrit_analyzer/data/ashtadhyayi`` (vendored)
 
-Fetch (pinned to one commit, resumable)::
+Refresh the vendored copy after bumping COMMIT (resumable)::
 
-    python -m sanskrit_analyzer.ashtadhyayi_data [--out DIR] [--all]
+    python -m sanskrit_analyzer.ashtadhyayi_data --all
 
-Without ``--all`` only the files SutraIndex reads are fetched (~4.5 MB).
+Without ``--all`` only CORE_FILES are fetched (~4.5 MB).
 """
 
 from __future__ import annotations
@@ -62,17 +63,17 @@ the data behind https://ashtadhyayi.com.
 
 Credit: ashtadhyayi.com and its contributors. Their terms: "You are free to
 use this data in your own projects provided that appropriate credits are
-mentioned wherever applicable." Do not commit these files to another repo
-without that credit.
+mentioned wherever applicable." Keep this file next to the data wherever
+it is copied.
 
-Fetched by `python -m sanskrit_analyzer.ashtadhyayi_data`.
+Refreshed by `python -m sanskrit_analyzer.ashtadhyayi_data --all`.
 """
 
 
 def data_dir() -> Path:
-    """Where the data lives (or would be fetched to)."""
+    """Where the data lives: the env override, else the vendored copy."""
     env = os.environ.get("ASHTADHYAYI_DATA_DIR")
-    return Path(env) if env else Path.home() / ".sanskrit-data" / "ashtadhyayi"
+    return Path(env) if env else Path(__file__).parent / "data" / "ashtadhyayi"
 
 
 def load_commentary(name: str, root: Path | None = None) -> dict[str, str]:
