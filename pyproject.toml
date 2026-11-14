@@ -85,7 +85,16 @@ packages = ["sanskrit_analyzer"]
 # out of the wheel on size; lexicon.resolve_data_dir() also looks at
 # SANSKRIT_LAYERB_DIR and ~/.sanskrit_analyzer/vyutpatti, and lexicon.is_available()
 # is False when none of those has the data. Drop this line to ship them instead.
-exclude = ["sanskrit_analyzer/data/vyutpatti/*.tsv"]
+# Vendored Aṣṭādhyāyī corpus (~69 MB): the wheel keeps only what SutraIndex
+# reads (ashtadhyayi_data.CORE_FILES) plus the credit; the rest is checkout-only.
+exclude = [
+    "sanskrit_analyzer/data/vyutpatti/*.tsv",
+    "sanskrit_analyzer/data/ashtadhyayi/**",
+    "!sanskrit_analyzer/data/ashtadhyayi/SOURCE.md",
+    "!sanskrit_analyzer/data/ashtadhyayi/manifest.json",
+    "!sanskrit_analyzer/data/ashtadhyayi/sutraani/kashika.txt",
+    "!sanskrit_analyzer/data/ashtadhyayi/sutraani/vasu_english_summary.txt",
+]
 
 # Required because the [project.optional-dependencies].api group includes a
 # direct reference (`homelab-observability @ git+...`). Without this flag
