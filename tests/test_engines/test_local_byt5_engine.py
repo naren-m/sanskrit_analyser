@@ -21,6 +21,28 @@ class TestLocalByT5Engine:
             engine = LocalByT5Engine(load_on_init=False)
             assert not engine.is_available
 
+    # The combined task writes surface_lemma_tags for every word. For BG 2.47
+    # the real model output is 282 bytes, so a fixed 256-token cap cut the
+    # last word ("akarmaṇi") off the verse.
+    BG_2_47_IAST = (
+        "karmaṇyevādhikāraste mā phaleṣu kadācana | "
+        "mā karmaphalaheturbhūrmā te saṅgo'stvakarmaṇi ||"
+    )
+
+    @pytest.mark.parametrize(
+        ("input_text", "min_budget"),
+        [
+            ("SLM rāmo gacchati", 256),       # short input keeps the floor
+            (f"SLM {BG_2_47_IAST}", 282),     # full śloka: room for all words
+        ],
+    )
+    def test_output_budget_covers_full_verse(
+        self, input_text: str, min_budget: int
+    ) -> None:
+        with patch.object(LocalByT5Engine, "_load_model"):
+            engine = LocalByT5Engine(load_on_init=False)
+            assert engine._output_budget(input_text) >= min_budget
+
     def test_parse_segmentation(self) -> None:
         """Test parsing of segmentation output."""
         with patch.object(LocalByT5Engine, "_load_model"):

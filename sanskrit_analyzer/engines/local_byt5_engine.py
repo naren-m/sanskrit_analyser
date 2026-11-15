@@ -48,6 +48,11 @@ class LocalByT5Engine(EngineBase):
     # Default model - the fine-tuned multitask model
     DEFAULT_MODEL = "chronbmm/sanskrit5-multitask"
 
+    # The SLM task writes surface_lemma_tags for every word, about 2.5x the
+    # input bytes (BG 2.47: 113 input bytes -> 282 output bytes). Scale the
+    # output cap with the input so a full śloka is never cut short.
+    OUTPUT_BYTES_PER_INPUT_BYTE = 4
+
     def __init__(
         self,
         model_name: str = DEFAULT_MODEL,
@@ -67,7 +72,8 @@ class LocalByT5Engine(EngineBase):
             input_max_length: Max byte-length window for tokenizing input. ByT5
                 is byte-level (~512 bytes ≈ 170 Devanagari chars), so a wider
                 window keeps long verses from being byte-truncated.
-            max_new_tokens: Max number of new tokens to generate (output budget).
+            max_new_tokens: Minimum output budget in tokens. Long inputs get
+                more (see ``_output_budget``).
             load_on_init: Whether to load model immediately or lazily.
         """
         self._model_name = model_name
@@ -194,17 +200,28 @@ class LocalByT5Engine(EngineBase):
         # Generate greedily. Beam search with early_stopping halts the beam at
         # the first EOS and catastrophically truncates output (e.g. a whole
         # compound collapsing to "ik"); greedy decoding runs to the real end.
-        # Cap by max_new_tokens (output budget), not the input window.
+        budget = self._output_budget(input_text)
         with torch.no_grad():
             outputs = self._model.generate(
                 **inputs,
-                max_new_tokens=self._max_new_tokens,
+                max_new_tokens=budget,
                 num_beams=1,
+            )
+        # outputs[0] starts with the decoder start token.
+        if len(outputs[0]) - 1 >= budget:
+            logger.warning(
+                "ByT5 output hit the %d-token budget; the last words may be lost",
+                budget,
             )
 
         # Decode
         result = self._tokenizer.decode(outputs[0], skip_special_tokens=True)
         return result.strip()
+
+    def _output_budget(self, input_text: str) -> int:
+        """Max new tokens for ``input_text``: the floor, or more for long input."""
+        scaled = self.OUTPUT_BYTES_PER_INPUT_BYTE * len(input_text.encode("utf-8"))
+        return max(self._max_new_tokens, scaled)
 
     def _strip_task_prefix(self, output: str) -> str:
         """Strip task prefix from model output if present.
