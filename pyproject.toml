@@ -131,3 +131,11 @@ testpaths = ["tests"]
 markers = [
     "slow: marks tests that are slow and/or require ML model weights (deselect with '-m \"not slow\"')",
 ]
+
+# Code-smell gate (naren-m/smell-lint v0.1.0). Baseline: .smell_baseline.json.
+# Scan the library. CLI entry points print by design, so they are skipped:
+# training/cli.py and every __main__.py. tests/, examples/, scripts/ and
+# streamlit_app.py are out of scope.
+[tool.smell_lint]
+paths = ["sanskrit_analyzer", "api"]
+exclude = ["sanskrit_analyzer/training/cli.py", "__main__.py"]
