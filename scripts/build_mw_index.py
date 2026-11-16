@@ -8,9 +8,10 @@ never downloads anything. Writes table ``mw(key, key_stem, lnum, page, text,
 hom)`` with an index on ``key``. ``key`` is the SLP1 headword (``key1``),
 ``key_stem`` is ``key2`` with markup and accents removed.
 
-The body cleaning (tag regexes, accent strip, CDSL id scrub) is written to match
-the yoga_sutras ``DictionaryService`` approach. That repo was not available when
-this was written, so these are equivalent regexes, not a verbatim copy.
+The body cleaning (``_DEF_*`` regexes, accent strip, ``_CDSL_ID`` scrub, and
+``clean_definition``) is copied from ``naren-m/yoga_sutras``
+``backend/app/services/dictionary_service.py`` (``DictionaryService``), not
+imported. Only the XML-to-flat-text step before it is local to this script.
 """
 from __future__ import annotations
 
@@ -21,25 +22,80 @@ import sys
 import zipfile
 from pathlib import Path
 
+from indic_transliteration import sanscript
+from indic_transliteration.sanscript import transliterate
+
 _ENTRY = re.compile(r"<(H\d+[A-Za-z]*)>(.*?)</\1>", re.S)
 _TAG = re.compile(r"<[^>]+>")
 _WS = re.compile(r"\s+")
-# CDSL bookkeeping that is not gloss text: <info .../>, <L>, <pc>, <lbinfo .../>.
-_CDSL_ID = re.compile(r"<(?:info|lbinfo)\b[^>]*/?>|<L>.*?</L>|<pc>.*?</pc>", re.S)
+# CDSL XML bookkeeping that is not gloss text: <info .../>, <L>, <pc>, <lbinfo .../>.
+_XML_BOOKKEEPING = re.compile(r"<(?:info|lbinfo)\b[^>]*/?>|<L>.*?</L>|<pc>.*?</pc>", re.S)
 # Inline emphasis / transliteration wrappers: {%italic%}, {#slp1#}, {@bold@}.
 _MARKS = re.compile(r"\{[%#@]|[%#@]\}")
-# Vedic accent marks in SLP1, only meaningful inside <s>...</s>.
-_S_SPAN = re.compile(r"(<s>)(.*?)(</s>)", re.S)
+# Vedic accent marks in SLP1 headwords (key_stem only; bodies use _DEF_ACCENT).
 _ACCENTS = re.compile(r"[/\\^]")
+
+# --- copied from yoga_sutras DictionaryService ---------------------------------
+_DEF_WORD = re.compile(r'[A-Za-z/]+')
+_DEF_TRAIL_REF = re.compile(r'[\d,\-]{4,}[a-z]?\s*$')
+_DEF_DOUBLED = re.compile(r'(\w{4,})\1+')
+_DEF_ACCENT = re.compile(r'(?<=[A-Za-z])/(?=[A-Za-z])')
+_DEF_BODY_START = re.compile(r'^(?:(?:mfn|mf|m|f|n|ind|cl|p{1,2})\.?$|[0-9(&A-Z])')
+# MW states a derived word's origin as 'fr. √ 1. viṣ'; CDSL glues its own entry
+# id onto some roots: 'sañj.228458'.
+_CITED_ROOT = re.compile(r'√\s*(?:(?:\d+\.?|and)\s*)*([^\s,;)\]]+)')
+_CDSL_ID = re.compile(r'\.\d+$')
+
+
+def clean_definition(value: str) -> str:
+    """Make a raw CDSL entry body readable (yoga_sutras ``clean_definition``)."""
+
+    def _xlit_token(m: re.Match) -> str:
+        token = m.group(0)
+        core = token.replace('/', '')  # '/' marks vedic accent in MW
+        if core and core[0].islower() and any(c.isupper() for c in core[1:]):
+            try:
+                return transliterate(core, sanscript.SLP1, sanscript.IAST)
+            except Exception:
+                return token
+        return token
+
+    text = _DEF_WORD.sub(_xlit_token, value)
+    text = _DEF_ACCENT.sub('', text)
+    text = _DEF_DOUBLED.sub(r'\1', text)
+    text = _DEF_TRAIL_REF.sub('', text)
+    stripped = re.sub(r'^(?:\S*[^\x00-\x7F]\S*\s+)+', '', text)
+    if len(stripped) >= 3:
+        text = stripped
+    tokens = text.split(' ')
+    for i, token in enumerate(tokens[:6]):
+        if _DEF_BODY_START.match(token):
+            if i > 0:
+                text = ' '.join(tokens[i:])
+            break
+    return text.rstrip(' ;,')
+
+
+def _scrub_root_ids(text: str) -> str:
+    """Drop the CDSL entry id glued onto cited roots ('sañj.228458' -> 'sañj')."""
+    return _CITED_ROOT.sub(
+        lambda m: m.group(0)[: m.start(1) - m.start(0)] + _CDSL_ID.sub("", m.group(1)), text
+    )
+# --- end copied block -----------------------------------------------------------
+
+_TAG = re.compile(r"<[^>]+>")
+_WS = re.compile(r"\s+")
+
+
+def flatten(raw: str) -> str:
+    """Flat text from a raw MW XML fragment (tags and markup removed)."""
+    raw = _MARKS.sub("", _XML_BOOKKEEPING.sub(" ", raw))
+    return _WS.sub(" ", html.unescape(_TAG.sub(" ", raw))).replace("¦", "").strip()
 
 
 def clean_body(raw: str) -> str:
     """Plain-text gloss from a raw MW ``<body>`` fragment."""
-    raw = _CDSL_ID.sub(" ", raw)
-    raw = _S_SPAN.sub(lambda m: m.group(1) + _ACCENTS.sub("", m.group(2)) + m.group(3), raw)
-    raw = _MARKS.sub("", raw)
-    text = html.unescape(_TAG.sub(" ", raw))
-    return _WS.sub(" ", text).replace("¦", "").strip()
+    return _scrub_root_ids(clean_definition(flatten(raw)))
 
 
 def _field(tag: str, chunk: str) -> str:
@@ -55,7 +111,7 @@ def parse_entries(xml: str):
         body = _field("body", chunk)
         if not key or not body:
             continue
-        stem = clean_body(_field("key2", chunk)).replace("-", "") or key
+        stem = flatten(_field("key2", chunk)).replace("-", "") or key
         yield (
             key,
             _ACCENTS.sub("", stem),

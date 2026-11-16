@@ -52,7 +52,7 @@ def test_lookup_mw_any_script(mw_db, word):
 
 def test_body_cleaning_strips_accents_and_ids(mw_db):
     (e,) = lexicon.lookup("agni", sources=["mw"])
-    assert e.text == "agni m. fire, sacrificial fire RV."
+    assert e.text == "m. fire, sacrificial fire RV."  # clean_definition drops the headword echo
     assert e.fields["key_stem"] == "agni"  # key2 "a/gni" loses its accent
     assert "<" not in e.text and "sup" not in e.text
 
