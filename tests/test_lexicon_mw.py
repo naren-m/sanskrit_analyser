@@ -1,0 +1,88 @@
+"""Monier-Williams source and prefix() in the lexicon, built from a tiny fixture."""
+
+from __future__ import annotations
+
+import importlib.util
+import sqlite3
+from pathlib import Path
+
+import pytest
+
+from sanskrit_analyzer import lexicon
+
+ROOT = Path(__file__).resolve().parent.parent
+FIXTURE = ROOT / "tests" / "fixtures" / "mw_mini.xml"
+
+_spec = importlib.util.spec_from_file_location(
+    "build_mw_index", ROOT / "scripts" / "build_mw_index.py"
+)
+builder = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(builder)
+
+
+@pytest.fixture
+def mw_db(tmp_path, monkeypatch):
+    db = tmp_path / "mw.sqlite"
+    builder.build(FIXTURE, db)
+    monkeypatch.setenv("SANSKRIT_MW_DB", str(db))
+    return db
+
+
+def test_build_index_from_fixture(mw_db):
+    con = sqlite3.connect(mw_db)
+    cols = [r[1] for r in con.execute("PRAGMA table_info(mw)")]
+    assert cols == ["key", "key_stem", "lnum", "page", "text", "hom"]
+    assert con.execute("SELECT COUNT(*) FROM mw").fetchone()[0] == 8
+    assert con.execute("PRAGMA index_list(mw)").fetchall()
+    con.close()
+
+
+# "rāma" is spelt differently in all three encodings.
+@pytest.mark.parametrize("word", ["राम", "rāma", "rAma"])
+def test_lookup_mw_any_script(mw_db, word):
+    entries = lexicon.lookup(word, sources=["mw"])
+    assert [e.fields["hom"] for e in entries] == ["1", "2"]
+    e = entries[1]
+    assert e.source == "mw" and e.key == "rAma" and e.page == "877,3"
+    assert e.fields["lnum"] == "4" and e.fields["key_stem"] == "rAma"
+    assert "Rama, son of Dasharatha & hero" in e.text
+    assert e.licence == "CC BY-SA 4.0"
+    assert "Cologne" in e.acknowledgement
+
+
+def test_body_cleaning_strips_accents_and_ids(mw_db):
+    (e,) = lexicon.lookup("agni", sources=["mw"])
+    assert e.text == "agni m. fire, sacrificial fire RV."
+    assert e.fields["key_stem"] == "agni"  # key2 "a/gni" loses its accent
+    assert "<" not in e.text and "sup" not in e.text
+
+
+def test_prefix_sorted_distinct(mw_db):
+    # rAma appears twice in the fixture (two homonyms) but once in the result.
+    assert lexicon.prefix("रा", sources=["mw"]) == ["rAjan", "rAmAyaRa", "rAma"]  # code-point order: A < a
+    assert lexicon.prefix("", sources=["mw"]) == []
+
+
+def test_prefix_limit(mw_db):
+    assert lexicon.prefix("rA", limit=2, sources=["mw"]) == ["rAjan", "rAmAyaRa"]
+
+
+def test_prefix_unknown_source_raises(mw_db):
+    with pytest.raises(KeyError, match="unknown Layer B source"):
+        lexicon.prefix("rA", sources=["nosuchdict"])
+
+
+def test_mw_unavailable_returns_empty(monkeypatch):
+    monkeypatch.setattr(lexicon, "resolve_mw_db", lambda: None)
+    assert lexicon.is_available("mw") is False
+    assert lexicon.lookup("rAma", sources=["mw"]) == []
+    assert lexicon.prefix("rA", sources=["mw"]) == []
+
+
+@pytest.mark.skipif(not lexicon.is_available("skd"), reason="Layer B TSVs not present")
+def test_layerb_lookup_unchanged(mw_db):
+    entries = lexicon.lookup("rAma", sources=["skd", "vcp"])
+    assert entries and {e.source for e in entries} <= {"skd", "vcp"}
+    assert all(e.licence is None and e.acknowledgement is None for e in entries)
+    assert lexicon.resolve_data_dir() != mw_db.parent
+    assert "rAma" in lexicon.prefix("rAm", limit=50, sources=["skd", "vcp"])
