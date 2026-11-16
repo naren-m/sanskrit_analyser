@@ -1,0 +1,15 @@
+Monier-Williams Sanskrit-English Dictionary data
+Source: Cologne Digital Sanskrit Dictionaries (CDSL),
+Institut für Indologie und Südasienforschung, Universität zu Köln,
+https://www.sanskrit-lexicon.uni-koeln.de
+
+The dictionary data derived from CDSL (the mw.sqlite index built by
+scripts/build_mw_index.py) is licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International licence (CC BY-SA 4.0):
+https://creativecommons.org/licenses/by-sa/4.0/legalcode
+
+You must give attribution to the Cologne Digital Sanskrit Dictionaries and
+share derivatives of this data under the same licence.
+
+This licence covers the CDSL data only. The sanskrit_analyzer library code
+stays under the MIT licence.
