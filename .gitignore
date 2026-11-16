@@ -7,8 +7,3 @@ __pycache__/
 
 # Generated artifacts
 graphify-out/
-
-# Sandbox scratch
-pytest-of-*/
-tmp*.db-shm
-tmp*.db-wal

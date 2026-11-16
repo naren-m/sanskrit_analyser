@@ -16,6 +16,7 @@ imported. Only the XML-to-flat-text step before it is local to this script.
 from __future__ import annotations
 
 import html
+import os
 import re
 import sqlite3
 import sys
@@ -122,27 +123,41 @@ def parse_entries(xml: str):
 def read_xml(path: Path) -> str:
     if path.suffix == ".zip":
         with zipfile.ZipFile(path) as zf:
-            name = next(n for n in zf.namelist() if n.endswith("mw.xml"))
+            name = next((n for n in zf.namelist() if n.endswith("mw.xml")), None)
+            if name is None:
+                raise ValueError(f"no mw.xml inside {path}")
             return zf.read(name).decode("utf-8")
     return path.read_text(encoding="utf-8")
 
 
 def build(src: Path, out: Path) -> int:
-    """Write the SQLite index to ``out``; returns the number of rows."""
-    if out.exists():
-        out.unlink()
-    con = sqlite3.connect(out)
+    """Write the SQLite index to ``out``; returns the number of rows.
+
+    Builds into ``<out>.tmp`` and swaps it in with ``os.replace`` once complete,
+    so a failed build leaves any existing ``out`` untouched.
+    """
+    tmp = out.with_name(out.name + ".tmp")
+    tmp.unlink(missing_ok=True)
     try:
-        con.execute(
-            "CREATE TABLE mw (key TEXT, key_stem TEXT, lnum TEXT, page TEXT, "
-            "text TEXT, hom TEXT)"
-        )
-        con.executemany("INSERT INTO mw VALUES (?,?,?,?,?,?)", parse_entries(read_xml(src)))
-        con.execute("CREATE INDEX mw_key ON mw (key)")
-        con.commit()
-        return con.execute("SELECT COUNT(*) FROM mw").fetchone()[0]
-    finally:
-        con.close()
+        con = sqlite3.connect(tmp)
+        try:
+            con.execute(
+                "CREATE TABLE mw (key TEXT, key_stem TEXT, lnum TEXT, page TEXT, "
+                "text TEXT, hom TEXT)"
+            )
+            con.executemany(
+                "INSERT INTO mw VALUES (?,?,?,?,?,?)", parse_entries(read_xml(src))
+            )
+            con.execute("CREATE INDEX mw_key ON mw (key)")
+            con.commit()
+            n = con.execute("SELECT COUNT(*) FROM mw").fetchone()[0]
+        finally:
+            con.close()
+        os.replace(tmp, out)
+        return n
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def main(argv: list[str]) -> int:

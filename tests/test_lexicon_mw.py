@@ -37,6 +37,20 @@ def test_build_index_from_fixture(mw_db):
     con.close()
 
 
+def test_failed_build_keeps_old_index(mw_db, tmp_path):
+    import zipfile
+
+    bad = tmp_path / "bad.zip"
+    with zipfile.ZipFile(bad, "w") as zf:
+        zf.writestr("other.txt", "x")
+    with pytest.raises(ValueError, match="mw.xml"):
+        builder.build(bad, mw_db)
+    con = sqlite3.connect(mw_db)
+    assert con.execute("SELECT COUNT(*) FROM mw").fetchone()[0] == 9
+    con.close()
+    assert not mw_db.with_name(mw_db.name + ".tmp").exists()
+
+
 # "rāma" is spelt differently in all three encodings.
 @pytest.mark.parametrize("word", ["राम", "rāma", "rAma"])
 def test_lookup_mw_any_script(mw_db, word):
