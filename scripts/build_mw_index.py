@@ -83,9 +83,6 @@ def _scrub_root_ids(text: str) -> str:
     )
 # --- end copied block -----------------------------------------------------------
 
-_TAG = re.compile(r"<[^>]+>")
-_WS = re.compile(r"\s+")
-
 
 def flatten(raw: str) -> str:
     """Flat text from a raw MW XML fragment (tags and markup removed)."""

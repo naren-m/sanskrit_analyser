@@ -32,7 +32,7 @@ def test_build_index_from_fixture(mw_db):
     con = sqlite3.connect(mw_db)
     cols = [r[1] for r in con.execute("PRAGMA table_info(mw)")]
     assert cols == ["key", "key_stem", "lnum", "page", "text", "hom"]
-    assert con.execute("SELECT COUNT(*) FROM mw").fetchone()[0] == 8
+    assert con.execute("SELECT COUNT(*) FROM mw").fetchone()[0] == 9
     assert con.execute("PRAGMA index_list(mw)").fetchall()
     con.close()
 
@@ -55,6 +55,10 @@ def test_body_cleaning_strips_accents_and_ids(mw_db):
     assert e.text == "m. fire, sacrificial fire RV."  # clean_definition drops the headword echo
     assert e.fields["key_stem"] == "agni"  # key2 "a/gni" loses its accent
     assert "<" not in e.text and "sup" not in e.text
+    # cited root loses its glued CDSL id; accented body word loses its accent
+    (s,) = lexicon.lookup("saNga", sources=["mw"])
+    assert s.text == "m. fr. √ 1. sañj, cf. agni"
+    assert "228458" not in s.text and "/" not in s.text
 
 
 def test_prefix_sorted_distinct(mw_db):
