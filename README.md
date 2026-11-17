@@ -58,6 +58,8 @@ async def main():
 asyncio.run(main())
 ```
 
+`sanskrit_analyzer.lexical_categories` exports three curated `frozenset[str]` word lists (`ROLE_NOUN_KEYS`, `PRONOUN_KEYS`, `GENERIC_EPITHET_KEYS`, romanised keys) for keeping generic words from being treated as individuals.
+
 ### Running the API
 
 ```bash
