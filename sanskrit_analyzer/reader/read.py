@@ -27,7 +27,12 @@ logger = logging.getLogger(__name__)
 class Hypothesis:
     surface: str   # SLP1
     lemma: str     # SLP1
-    tags: str
+    tags: str      # ByT5 tag string ("" when the proposer gives none)
+    morph: Morph | None = None   # set by proposers that decode their own tags (reader.slm)
+
+
+def _morph(h: Hypothesis) -> Morph:
+    return h.morph if h.morph is not None else decode(h.tags)
 
 
 def _iast_to_slp1(s: str) -> str:
@@ -109,7 +114,7 @@ def _repair(hyps: list[Hypothesis]) -> list[Hypothesis]:
     (rAjA + ArAjan for rAjArAjan, cakuruta + ivaSe for cakurutevaSe).
     """
     def ok(h: Hypothesis) -> bool:
-        morph = decode(h.tags)
+        morph = _morph(h)
         return morph.kind == "compound_member" or credible(verify_word(h.surface, h.lemma, morph))
 
     out: list[Hypothesis] = []
@@ -136,23 +141,37 @@ def _repair(hyps: list[Hypothesis]) -> list[Hypothesis]:
     return out
 
 
-def read_words(text: str) -> tuple[list[dict[str, Any]], str]:
-    """Segment and verify. Returns (words, segmenter label)."""
-    n = normalize(text)
-    hyps, label = None, "byt5"
-    try:
-        hyps = _byt5_hypotheses(n.slp1)
-    except Exception as exc:
-        logger.warning("ByT5 unavailable: %s", exc)
-    if not hyps:
-        hyps, label = _dp_hypotheses(text), "dp"
-    hyps = _repair(hyps)
+PROPOSERS = ("byt5", "slm", "best")
 
+
+def _slm_hypotheses(text_slp1: str) -> list[Hypothesis] | None:
+    from sanskrit_analyzer.reader.slm import get_proposer
+
+    proposer = get_proposer()
+    return proposer.propose(text_slp1) or None if proposer is not None else None
+
+
+def _propose(text: str, proposer: str) -> tuple[list[Hypothesis], str]:
+    """Hypotheses from the named proposer, falling back to the DP segmenter."""
+    n = normalize(text)
+    fn = _slm_hypotheses if proposer == "slm" else _byt5_hypotheses
+    hyps = None
+    try:
+        hyps = fn(n.slp1)
+    except Exception as exc:
+        logger.warning("%s proposer failed: %s", proposer, exc)
+    if not hyps:
+        return _dp_hypotheses(text), "dp"
+    return hyps, proposer
+
+
+def _assemble(hyps: list[Hypothesis]) -> list[dict[str, Any]]:
+    """Repair, verify and group hypotheses into the reader's word list."""
     words: list[dict[str, Any]] = []
     members: list[dict[str, Any]] = []
     recent: list[str] = []  # last surfaces, for mA + aorist
-    for h in hyps:
-        morph = decode(h.tags)
+    for h in _repair(hyps):
+        morph = _morph(h)
         reading = _verify(h, morph, "mA" in recent[-3:])
         _add_scripts(reading)
         if morph.kind == "compound_member":
@@ -179,10 +198,56 @@ def read_words(text: str) -> tuple[list[dict[str, Any]], str]:
         for m in members:
             m["index"] = len(words)
             words.append(m)
-    return words, label
+    return words
 
 
-def read_sloka(text: str, llm: bool = False, model: str | None = None) -> dict[str, Any]:
+def _verified_share(words: list[dict[str, Any]]) -> float:
+    return sum(w["verified"] for w in words) / len(words) if words else 0.0
+
+
+def coverage(text_slp1: str, words: list[dict[str, Any]]) -> float:
+    """How well the proposed padas reproduce the input letters (0..1).
+
+    Verification cannot see a word the proposer dropped or repeated: every
+    word left over still verifies. Letter-level similarity can. The padas are
+    unsandhied, so a perfect split still scores below 1.0 (about 0.9).
+    """
+    import difflib
+    import re
+
+    def key(s: str) -> str:
+        return re.sub(r"[^A-Za-z]", "", s)
+
+    flat = "".join(m["surface"] for w in words for m in (w.get("compound_members") or [w]))
+    return difflib.SequenceMatcher(None, key(text_slp1), key(flat), autojunk=False).ratio()
+
+
+def read_words(text: str, proposer: str = "byt5") -> tuple[list[dict[str, Any]], str]:
+    """Segment and verify. Returns (words, segmenter label).
+
+    proposer: "byt5" (default), "slm" (the DCS-trained char model, reader.slm),
+    or "best": run both and keep the one with the higher verified share plus
+    coverage (ties go to ByT5). Coverage catches dropped and doubled words,
+    which verification cannot see. Pāṇini disposes either way.
+    """
+    if proposer not in PROPOSERS:
+        raise ValueError(f"proposer must be one of {PROPOSERS}")
+    if proposer != "best":
+        hyps, label = _propose(text, proposer)
+        return _assemble(hyps), label
+    slp1 = normalize(text).slp1
+    candidates = []
+    for name in ("byt5", "slm"):
+        hyps, label = _propose(text, name)
+        words = _assemble(hyps)
+        score = _verified_share(words) + coverage(slp1, words)
+        candidates.append((round(score, 4), name == "byt5", words, label))
+    _, _, words, label = max(candidates, key=lambda c: (c[0], c[1]))
+    return words, f"best:{label}"
+
+
+def read_sloka(text: str, llm: bool = False, model: str | None = None,
+               proposer: str = "byt5") -> dict[str, Any]:
     n = normalize(text)
     record: dict[str, Any] = {
         "input": {"raw": n.raw, "script": n.script, "slp1": n.slp1,
@@ -194,7 +259,7 @@ def read_sloka(text: str, llm: bool = False, model: str | None = None) -> dict[s
             record["chandas"] = _chandas_record(chandas_mod.identify(n.slp1))
         except Exception as exc:
             logger.warning("chandas failed: %s", exc)
-    words, label = read_words(text)
+    words, label = read_words(text, proposer)
     record["segmenter"] = label
     record["words"] = words
     record["stats"] = {

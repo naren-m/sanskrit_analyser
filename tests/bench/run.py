@@ -81,16 +81,23 @@ def _engines(names: list[str]) -> dict[str, Engine]:
             for p in analyze_verse(text)["padas"]
         ]
 
-    def reader(text: str) -> list[Token]:
+    def reader_with(proposer: str):
+        def reader(text: str) -> list[Token]:
+            return _reader_tokens(text, proposer)
+        return reader
+
+    def _reader_tokens(text: str, proposer: str) -> list[Token]:
         from sanskrit_analyzer.reader.read import read_words
 
         out: list[Token] = []
-        for w in read_words(text)[0]:
+        for w in read_words(text, proposer)[0]:
             for m in w.get("compound_members") or [w]:
                 out.append((m["surface"], m["lemma"], m["verified"]))
         return out
 
-    table = {"dp": deep(False), "byt5": deep(True), "prakriya": prakriya, "reader": reader}
+    table = {"dp": deep(False), "byt5": deep(True), "prakriya": prakriya,
+             "reader": reader_with("byt5"), "reader-slm": reader_with("slm"),
+             "reader-best": reader_with("best")}
     return {n: table[n] for n in names}
 
 
@@ -223,7 +230,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ramayanam", type=Path, required=True, help="ramayanam checkout")
     ap.add_argument("--split", choices=("dev", "heldout"), default="dev")
     ap.add_argument("--n", type=int, default=100)
-    ap.add_argument("--engines", default="dp,prakriya", help="dp,byt5,prakriya,reader")
+    ap.add_argument("--engines", default="dp,prakriya", help="dp,byt5,prakriya,reader,reader-slm,reader-best "
+                    "(reader-slm/-best need SANSKRIT_SLM_CKPT)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", type=Path)
     args = ap.parse_args(argv)
