@@ -8,6 +8,8 @@ the verified JSON and its output is checked against it (``reader.llm``).
 from __future__ import annotations
 
 import logging
+import os
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -141,7 +143,20 @@ def _repair(hyps: list[Hypothesis]) -> list[Hypothesis]:
     return out
 
 
-PROPOSERS = ("byt5", "slm", "best")
+PROPOSERS = ("byt5", "slm", "best", "cascade")
+
+# Cascade: below this coverage the char model's reading is treated as doubtful
+# (a dropped or doubled word). Tuned on Gītā chapters 1-9 only; see the bench.
+CASCADE_MIN_COVERAGE = float(os.environ.get("SANSKRIT_CASCADE_MIN_COVERAGE", "0.88"))
+# How often the cascade kept the char model ("slm") or called ByT5 ("fallback").
+CASCADE_STATS: Counter = Counter()
+
+
+def needs_fallback(words: list[dict[str, Any]], text_slp1: str, min_coverage: float) -> bool:
+    """True when the char model's reading is in doubt and ByT5 should be asked too."""
+    if not words or not all(w["verified"] for w in words):
+        return True
+    return coverage(text_slp1, words) < min_coverage
 
 
 def _slm_hypotheses(text_slp1: str) -> list[Hypothesis] | None:
@@ -226,23 +241,34 @@ def read_words(text: str, proposer: str = "byt5") -> tuple[list[dict[str, Any]],
     """Segment and verify. Returns (words, segmenter label).
 
     proposer: "byt5" (default), "slm" (the DCS-trained char model, reader.slm),
-    or "best": run both and keep the one with the higher verified share plus
-    coverage (ties go to ByT5). Coverage catches dropped and doubled words,
+    "best": run both and keep the one with the higher verified share plus
+    coverage (ties go to ByT5). "cascade": run the char model; call ByT5 only
+    when a word is unverified or coverage is below CASCADE_MIN_COVERAGE, then
+    keep the better of the two. Coverage catches dropped and doubled words,
     which verification cannot see. Pāṇini disposes either way.
     """
     if proposer not in PROPOSERS:
         raise ValueError(f"proposer must be one of {PROPOSERS}")
-    if proposer != "best":
+    if proposer not in ("best", "cascade"):
         hyps, label = _propose(text, proposer)
         return _assemble(hyps), label
     slp1 = normalize(text).slp1
-    candidates = []
-    for name in ("byt5", "slm"):
+
+    def scored(name: str):
         hyps, label = _propose(text, name)
         words = _assemble(hyps)
         score = _verified_share(words) + coverage(slp1, words)
-        candidates.append((round(score, 4), name == "byt5", words, label))
-    _, _, words, label = max(candidates, key=lambda c: (c[0], c[1]))
+        return round(score, 4), name == "byt5", words, label
+
+    if proposer == "cascade":
+        first = scored("slm")
+        if first[3] == "slm" and not needs_fallback(first[2], slp1, CASCADE_MIN_COVERAGE):
+            CASCADE_STATS["slm"] += 1
+            return first[2], "cascade:slm"
+        CASCADE_STATS["fallback"] += 1
+        _, _, words, label = max([first, scored("byt5")], key=lambda c: (c[0], c[1]))
+        return words, f"cascade:{label}"
+    _, _, words, label = max([scored("byt5"), scored("slm")], key=lambda c: (c[0], c[1]))
     return words, f"best:{label}"
 
 
