@@ -14,9 +14,12 @@ want a specific engine's output (the split validator asks for vidyut's).
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass, field
 
 from sanskrit_analyzer.engines.base import EngineBase, EngineResult, Segment
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -154,6 +157,7 @@ class EngineRunner:
         try:
             return await engine.analyze(text)
         except Exception as e:
+            logger.warning("engine %s raised", engine.name, exc_info=True)
             return EngineResult(
                 engine=engine.name,
                 segments=[],

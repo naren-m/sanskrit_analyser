@@ -1,5 +1,6 @@
 """Dhatu tools for MCP server."""
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -8,6 +9,8 @@ from mcp.types import TextContent, Tool
 from sanskrit_analyzer.dhatu import conjugation
 from sanskrit_analyzer.dhatu.dhatupatha import DhatuKosha, entry_to_dict, get_dhatu_kosha
 from sanskrit_analyzer.mcp.response import error_response, json_response, text_response
+
+logger = logging.getLogger(__name__)
 
 ToolDispatcher = Callable[[str, dict[str, Any]], Awaitable[list[TextContent] | None]]
 
@@ -134,6 +137,7 @@ def _lookup_dhatu(kosha: DhatuKosha, arguments: dict[str, Any]) -> list[TextCont
         return json_response([entry_to_dict(e) for e in entries])
 
     except Exception as e:
+        logger.warning("MCP tool failed while looking up dhatu", exc_info=True)
         return error_response(f"looking up dhatu: {e}")
 
 
@@ -167,6 +171,7 @@ def _search_dhatu(kosha: DhatuKosha, arguments: dict[str, Any]) -> list[TextCont
         return json_response([entry_to_dict(entry) for entry in results])
 
     except Exception as e:
+        logger.warning("MCP tool failed while searching dhatus", exc_info=True)
         return error_response(f"searching dhatus: {e}")
 
 
@@ -204,6 +209,7 @@ def _conjugate_verb(kosha: DhatuKosha, arguments: dict[str, Any]) -> list[TextCo
         )
 
     except Exception as e:
+        logger.warning("MCP tool failed while conjugating verb", exc_info=True)
         return error_response(f"conjugating verb: {e}")
 
 
@@ -234,4 +240,5 @@ def _list_gana(kosha: DhatuKosha, arguments: dict[str, Any]) -> list[TextContent
         return json_response([entry_to_dict(entry) for entry in results])
 
     except Exception as e:
+        logger.warning("MCP tool failed while listing gana", exc_info=True)
         return error_response(f"listing gana: {e}")

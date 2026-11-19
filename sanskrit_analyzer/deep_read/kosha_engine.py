@@ -228,6 +228,7 @@ def to_iast(slp_text: str | None) -> str | None:
 
         return transliterate(slp_text, Scheme.Slp1, Scheme.Iast)
     except Exception:  # transliteration is non-critical enrichment
+        logger.debug("SLP1->IAST failed for %r", slp_text, exc_info=True)
         return None
 
 
@@ -240,6 +241,7 @@ def to_devanagari(slp_text: str | None) -> str | None:
 
         return transliterate(slp_text, Scheme.Slp1, Scheme.Devanagari)
     except Exception:
+        logger.debug("SLP1->Devanagari failed for %r", slp_text, exc_info=True)
         return None
 
 

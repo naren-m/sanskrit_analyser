@@ -172,6 +172,7 @@ class DeepRead:
         try:
             slp1 = engine.slp(text) if text else ""
         except Exception:  # whole-line transliteration is only a convenience
+            logger.debug("whole-line SLP1 transliteration failed", exc_info=True)
             slp1 = None
         return {
             "input": text,
@@ -205,10 +206,12 @@ class DeepRead:
             try:
                 surface_dev = engine.to_devanagari(engine.slp(w_iast, "Iast"))
             except Exception:
+                logger.debug("IAST->Devanagari failed for %r", w_iast, exc_info=True)
                 surface_dev = w_iast
             try:
                 tok = engine.analyze_word(surface_dev)
             except Exception:  # kosha unavailable, etc. — keep the segmentation
+                logger.debug("kosha analysis failed for %r", surface_dev, exc_info=True)
                 tok = {
                     "surface": surface_dev,
                     "slp1": None,
@@ -229,6 +232,7 @@ class DeepRead:
         try:
             slp1 = engine.slp(text)
         except Exception:
+            logger.debug("whole-line SLP1 transliteration failed", exc_info=True)
             slp1 = None
         return {
             "input": text,
@@ -304,6 +308,7 @@ class DeepRead:
         try:
             slp1 = engine.slp(text)
         except Exception:
+            logger.debug("whole-line SLP1 transliteration failed", exc_info=True)
             slp1 = None
 
         return {
@@ -362,6 +367,7 @@ def _dhatu_block(dhatu_info: Any) -> dict[str, Any] | None:
     try:
         root_dev = engine.to_devanagari(root)
     except Exception:
+        logger.debug("Devanagari for root %r failed", root, exc_info=True)
         root_dev = None
 
     # ``gana`` is an int in this engine build; older builds may give a name.
@@ -405,6 +411,7 @@ def _morphology_dict(base_word: Any) -> dict[str, str]:
         try:
             raw = morph.to_dict()
         except Exception:
+            logger.debug("morphology.to_dict() failed", exc_info=True)
             return {}
     elif isinstance(morph, dict):
         raw = morph
@@ -469,6 +476,7 @@ def _token_from_base_word(base_word: Any) -> dict[str, Any]:
         try:
             surface = engine.to_devanagari(slp1)
         except Exception:
+            logger.debug("Devanagari for %r failed", slp1, exc_info=True)
             surface = slp1
     return {
         "surface": surface,

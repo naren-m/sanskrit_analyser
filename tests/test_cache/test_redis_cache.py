@@ -1,5 +1,6 @@
 """Tests for Redis cache."""
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -207,16 +208,18 @@ class TestRedisCache:
         mock_client.ping.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_health_check_failure(self) -> None:
-        """Test health check failure."""
+    async def test_health_check_failure(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Test health check failure is reported as False and logged."""
         cache = RedisCache(redis_url="redis://localhost:6379")
 
         mock_client = AsyncMock()
         mock_client.ping.side_effect = Exception("Connection error")
         cache._client = mock_client
 
-        result = await cache.health_check()
+        with caplog.at_level(logging.WARNING, logger="sanskrit_analyzer.cache.redis_cache"):
+            result = await cache.health_check()
         assert result is False
+        assert any(r.exc_info for r in caplog.records), "ping failure must be logged"
 
     @pytest.mark.asyncio
     async def test_health_check_disabled(self) -> None:
