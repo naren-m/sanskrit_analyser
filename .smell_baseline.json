@@ -1,17 +1,1 @@
-{
- "sanskrit_analyzer/analyzer.py": {
-  "SML004": 2
- },
- "sanskrit_analyzer/api/routes/analyze.py": {
-  "SML004": 1
- },
- "sanskrit_analyzer/mcp/resources/grammar.py": {
-  "SML004": 1
- },
- "sanskrit_analyzer/mcp/tools/dhatu.py": {
-  "SML004": 1
- },
- "sanskrit_analyzer/ui/styles.py": {
-  "SML004": 1
- }
-}
+{}

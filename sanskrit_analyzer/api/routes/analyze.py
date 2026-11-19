@@ -129,6 +129,59 @@ class DisambiguateRequest(BaseModel):
     selected_parse: str = Field(..., description="The parse_id of the selected interpretation")
 
 
+def _base_word_to_response(bw: Any, word_id: str) -> BaseWordResponse:
+    """Convert one BaseWord to its response model; ``word_id`` is the fallback-resolved id."""
+    # Convert morphology
+    morph_resp = None
+    if bw.morphology:
+        morph_resp = MorphologicalTagResponse(
+            pos=getattr(bw.morphology, "pos", None),
+            gender=getattr(bw.morphology, "gender", None),
+            number=getattr(bw.morphology, "number", None),
+            case=getattr(bw.morphology, "case", None),
+            person=getattr(bw.morphology, "person", None),
+            tense=getattr(bw.morphology, "tense", None),
+            mood=getattr(bw.morphology, "mood", None),
+            voice=getattr(bw.morphology, "voice", None),
+        )
+
+    # Convert dhatu
+    dhatu_resp = None
+    if bw.dhatu:
+        dhatu_resp = DhatuInfoResponse(
+            dhatu=bw.dhatu.dhatu,
+            meaning=bw.dhatu.meaning,
+            gana=bw.dhatu.gana,
+            pada=bw.dhatu.pada,
+        )
+
+    # Convert scripts
+    bw_scripts = None
+    if bw.scripts:
+        bw_scripts = ScriptVariantsResponse(
+            devanagari=bw.scripts.devanagari,
+            iast=bw.scripts.iast,
+            slp1=bw.scripts.slp1,
+        )
+
+    # Handle meanings - may be list of Meaning objects or strings
+    meanings = []
+    if bw.meanings:
+        for m in bw.meanings:
+            meanings.append(str(m) if not isinstance(m, str) else m)
+
+    return BaseWordResponse(
+        word_id=word_id,
+        lemma=bw.lemma,
+        surface_form=bw.surface_form,
+        scripts=bw_scripts,
+        morphology=morph_resp,
+        meanings=meanings,
+        dhatu=dhatu_resp,
+        confidence=bw.confidence,
+    )
+
+
 def _tree_to_response(tree: Any) -> AnalysisTreeResponse:
     """Convert AnalysisTree to response model."""
     # Convert scripts
@@ -144,62 +197,13 @@ def _tree_to_response(tree: Any) -> AnalysisTreeResponse:
     for pt_idx, pt in enumerate(tree.parse_forest):
         sandhi_groups = []
         for sg_idx, sg in enumerate(pt.sandhi_groups):
-            base_words = []
-            for bw_idx, bw in enumerate(sg.base_words):
-                # Convert morphology
-                morph_resp = None
-                if bw.morphology:
-                    morph_resp = MorphologicalTagResponse(
-                        pos=getattr(bw.morphology, "pos", None),
-                        gender=getattr(bw.morphology, "gender", None),
-                        number=getattr(bw.morphology, "number", None),
-                        case=getattr(bw.morphology, "case", None),
-                        person=getattr(bw.morphology, "person", None),
-                        tense=getattr(bw.morphology, "tense", None),
-                        mood=getattr(bw.morphology, "mood", None),
-                        voice=getattr(bw.morphology, "voice", None),
-                    )
-
-                # Convert dhatu
-                dhatu_resp = None
-                if bw.dhatu:
-                    dhatu_resp = DhatuInfoResponse(
-                        dhatu=bw.dhatu.dhatu,
-                        meaning=bw.dhatu.meaning,
-                        gana=bw.dhatu.gana,
-                        pada=bw.dhatu.pada,
-                    )
-
-                # Convert scripts
-                bw_scripts = None
-                if bw.scripts:
-                    bw_scripts = ScriptVariantsResponse(
-                        devanagari=bw.scripts.devanagari,
-                        iast=bw.scripts.iast,
-                        slp1=bw.scripts.slp1,
-                    )
-
-                # Generate word_id if not present
-                word_id = getattr(bw, "word_id", None) or f"w{pt_idx}_{sg_idx}_{bw_idx}"
-
-                # Handle meanings - may be list of Meaning objects or strings
-                meanings = []
-                if bw.meanings:
-                    for m in bw.meanings:
-                        meanings.append(str(m) if not isinstance(m, str) else m)
-
-                base_words.append(
-                    BaseWordResponse(
-                        word_id=word_id,
-                        lemma=bw.lemma,
-                        surface_form=bw.surface_form,
-                        scripts=bw_scripts,
-                        morphology=morph_resp,
-                        meanings=meanings,
-                        dhatu=dhatu_resp,
-                        confidence=bw.confidence,
-                    )
+            # Generate word_id if not present
+            base_words = [
+                _base_word_to_response(
+                    bw, getattr(bw, "word_id", None) or f"w{pt_idx}_{sg_idx}_{bw_idx}"
                 )
+                for bw_idx, bw in enumerate(sg.base_words)
+            ]
 
             # Generate group_id if not present
             group_id = getattr(sg, "group_id", None) or f"g{pt_idx}_{sg_idx}"

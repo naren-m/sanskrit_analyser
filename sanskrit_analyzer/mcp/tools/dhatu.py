@@ -15,94 +15,98 @@ logger = logging.getLogger(__name__)
 ToolDispatcher = Callable[[str, dict[str, Any]], Awaitable[list[TextContent] | None]]
 
 
+# Tool specs served by build_dhatu_tools; each call returns a fresh list.
+_DHATU_TOOLS: list[Tool] = [
+    Tool(
+        name="lookup_dhatu",
+        description=(
+            "Look up a dhatu (verbal root) in the Dhatupatha. Accepts "
+            "Devanagari, IAST, SLP1, or the citation form (qukfY)."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "dhatu": {
+                    "type": "string",
+                    "description": "Dhatu root (e.g., gam, bhu, kf)",
+                },
+            },
+            "required": ["dhatu"],
+        },
+    ),
+    Tool(
+        name="search_dhatu",
+        description="Search dhatus by root form or artha (the Sanskrit gloss)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query (root form or artha)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results to return",
+                    "default": 10,
+                },
+            },
+            "required": ["query"],
+        },
+    ),
+    Tool(
+        name="conjugate_verb",
+        description=(
+            "Derive the conjugation table for a dhatu in one lakara "
+            "with the Paninian engine (needs the vidyut data bundle)."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "dhatu": {
+                    "type": "string",
+                    "description": "Dhatu root",
+                },
+                "lakara": {
+                    "type": "string",
+                    "description": (
+                        "Tense/mood: lat, lit, lut, lrt, let, lot, lan, "
+                        "vidhilin, ashirlin, lun, lrn"
+                    ),
+                    "default": "lat",
+                },
+            },
+            "required": ["dhatu"],
+        },
+    ),
+    Tool(
+        name="list_gana",
+        description="List dhatus by verb class (gana)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "gana": {
+                    "type": "integer",
+                    "description": "Gana number (1-10)",
+                    "minimum": 1,
+                    "maximum": 10,
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results to return",
+                    "default": 20,
+                },
+            },
+            "required": ["gana"],
+        },
+    ),
+]
+
+
 def build_dhatu_tools() -> tuple[list[Tool], ToolDispatcher]:
     """Build the dhatu tool specs and their dispatcher (see build_analysis_tools)."""
     kosha = get_dhatu_kosha()
 
-    tools = [
-            Tool(
-                name="lookup_dhatu",
-                description=(
-                    "Look up a dhatu (verbal root) in the Dhatupatha. Accepts "
-                    "Devanagari, IAST, SLP1, or the citation form (qukfY)."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "dhatu": {
-                            "type": "string",
-                            "description": "Dhatu root (e.g., gam, bhu, kf)",
-                        },
-                    },
-                    "required": ["dhatu"],
-                },
-            ),
-            Tool(
-                name="search_dhatu",
-                description="Search dhatus by root form or artha (the Sanskrit gloss)",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query (root form or artha)",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum results to return",
-                            "default": 10,
-                        },
-                    },
-                    "required": ["query"],
-                },
-            ),
-            Tool(
-                name="conjugate_verb",
-                description=(
-                    "Derive the conjugation table for a dhatu in one lakara "
-                    "with the Paninian engine (needs the vidyut data bundle)."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "dhatu": {
-                            "type": "string",
-                            "description": "Dhatu root",
-                        },
-                        "lakara": {
-                            "type": "string",
-                            "description": (
-                                "Tense/mood: lat, lit, lut, lrt, let, lot, lan, "
-                                "vidhilin, ashirlin, lun, lrn"
-                            ),
-                            "default": "lat",
-                        },
-                    },
-                    "required": ["dhatu"],
-                },
-            ),
-            Tool(
-                name="list_gana",
-                description="List dhatus by verb class (gana)",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "gana": {
-                            "type": "integer",
-                            "description": "Gana number (1-10)",
-                            "minimum": 1,
-                            "maximum": 10,
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum results to return",
-                            "default": 20,
-                        },
-                    },
-                    "required": ["gana"],
-                },
-            ),
-        ]
+    tools = list(_DHATU_TOOLS)
 
     async def dispatch(
         name: str, arguments: dict[str, Any]
