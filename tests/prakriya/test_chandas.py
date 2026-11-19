@@ -127,3 +127,14 @@ def test_valid_sloka_beats_vidyut_jati_fuzzy_match():
     r = identify("kintu vakzyAmyahaM devi tvayEvoktamidaM vacaH . "
                  "kzatriyErDAryate cApo nArtaSabdo Bavediti")
     assert r.name == "anuzwuB (paTyA)"
+
+
+@pytest.mark.parametrize(
+    "stray",
+    ["़", "‍", "ॐ", "’", "é"],   # nukta, ZWJ, om, curly quote, Latin-1
+)
+def test_identify_survives_untransliterated_characters(stray):
+    """vidyut's classifier indexes a 256-entry table: any character above
+    U+00FF used to panic in Rust (PanicException, not an Exception)."""
+    verse = f"karmaRyevADikAraste mA Pa{stray}lezu kadAcana mA karmaPalaheturBUrmA te saNgo'stvakarmaRi"
+    assert identify(verse).name == "anuzwuB (paTyA)"

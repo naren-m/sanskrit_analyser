@@ -1,6 +1,6 @@
 """SanskritBench-local: one per-layer scoreboard for verse understanding.
 
-Phase 0 of ``~/Projects/llms/sanskrit-understanding-plan.md``. Each row of the
+Phase 0 of ``naren-m/sanskrit_model: docs/plan/2026-11-13-sanskrit-understanding-plan.md``. Each row of the
 report is one engine; each column is one layer of understanding. The first run
 on ``main`` is the baseline every later change is gated against.
 
@@ -42,7 +42,8 @@ from typing import Any
 from sanskrit_analyzer.dhatu.dhatupatha import strip_anubandhas
 from sanskrit_analyzer.models.scripts import Script
 from sanskrit_analyzer.utils import transliterate
-from tests.bench.corpus import gold_padas, load_rows, split_rows
+from tests.bench.corpus import (gold_padas, load_gita, load_plain, load_rows, sample,
+                                split_rows)
 from tests.bench.score import meter_match, norm_slp1, recovered
 
 DATA = Path(__file__).resolve().parents[1] / "data"
@@ -133,16 +134,43 @@ def _meter_gold() -> list[tuple[str, str]]:
     return [(c["text"], c["meter"]) for c in cases]
 
 
+def _coverage(text_dev: str, surfaces: list[str]) -> float:
+    """Letter similarity between the input and the proposed padas (label-free)."""
+    from sanskrit_analyzer.reader.read import coverage
+
+    return coverage(_slp1(text_dev), [{"surface": s} for s in surfaces])
+
+
+def agreement(a: list[list[str]], b: list[list[str]]) -> float:
+    """Mean per-verse token F1 between two engines' outputs (label-free).
+
+    Low agreement marks verses where at least one proposer is wrong: a cheap
+    way to find hard verses in a corpus with no gold.
+    """
+    from collections import Counter
+
+    scores = []
+    for x, y in zip(a, b):
+        cx, cy = Counter(norm_slp1(t) for t in x), Counter(norm_slp1(t) for t in y)
+        hit = sum((cx & cy).values())
+        scores.append(2 * hit / (sum(cx.values()) + sum(cy.values())) if hit else 0.0)
+    return sum(scores) / len(scores) if scores else 0.0
+
+
 def score_engine(fn: Engine, rows, lemma_gold) -> dict[str, Any]:
     hit = gold_n = tok_n = ver_n = 0
+    cov: list[float] = []
+    outputs: list[list[str]] = []
     t0 = time.time()
     for row in rows:
-        gold = gold_padas(row.meaning)
+        gold = list(row.gold) if row.gold is not None else gold_padas(row.meaning)
         try:
             toks = fn(row.text)
         except Exception as exc:  # a crash scores zero for the verse, visibly
             logging.getLogger(__name__).warning("%s crashed: %s", row.ref, exc)
             toks = []
+        outputs.append([t[0] for t in toks])
+        cov.append(_coverage(row.text, outputs[-1]))
         hit += recovered(gold, [t[0] for t in toks])
         gold_n += len(gold)
         tok_n += len(toks)
@@ -166,7 +194,9 @@ def score_engine(fn: Engine, rows, lemma_gold) -> dict[str, Any]:
         "verify": ver_n / tok_n if tok_n else 0.0,
         "lemma_acc": lemma_ok / lemma_n if lemma_n else 0.0,
         "lemma_n": lemma_n,
+        "coverage": sum(cov) / len(cov) if cov else 0.0,
         "sec_per_verse": sec,
+        "_outputs": outputs,
     }
 
 
@@ -198,14 +228,30 @@ def _git_sha() -> str:
         return "unknown"
 
 
-def run(ramayanam: Path, split: str, n: int, engines: list[str], seed: int) -> dict[str, Any]:
-    rows = split_rows(load_rows(ramayanam), split, n, seed)
-    lemma_gold = _lemma_gold(ramayanam)
+def _rows(corpus: str, ramayanam: Path, split: str, n: int, seed: int, plain: Path | None):
+    """(rows, label, has_gold). Gītā and plain corpora have no dev/heldout split:
+    the DCS-trained proposer saw neither, and nothing here was tuned on them."""
+    if corpus == "gita":
+        return sample(load_gita(ramayanam), n, seed), "gita", True
+    if corpus == "plain":
+        return sample(load_plain(plain), n, seed), f"plain:{plain.name}", False
+    return split_rows(load_rows(ramayanam), split, n, seed), split, True
+
+
+def run(ramayanam: Path, split: str, n: int, engines: list[str], seed: int,
+        corpus: str = "ramayana", plain: Path | None = None) -> dict[str, Any]:
+    rows, label, has_gold = _rows(corpus, ramayanam, split, n, seed, plain)
+    lemma_gold = _lemma_gold(ramayanam) if corpus == "ramayana" else []
+    scored = {name: score_engine(fn, rows, lemma_gold) for name, fn in _engines(engines).items()}
+    outputs = {name: e.pop("_outputs") for name, e in scored.items()}
+    first = next(iter(outputs), None)
+    for name, e in scored.items():   # agreement with the first engine listed
+        e["agree"] = agreement(outputs[first], outputs[name]) if name != first else 1.0
     return {
-        "git": _git_sha(), "split": split, "n": len(rows), "seed": seed,
+        "git": _git_sha(), "corpus": corpus, "split": label, "n": len(rows), "seed": seed,
+        "has_gold": has_gold, "agree_with": first,
         "meter": score_meter(rows),
-        "engines": {name: score_engine(fn, rows, lemma_gold)
-                    for name, fn in _engines(engines).items()},
+        "engines": scored,
         "pending_layers": list(PENDING_LAYERS),
     }
 
@@ -215,11 +261,17 @@ def format_report(report: dict[str, Any]) -> str:
     lines = [
         f"split={report['split']} n={report['n']} seed={report['seed']} git={report['git']}",
         f"meter_acc={m['meter_acc']:.3f} (n={m['meter_n']})  meter_named={m['meter_named']:.3f}",
-        f"{'engine':9} {'seg_recall':>10} {'split':>6} {'verify':>7} {'lemma':>6} {'s/verse':>8}",
+        f"{'engine':12} {'seg_recall':>10} {'split':>6} {'verify':>7} {'lemma':>6} "
+        f"{'cover':>6} {'agree':>6} {'s/verse':>8}",
     ]
+    na = lambda v, ok: f"{v:.3f}" if ok else "n/a"  # noqa: E731
+    gold = report.get("has_gold", True)
     for name, e in report["engines"].items():
-        lines.append(f"{name:9} {e['seg_recall']:>10.3f} {e['split_ratio']:>6.2f} "
-                     f"{e['verify']:>7.3f} {e['lemma_acc']:>6.3f} {e['sec_per_verse']:>8.2f}")
+        lines.append(f"{name:12} {na(e['seg_recall'], gold):>10} {na(e['split_ratio'], gold):>6} "
+                     f"{e['verify']:>7.3f} {na(e['lemma_acc'], e['lemma_n'] > 0):>6} "
+                     f"{e['coverage']:>6.3f} {e['agree']:>6.3f} {e['sec_per_verse']:>8.2f}")
+    lines.append(f"agree = token F1 against '{report.get('agree_with')}'. "
+                 "cover = letter similarity of input and padas (~0.9 for a perfect split).")
     lines.append("not scored yet: " + ", ".join(report["pending_layers"]))
     return "\n".join(lines)
 
@@ -233,10 +285,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--engines", default="dp,prakriya", help="dp,byt5,prakriya,reader,reader-slm,reader-best "
                     "(reader-slm/-best need SANSKRIT_SLM_CKPT)")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--corpus", choices=("ramayana", "gita", "plain"), default="ramayana",
+                    help="gita: ramayanam's gita pack (gold = gita/gita word keys). "
+                         "plain: --plain JSON with no gold (label-free metrics only)")
+    ap.add_argument("--plain", type=Path, help='JSON list with a "devanagari" field')
     ap.add_argument("--out", type=Path)
     args = ap.parse_args(argv)
-    report = run(args.ramayanam.expanduser(), args.split, args.n,
-                 args.engines.split(","), args.seed)
+    if args.corpus == "plain" and not args.plain:
+        ap.error("--corpus plain needs --plain <file.json>")
+    report = run(args.ramayanam.expanduser(), args.split, args.n, args.engines.split(","),
+                 args.seed, args.corpus, args.plain.expanduser() if args.plain else None)
     print(format_report(report))
     if args.out:
         args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False))

@@ -108,6 +108,10 @@ def _classifier():
 
 
 def identify(slp1_verse: str) -> ChandasResult:
+    # SLP1 is ASCII. Anything else is a character transliteration left behind
+    # (nukta, ZWJ, om, curly quotes). vidyut indexes a 256-entry table and
+    # panics in Rust on them, so drop them: they carry no syllable weight.
+    slp1_verse = "".join(ch for ch in slp1_verse if ch.isascii())
     match = _classifier().classify(slp1_verse.replace(".", " "))
     scans = ["".join(str(a.weight) for a in row) for row in (match.aksharas or [])]
     # vidyut fuzzy-matches even tiny fragments (5 syllables of prose match a
