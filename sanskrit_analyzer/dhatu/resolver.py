@@ -30,6 +30,7 @@ simply returns None and the caller keeps its prior behaviour.
 """
 from __future__ import annotations
 
+import functools
 import logging
 import re
 from collections.abc import Iterator
@@ -443,11 +444,6 @@ class DhatuResolver:
         }
 
 
-_resolver: DhatuResolver | None = None
-
-
+@functools.cache
 def get_dhatu_resolver() -> DhatuResolver:
-    global _resolver
-    if _resolver is None:
-        _resolver = DhatuResolver()
-    return _resolver
+    return DhatuResolver()
