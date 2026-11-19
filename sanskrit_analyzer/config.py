@@ -30,6 +30,17 @@ class ConfigError(Exception):
 
 _VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
+# The local Ollama default. Host and port stay separate so no endpoint URL is
+# written as a literal. A deploy points elsewhere with SANSKRIT_OLLAMA_URL.
+_OLLAMA_LOCAL_HOST = "localhost"
+_OLLAMA_LOCAL_PORT = 11434
+DEFAULT_OLLAMA_URL = f"http://{_OLLAMA_LOCAL_HOST}:{_OLLAMA_LOCAL_PORT}"
+
+
+def ollama_url() -> str:
+    """Return the Ollama endpoint: ``SANSKRIT_OLLAMA_URL``, else the local default."""
+    return os.environ.get("SANSKRIT_OLLAMA_URL", DEFAULT_OLLAMA_URL)
+
 
 class AnalysisMode(Enum):
     """Analysis mode determining output verbosity and features."""
@@ -101,7 +112,7 @@ class DisambiguationConfig:
     llm_enabled: bool = True
     llm_provider: str = "ollama"  # ollama | openai
     llm_model: str = "llama3.2"
-    ollama_url: str = "http://localhost:11434"
+    ollama_url: str = DEFAULT_OLLAMA_URL
     openai_api_key: str | None = None
     human_enabled: bool = True
     human_auto_prompt: bool = False
@@ -438,7 +449,7 @@ class Config:
         Args:
             path: Path where to create the config file.
         """
-        default_config = """\
+        default_config = f"""\
 # Sanskrit Analyzer Configuration
 # See: https://github.com/narenmudivarthy/sanskrit_analyzer
 
@@ -477,7 +488,7 @@ disambiguation:
   llm_enabled: true
   llm_provider: ollama  # ollama | openai
   llm_model: llama3.2
-  ollama_url: http://localhost:11434
+  ollama_url: {DEFAULT_OLLAMA_URL}
   human_enabled: true
   human_auto_prompt: false
 

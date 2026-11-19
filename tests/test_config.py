@@ -13,6 +13,7 @@ from sanskrit_analyzer.config import (
     DisambiguationConfig,
     EngineConfig,
     ModeConfig,
+    ollama_url,
 )
 
 
@@ -290,6 +291,25 @@ class TestConfigEnvOverrides:
         assert config.disambiguation.openai_api_key == "sk-test-key"
 
 
+@pytest.mark.parametrize(
+    ("env_value", "expected"),
+    [
+        (None, "http://localhost:11434"),
+        ("http://ollama.test:11434", "http://ollama.test:11434"),
+    ],
+)
+def test_ollama_url_resolution(
+    env_value: str | None, expected: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ollama_url() reads SANSKRIT_OLLAMA_URL and falls back to the local Ollama."""
+    if env_value is None:
+        monkeypatch.delenv("SANSKRIT_OLLAMA_URL", raising=False)
+    else:
+        monkeypatch.setenv("SANSKRIT_OLLAMA_URL", env_value)
+    assert ollama_url() == expected
+    assert DisambiguationConfig().ollama_url == "http://localhost:11434"
+
+
 class TestConfigDefaultCreation:
     """Tests for default config file creation."""
 
@@ -309,6 +329,7 @@ class TestConfigDefaultCreation:
         content = config_path.read_text()
         assert "Sanskrit Analyzer Configuration" in content
         assert "default_mode: production" in content
+        assert "ollama_url: http://localhost:11434" in content
 
     def test_load_existing_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test loading existing config file."""

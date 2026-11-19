@@ -9,6 +9,7 @@ from typing import Any
 
 import aiohttp
 
+from sanskrit_analyzer.config import DEFAULT_OLLAMA_URL
 from sanskrit_analyzer.disambiguation.rules import ParseCandidate
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class LLMConfig:
 
     provider: LLMProvider = LLMProvider.OLLAMA
     model: str = "llama3.2"
-    ollama_url: str = "http://localhost:11434"
+    ollama_url: str = DEFAULT_OLLAMA_URL
     openai_api_key: str | None = None
     timeout: float = 30.0
     max_tokens: int = 500

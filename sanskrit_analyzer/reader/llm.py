@@ -21,10 +21,12 @@ import os
 import urllib.request
 from typing import Any
 
+from sanskrit_analyzer.config import ollama_url
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = os.environ.get("SANSKRIT_READER_MODEL", "qwen3.8:27b")
-OLLAMA_URL = os.environ.get("SANSKRIT_OLLAMA_URL", "http://localhost:11434")
+OLLAMA_URL = ollama_url()
 
 _CASE = {"praTamA": "nominative", "dvitIyA": "accusative", "tftIyA": "instrumental",
          "caturTI": "dative", "paYcamI": "ablative", "zazWI": "genitive",
