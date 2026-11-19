@@ -53,6 +53,11 @@ def _expected(verse: dict) -> str:
     return _RULE_DEFINED.get(verse["meter"]) or _SLP1_BY_IAST[verse["meter"]]
 
 
+def _lg_text(scan: str) -> str:
+    """IAST text whose syllable weights are ``scan`` ('/' separates pādas)."""
+    return "\n".join(" ".join("kā" if w == "G" else "ka" for w in pada) for pada in scan.split("/"))
+
+
 def _gana_pattern(spec: str) -> str:
     return "".join(GANAS[g] for g in spec.split())
 
@@ -63,6 +68,10 @@ def _decompose(pattern: str) -> str:
     out += ["ga" if ch == "G" else "la" for ch in pattern[len(pattern) - len(pattern) % 3:]]
     return "-".join(out)
 
+
+#: ākhyānikī-shaped, but pāda c ends laghu where an odd pāda must be exact, and
+#: pāda interiors break the family tail: neither ākhyānikī, upajāti nor āryā.
+AKHYANIKI_BROKEN_ODD = "GGLGGLLLLGG/LGLGGLLLLGG/GGLGGLLLLGL/LGLGGLLLLGG"
 
 FIXED = [v for v in VERSES if v["ganas"]]
 ids = lambda cases: [c["id"] for c in cases]  # noqa: E731
@@ -100,12 +109,27 @@ def test_specific_rules(second_opinion, verse_id, expected_name, expected_iast):
     assert all(set(s) <= {"L", "G"} for s in got.scans)
 
 
+@pytest.mark.parametrize(
+    "scan,expected",
+    [
+        # pāda a ends laghu: puṣpitāgrā keeps pāda-final anceps on odd pādas
+        ("LLLLLLGLGLGL/LLLLGLLGLGLGG/LLLLLLGLGLGG/LLLLGLLGLGLGG", "puzpitAgrA"),
+        ("GGLGGLLGLGG/LGLGGLLGLGG/GGLGGLLGLGG/LGLGGLLGLGG", "AKyAnikI"),
+    ],
+)
+def test_ardhasama_odd_pada_anceps_is_narrow(scan, expected):
+    padas = scan.split("/")
+    assert chandas._scan(padas, "".join(padas)).name == expected
+
+
 # --- negative controls ------------------------------------------------------
 
 @pytest.mark.parametrize(
     "text",
-    [v["text"] for v in IRREGULAR] + ["ka ka ka ka ka", "", "   ", "\n\n", "12345", "..."],
-    ids=[v["id"] for v in IRREGULAR] + ["nonsense", "empty", "spaces", "newlines", "digits", "dots"],
+    [v["text"] for v in IRREGULAR]
+    + ["ka ka ka ka ka", "", "   ", "\n\n", "12345", "...", _lg_text(AKHYANIKI_BROKEN_ODD)],
+    ids=[v["id"] for v in IRREGULAR]
+    + ["nonsense", "empty", "spaces", "newlines", "digits", "dots", "akhyaniki-broken-odd-pada"],
 )
 def test_not_verse_is_not_identified(second_opinion, text):
     got = chandas.identify(_slp1(text))

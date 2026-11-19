@@ -213,12 +213,18 @@ def _vrtta(line_weights: list[str], flat: str, *, samavrtta: bool) -> _Row | Non
             continue
         lengths = [len(row.padas[i % len(row.padas)]) for i in range(4)]
         padas = _split_padas(line_weights, flat, lengths)
-        # In an ardhasama row only the even pādas' last syllable is anceps. With
-        # it free everywhere, a free indravajrā/upendravajrā mix whose first
-        # syllables happen to alternate would be named ākhyānikī.
+        # In an ardhasama row made of upajāti-family pādas (ākhyānikī), only the
+        # even pādas' last syllable is anceps. With it free everywhere, a free
+        # indravajrā/upendravajrā mix whose first syllables happen to alternate
+        # would be named ākhyānikī. Other ardhasama rows keep it free on all pādas.
+        strict_odd = not samavrtta and all(
+            p[1:] in _upajati_families() for p in row.padas
+        )
         if padas and all(
             _matches(
-                w, row.padas[i % len(row.padas)], anceps_final=samavrtta or i % 2 == 1
+                w,
+                row.padas[i % len(row.padas)],
+                anceps_final=not strict_odd or i % 2 == 1,
             )
             for i, w in enumerate(padas)
         ):
