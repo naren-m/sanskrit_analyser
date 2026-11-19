@@ -42,7 +42,7 @@ _DEF_TRAIL_REF = re.compile(r'[\d,\-]{4,}[a-z]?\s*$')
 _DEF_DOUBLED = re.compile(r'(\w{4,})\1+')
 _DEF_ACCENT = re.compile(r'(?<=[A-Za-z])/(?=[A-Za-z])')
 # Local change: also accepts the whole 'mf(A)n.' / 'f(A).' gender marker (see _lex_marker).
-_DEF_BODY_START = re.compile(r'^(?:(?:mfn|mf|m|f|n|ind|cl|p{1,2})\.?$|(?:mf|m|f|n)\([A-Za-z~]+\)n?\.?$|[0-9(&A-Z])')
+_DEF_BODY_START = re.compile(r'^(?:(?:mfn|mf|m|f|n|ind|cl|p{1,2})\.?$|(?:mf|m|f|n)\([A-Za-z]+\)n?\.?$|[0-9(&A-Z])')
 # MW states a derived word's origin as 'fr. √ 1. viṣ'; CDSL glues its own entry
 # id onto some roots: 'sañj.228458'.
 _CITED_ROOT = re.compile(r'√\s*(?:(?:\d+\.?|and)\s*)*([^\s,;)\]]+)')
@@ -66,7 +66,7 @@ def clean_definition(value: str) -> str:
     text = _DEF_ACCENT.sub('', text)
     text = _DEF_DOUBLED.sub(r'\1', text)
     text = _DEF_TRAIL_REF.sub('', text)
-    stripped = re.sub(r'^(?:\S*[^\x00-\x7F]\S*\s+)+', '', text)
+    stripped = re.sub(r'^(?:\S*[^\x00-\x7F\ue000]\S*\s+)+', '', text)  # Local change: _SP is not non-ASCII debris
     if len(stripped) >= 3:
         text = stripped
     tokens = text.split(' ')
@@ -89,8 +89,10 @@ def _scrub_root_ids(text: str) -> str:
 # '<lex>mf(<s>A/</s>)n.</lex>' must stay one token: 'mf(A)n.', not 'mf( A/ )n.'.
 # Attributes are allowed: '<lex type="hwalt">f(<s>A/</s>). <ab>du.</ab></lex>'.
 _LEX = re.compile(r"<lex\b[^>]*>(.*?)</lex>", re.S)
-# Short '(A)' / '(A or I)' ending parts of a marker; their spaces become '~' so the
+# Short '(A)' / '(A or I)' ending parts of a marker; their spaces become _SP so the
 # marker is one token for the body-start scan (restored in clean_body).
+# _SP is a private-use character: it cannot occur in CDSL text (a real '~' is the SLP1 candrabindu).
+_SP = "\ue000"
 _MARKER_PARENS = re.compile(r"\(([A-Za-z]+(?: (?:or|and) [A-Za-z]+)*)\)")
 # Leading SLP1 gender marker, converted to IAST once cleaning is done ('mf(A)n.' -> 'mf(ā)n.').
 _GENDER_MARKER = re.compile(r"^((?:mf|m|f|n)\()([A-Za-z]+(?: (?:or|and) [A-Za-z]+)*)(\)n?\.)")
@@ -98,7 +100,7 @@ _GENDER_MARKER = re.compile(r"^((?:mf|m|f|n)\()([A-Za-z]+(?: (?:or|and) [A-Za-z]
 
 def _lex_marker(m: re.Match) -> str:
     text = _TAG.sub("", m.group(1)).replace("/", "")
-    return " " + _MARKER_PARENS.sub(lambda p: p.group(0).replace(" ", "~"), text) + " "
+    return " " + _MARKER_PARENS.sub(lambda p: p.group(0).replace(" ", _SP), text) + " "
 
 
 def _iast_marker(m: re.Match) -> str:
@@ -119,7 +121,7 @@ def flatten(raw: str) -> str:
 
 def clean_body(raw: str) -> str:
     """Plain-text gloss from a raw MW ``<body>`` fragment."""
-    text = _scrub_root_ids(clean_definition(flatten(raw))).replace("~", " ")
+    text = _scrub_root_ids(clean_definition(flatten(raw))).replace(_SP, " ")
     return _GENDER_MARKER.sub(_iast_marker, text)
 
 

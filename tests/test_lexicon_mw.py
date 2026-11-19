@@ -33,7 +33,7 @@ def test_build_index_from_fixture(mw_db):
     con = sqlite3.connect(mw_db)
     cols = [r[1] for r in con.execute("PRAGMA table_info(mw)")]
     assert cols == ["key", "key_stem", "lnum", "page", "text", "hom"]
-    assert con.execute("SELECT COUNT(*) FROM mw").fetchone()[0] == 13
+    assert con.execute("SELECT COUNT(*) FROM mw").fetchone()[0] == 14
     assert con.execute("PRAGMA index_list(mw)").fetchall()
     con.close()
 
@@ -47,7 +47,7 @@ def test_failed_build_keeps_old_index(mw_db, tmp_path):
     with pytest.raises(ValueError, match="mw.xml"):
         builder.build(bad, mw_db)
     con = sqlite3.connect(mw_db)
-    assert con.execute("SELECT COUNT(*) FROM mw").fetchone()[0] == 13
+    assert con.execute("SELECT COUNT(*) FROM mw").fetchone()[0] == 14
     con.close()
     assert not mw_db.with_name(mw_db.name + ".tmp").exists()
 
@@ -107,15 +107,11 @@ def test_layerb_lookup_unchanged(mw_db):
     assert "rAma" in lexicon.prefix("rAm", limit=50, sources=["skd", "vcp"])
 
 
-def test_gender_marker_kept_whole(mw_db):
-    (e,) = lexicon.lookup("kAnta", sources=["mw"])
-    assert e.text.startswith("mf(ā)n. ( prob.")
-    assert "/ )" not in e.text
-
-
 @pytest.mark.parametrize(
     "key,start",
     [
+        ("kAnta", "mf(ā)n. ( prob. causing rest) dark, black"),
+        ("haM~sa", "m. a goose ~ swan"),
         ("ajita", "m. pl. a class of deified beings"),
         ("vAmana", "mf(ā or ī)n. dwarfish"),
         ("dfzadupala", "f(ā). du. the upper and lower millstone"),
