@@ -10,7 +10,6 @@
   "SML006": 2
  },
  "sanskrit_analyzer/cache/redis_cache.py": {
-  "SML002": 1,
   "SML003": 1
  },
  "sanskrit_analyzer/cache/tiered.py": {
@@ -56,9 +55,6 @@
  },
  "sanskrit_analyzer/mcp/tools/grammar.py": {
   "SML003": 4
- },
- "sanskrit_analyzer/reader/derive.py": {
-  "SML002": 4
  },
  "sanskrit_analyzer/reader/llm.py": {
   "SML003": 1,
