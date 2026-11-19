@@ -283,7 +283,9 @@ def _tinanta(surface: str, lemma: str, morph: Morph, augmentless: bool) -> Readi
                             purusha=getattr(Purusha, _PURUSHA_ATTR[morph.purusha]),
                             vacana=getattr(Vacana, _VACANA_ATTR[morph.vacana]),
                             dhatu_pada=pada))
-                    except Exception:
+                    except Exception:  # vidyut rejects some combinations
+                        logger.debug("tinanta derive failed for %s (%s, %s)",
+                                     surface, lak, prayoga_name, exc_info=True)
                         continue
                     for p in prakriyas:
                         if same_surface(p.text, surface):
@@ -348,8 +350,8 @@ def _basic_stems(lemma: str):
     if stem.endswith(("A", "I")):
         try:
             yield Pratipadika.nyap(stem), stem, {}, None
-        except Exception:
-            pass
+        except Exception:  # vidyut rejects some stems as nyap
+            logger.debug("nyap stem rejected: %s", stem, exc_info=True)
     for suffix, taddhita in (("vat", "matup"), ("mat", "matup"), ("vat", "vatup")):
         if stem.endswith(suffix) and len(stem) > len(suffix) + 1:
             base = stem[: -len(suffix)]
@@ -387,7 +389,9 @@ def _subanta(surface: str, stems, morph: Morph) -> Reading | None:
                     pratipadika=prati, linga=getattr(Linga, _LINGA_ATTR[linga]),
                     vibhakti=getattr(Vibhakti, _VIBHAKTI_ATTR[morph.vibhakti]),
                     vacana=getattr(Vacana, _VACANA_ATTR[morph.vacana])))
-            except Exception:
+            except Exception:  # vidyut rejects some stem/linga pairs
+                logger.debug("subanta derive failed for %s (stem %s, %s)",
+                             surface, stem, linga, exc_info=True)
                 continue
             for p in prakriyas:
                 feats = {"vibhakti": morph.vibhakti, "vacana": morph.vacana,
@@ -428,7 +432,9 @@ def _absolutive(surface: str, lemma: str) -> Reading | None:
             prakriyas = v.derive(Pada.Subanta(
                 pratipadika=Pratipadika.krdanta(d, Krt.ktvA), linga=Linga.Pum,
                 vibhakti=Vibhakti.Prathama, vacana=Vacana.Eka))
-        except Exception:
+        except Exception:  # vidyut rejects some dhatu/krt pairs
+            logger.debug("absolutive derive failed for %s (lemma %s)",
+                         surface, lemma, exc_info=True)
             continue
         for p in prakriyas:
             if same_surface(p.text, surface):

@@ -296,6 +296,24 @@ class TestRedisCache:
         assert cache.stats.connected is False
 
     @pytest.mark.asyncio
+    async def test_close_error_logs_and_drops_client(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A failing close logs a warning and still drops the client."""
+        cache = RedisCache(redis_url="redis://localhost:6379")
+        mock_client = AsyncMock()
+        mock_client.close.side_effect = ConnectionError("gone")
+        cache._client = mock_client
+        cache._stats.connected = True
+
+        with caplog.at_level("WARNING", logger="sanskrit_analyzer.cache.redis_cache"):
+            await cache.close()
+
+        assert "Failed to close Redis connection" in caplog.text
+        assert cache._client is None
+        assert cache.stats.connected is False
+
+    @pytest.mark.asyncio
     async def test_clear_prefix_disabled(self) -> None:
         """Test clearing keys by prefix when disabled."""
         cache = RedisCache(redis_url=None)

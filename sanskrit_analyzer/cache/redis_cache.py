@@ -110,8 +110,8 @@ class RedisCache:
         if self._client is not None:
             try:
                 await self._client.close()
-            except Exception:
-                pass
+            except Exception:  # close is best effort; drop the client anyway
+                logger.warning("Failed to close Redis connection", exc_info=True)
             self._client = None
             self._stats.connected = False
 
