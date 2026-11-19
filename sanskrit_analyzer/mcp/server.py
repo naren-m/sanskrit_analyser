@@ -3,6 +3,7 @@
 import argparse
 import functools
 import json
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -22,6 +23,8 @@ from sanskrit_analyzer.mcp.tools.dhatu import build_dhatu_tools
 from sanskrit_analyzer.mcp.tools.grammar import build_grammar_tools
 from sanskrit_analyzer.mcp.resources.dhatus import build_dhatu_resources
 from sanskrit_analyzer.mcp.resources.grammar import build_grammar_resources
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -143,6 +146,7 @@ async def health_check(request: Request) -> JSONResponse:
         kosha, _ = _get_health_probes()
         components["dhatupatha"] = {"status": "healthy", "roots": kosha.count()}
     except Exception as e:
+        logger.warning("health: Dhatupatha index probe failed", exc_info=True)
         components["dhatupatha"] = {"status": "unhealthy", "error": str(e)}
 
     # Check Analyzer
@@ -150,6 +154,7 @@ async def health_check(request: Request) -> JSONResponse:
         _get_health_probes()
         components["analyzer"] = {"status": "healthy"}
     except Exception as e:
+        logger.warning("health: analyzer probe failed", exc_info=True)
         components["analyzer"] = {"status": "unhealthy", "error": str(e)}
 
     # Determine overall status

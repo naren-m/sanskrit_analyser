@@ -15,10 +15,13 @@ Indeclinable detection is delegated to the curated :class:`Vocabulary`.
 from __future__ import annotations
 
 import functools
+import logging
 
 from sanskrit_analyzer import vidyut_data
 from sanskrit_analyzer.utils.desandhi import desandhi_candidates
 from sanskrit_analyzer.validation.vocabulary import Vocabulary
+
+logger = logging.getLogger(__name__)
 
 
 class KoshaVocabulary:
@@ -68,6 +71,7 @@ class KoshaVocabulary:
         try:
             return len(self._kosha.get(form)) > 0
         except Exception:
+            logger.debug("kosha lookup failed for %r", form, exc_info=True)
             return False
 
     def contains(self, slp1_lemma: str) -> bool:

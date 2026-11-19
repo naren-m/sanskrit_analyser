@@ -131,6 +131,21 @@ class TestSanskritAPIClient:
         client = SanskritAPIClient(timeout=60.0)
         assert client.timeout == 60.0
 
+    @pytest.mark.parametrize(
+        ("status", "body", "expected"),
+        [
+            (400, b'{"detail": "bad text"}', "bad text"),
+            (422, b'{"detail": [{"loc": ["text"]}]}', "Request failed with status 422"),
+            (404, b"not json", "Request failed with status 404"),
+            (400, b'["a", "list"]', "Request failed with status 400"),
+            (503, b"", "Server error occurred. Please try again or check server logs."),
+        ],
+    )
+    def test_get_error_message(self, status: int, body: bytes, expected: str) -> None:
+        """A non-JSON or non-object body falls back to the status-code message."""
+        response = httpx.Response(status, content=body)
+        assert SanskritAPIClient()._get_error_message(response) == expected
+
     @pytest.mark.asyncio
     async def test_analyze_success(self) -> None:
         """analyze() returns success result on 200 response."""

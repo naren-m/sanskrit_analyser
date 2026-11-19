@@ -13,10 +13,13 @@ is the dominant fragmentation mode in an extracted graph.
 from __future__ import annotations
 
 import functools
+import logging
 import re
 import unicodedata
 
 from sanskrit_analyzer.utils.script_routing import normalize_brahmic, to_iast
+
+logger = logging.getLogger(__name__)
 
 
 def canonical_key(name: str) -> str:
@@ -162,6 +165,7 @@ def lemma_keys(name: str, *, prefer_exact: bool = False) -> frozenset[str]:
             # रामो). Read it both ways; the union keeps the form ambiguous.
             entries += kosha.get(form[:-1] + "as")
     except Exception:  # missing data bundle, or a form vidyut cannot parse
+        logger.debug("kosha lookup failed for %r", name, exc_info=True)
         return frozenset()
     stems = set()
     for entry in entries:

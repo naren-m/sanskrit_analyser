@@ -1,7 +1,10 @@
 """Abstract base class for analysis engines."""
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -106,6 +109,7 @@ class EngineBase(ABC):
             result = await self.analyze("राम")
             return result.success
         except Exception:
+            logger.warning("health check failed for engine %s", self.name, exc_info=True)
             return False
 
     def __repr__(self) -> str:

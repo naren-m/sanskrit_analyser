@@ -1,5 +1,6 @@
 """Vidyut engine wrapper for Paninian grammar-based analysis."""
 
+import logging
 import os
 
 from sanskrit_analyzer.engines.base import EngineBase, EngineResult, Segment
@@ -7,6 +8,8 @@ from sanskrit_analyzer.models.scripts import Script
 from sanskrit_analyzer.utils.normalize import detect_script
 from sanskrit_analyzer.utils.transliterate import transliterate
 from sanskrit_analyzer.vidyut_data import resolve_data_dir
+
+logger = logging.getLogger(__name__)
 
 # Where to download the bundle when no data directory is found.
 DEFAULT_VIDYUT_DATA_PATH = os.path.expanduser("~/.vidyut-data")
@@ -56,6 +59,7 @@ class VidyutEngine(EngineBase):
         except ImportError as e:
             self._init_error = f"Vidyut not installed: {e}"
         except Exception as e:
+            logger.warning("Vidyut initialisation failed", exc_info=True)
             self._init_error = f"Failed to initialize Vidyut: {e}"
 
     @property
@@ -238,6 +242,7 @@ class VidyutEngine(EngineBase):
             )
 
         except Exception as e:
+            logger.warning("Vidyut analysis failed", exc_info=True)
             return EngineResult(
                 engine=self.name,
                 segments=[],

@@ -147,6 +147,7 @@ def interpret(record: dict[str, Any], model: str | None = None,
         try:
             answer = chat(messages, model)
         except Exception as exc:
+            logger.warning("reader LLM call failed (model %s)", model, exc_info=True)
             return {"source": "llm", "model": model, "error": f"LLM call failed: {exc}"}
         errors = check(record, answer)
         if not errors:

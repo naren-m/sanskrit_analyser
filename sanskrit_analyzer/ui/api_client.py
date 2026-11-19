@@ -275,5 +275,5 @@ class SanskritAPIClient:
             if isinstance(detail, str):
                 return detail
             return f"Request failed with status {response.status_code}"
-        except Exception:
+        except (ValueError, AttributeError):  # body is not JSON, or not a JSON object
             return f"Request failed with status {response.status_code}"

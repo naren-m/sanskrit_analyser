@@ -1,6 +1,7 @@
 """Analysis tools for MCP server."""
 
 from collections.abc import Awaitable, Callable
+import logging
 from typing import Any
 
 from mcp.types import Tool, TextContent
@@ -10,6 +11,8 @@ from sanskrit_analyzer.config import Config
 from sanskrit_analyzer.mcp.response import error_response, json_response, text_response
 from sanskrit_analyzer.utils.normalize import detect_script
 from sanskrit_analyzer.utils.transliterate import transliterate, Script
+
+logger = logging.getLogger(__name__)
 
 # A dispatcher returns the tool's result, or None if it does not own ``name``
 # (so the server can try the next tool group).
@@ -159,6 +162,7 @@ async def _analyze_sentence(
         return json_response(output)
 
     except Exception as e:
+        logger.warning("MCP tool failed while analyzing text", exc_info=True)
         return error_response(f"analyzing text: {e}")
 
 
@@ -194,6 +198,7 @@ async def _split_sandhi(
         return json_response(splits)
 
     except Exception as e:
+        logger.warning("MCP tool failed while splitting sandhi", exc_info=True)
         return error_response(f"splitting sandhi: {e}")
 
 
@@ -228,6 +233,7 @@ async def _get_morphology(
         return json_response(morphologies)
 
     except Exception as e:
+        logger.warning("MCP tool failed while getting morphology", exc_info=True)
         return error_response(f"getting morphology: {e}")
 
 
@@ -260,4 +266,5 @@ def _transliterate(arguments: dict[str, Any]) -> list[TextContent]:
         return text_response(result)
 
     except Exception as e:
+        logger.warning("MCP tool failed while transliterating", exc_info=True)
         return error_response(f"transliterating: {e}")

@@ -6,8 +6,12 @@ splits, scores them against the vocabulary, and returns the best candidate.
 
 from __future__ import annotations
 
+import logging
+
 from sanskrit_analyzer.engines.base import Segment
 from sanskrit_analyzer.validation.vocabulary import Vocabulary
+
+logger = logging.getLogger(__name__)
 
 # Maximum number of candidates to evaluate
 _MAX_CANDIDATES = 40
@@ -74,6 +78,7 @@ class SplitValidator:
         try:
             return bool(self._word_guard.contains(surface))
         except Exception:
+            logger.debug("word guard failed for %r", surface, exc_info=True)
             return False
 
     # ------------------------------------------------------------------

@@ -684,6 +684,7 @@ class Analyzer:
                     engine_health = await engine.health_check()
                     health[f"engine_{engine.name}"] = engine_health
                 except Exception:
+                    logger.warning("health check failed for engine %s", engine.name, exc_info=True)
                     health[f"engine_{engine.name}"] = False
 
         # Check disambiguation

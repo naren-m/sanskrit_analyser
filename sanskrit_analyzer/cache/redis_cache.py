@@ -266,6 +266,7 @@ class RedisCache:
             await self._client.ping()
             return True
         except Exception:
+            logger.warning("Redis health check failed", exc_info=True)
             return False
 
     async def get_ttl(self, key: str) -> int | None:

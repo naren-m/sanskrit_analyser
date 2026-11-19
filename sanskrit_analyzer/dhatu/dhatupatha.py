@@ -12,6 +12,7 @@ curated, that reading wins — the heuristic is only the fallback.
 from __future__ import annotations
 
 import csv
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,8 @@ from typing import Any
 from sanskrit_analyzer.models.scripts import Script
 from sanskrit_analyzer.utils.normalize import normalize_slp1
 from sanskrit_analyzer.utils.transliterate import to_devanagari, to_iast
+
+logger = logging.getLogger(__name__)
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -232,6 +235,7 @@ def to_slp1_query(query: str) -> str:
     try:
         return normalize_slp1(query.strip())
     except Exception:
+        logger.debug("SLP1 normalisation failed for %r", query, exc_info=True)
         return query.strip()
 
 

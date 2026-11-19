@@ -352,6 +352,7 @@ class TieredCache:
                 self._sqlite.count()
                 health["sqlite"] = True
             except Exception:
+                logger.warning("SQLite cache health check failed", exc_info=True)
                 health["sqlite"] = False
         else:
             health["sqlite"] = False

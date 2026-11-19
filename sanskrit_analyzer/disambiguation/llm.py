@@ -300,6 +300,7 @@ The ranking should list candidate indices from most likely to least likely."""
                 raw_response=response,
             )
         except Exception as e:
+            logger.warning("could not parse LLM disambiguation response", exc_info=True)
             return LLMDisambiguationResult(
                 success=False,
                 error=f"Parse error: {e}",
