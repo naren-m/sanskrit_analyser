@@ -71,10 +71,18 @@ def test_sandhi_csv_cites_real_sutra(index, code):
     assert index.lookup(code) is not None, f"no sūtra {code}"
 
 
+#: Rows where we deliberately correct vidyut's table: its pañcacāmara is the
+#: 12-syllable LGLGLGLGLGLG, but the canonical meter is ja ra ja ra ja ga (16).
+CORRECTED_PATTERNS = {"paYcacAmara": "LGLGLGLGLGLGLGLG"}
+
+
 def test_meters_csv_matches_vidyut():
-    """Name/class/pattern are vidyut's meters.tsv; duplicate names are kept."""
+    """Name/class/pattern are vidyut's meters.tsv (bar CORRECTED_PATTERNS); duplicate names are kept."""
     with (resolve_data_dir() / "chandas" / "meters.tsv").open(encoding="utf-8") as fh:
-        upstream = sorted(tuple(line.rstrip("\n").split("\t")) for line in fh if line.strip())
+        upstream = sorted(
+            (n, c, CORRECTED_PATTERNS.get(n, p))
+            for n, c, p in (tuple(line.rstrip("\n").split("\t")) for line in fh if line.strip())
+        )
     ours = sorted((r["name_slp1"], r["class"], r["pattern"]) for r in _rows("meters-full.csv"))
     assert ours == upstream
 
