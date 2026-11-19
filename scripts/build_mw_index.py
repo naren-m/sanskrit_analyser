@@ -41,8 +41,8 @@ _DEF_WORD = re.compile(r'[A-Za-z/]+')
 _DEF_TRAIL_REF = re.compile(r'[\d,\-]{4,}[a-z]?\s*$')
 _DEF_DOUBLED = re.compile(r'(\w{4,})\1+')
 _DEF_ACCENT = re.compile(r'(?<=[A-Za-z])/(?=[A-Za-z])')
-# Local change: also accepts the whole 'mf(A)n.' gender marker (see _lex_marker).
-_DEF_BODY_START = re.compile(r'^(?:(?:mfn|mf|m|f|n|ind|cl|p{1,2})\.?$|mf\([A-Za-z]+\)n\.$|[0-9(&A-Z])')
+# Local change: also accepts the whole 'mf(A)n.' / 'f(A).' gender marker (see _lex_marker).
+_DEF_BODY_START = re.compile(r'^(?:(?:mfn|mf|m|f|n|ind|cl|p{1,2})\.?$|(?:mf|m|f|n)\([A-Za-z~]+\)n?\.?$|[0-9(&A-Z])')
 # MW states a derived word's origin as 'fr. √ 1. viṣ'; CDSL glues its own entry
 # id onto some roots: 'sañj.228458'.
 _CITED_ROOT = re.compile(r'√\s*(?:(?:\d+\.?|and)\s*)*([^\s,;)\]]+)')
@@ -87,13 +87,27 @@ def _scrub_root_ids(text: str) -> str:
 
 
 # '<lex>mf(<s>A/</s>)n.</lex>' must stay one token: 'mf(A)n.', not 'mf( A/ )n.'.
-_LEX = re.compile(r"<lex>(.*?)</lex>", re.S)
+# Attributes are allowed: '<lex type="hwalt">f(<s>A/</s>). <ab>du.</ab></lex>'.
+_LEX = re.compile(r"<lex\b[^>]*>(.*?)</lex>", re.S)
+# Short '(A)' / '(A or I)' ending parts of a marker; their spaces become '~' so the
+# marker is one token for the body-start scan (restored in clean_body).
+_MARKER_PARENS = re.compile(r"\(([A-Za-z]+(?: (?:or|and) [A-Za-z]+)*)\)")
 # Leading SLP1 gender marker, converted to IAST once cleaning is done ('mf(A)n.' -> 'mf(ā)n.').
-_GENDER_MARKER = re.compile(r"^mf\(([A-Za-z]+)\)n\.")
+_GENDER_MARKER = re.compile(r"^((?:mf|m|f|n)\()([A-Za-z]+(?: (?:or|and) [A-Za-z]+)*)(\)n?\.)")
 
 
 def _lex_marker(m: re.Match) -> str:
-    return " " + re.sub(r"[/\s]", "", _TAG.sub("", m.group(1))) + " "
+    text = _TAG.sub("", m.group(1)).replace("/", "")
+    return " " + _MARKER_PARENS.sub(lambda p: p.group(0).replace(" ", "~"), text) + " "
+
+
+def _iast_marker(m: re.Match) -> str:
+    inner = re.sub(
+        r"[A-Za-z]+",
+        lambda w: w.group(0) if w.group(0) in ("or", "and") else transliterate(w.group(0), sanscript.SLP1, sanscript.IAST),
+        m.group(2),
+    )
+    return m.group(1) + inner + m.group(3)
 
 
 def flatten(raw: str) -> str:
@@ -105,10 +119,8 @@ def flatten(raw: str) -> str:
 
 def clean_body(raw: str) -> str:
     """Plain-text gloss from a raw MW ``<body>`` fragment."""
-    text = _scrub_root_ids(clean_definition(flatten(raw)))
-    return _GENDER_MARKER.sub(
-        lambda m: f"mf({transliterate(m.group(1), sanscript.SLP1, sanscript.IAST)})n.", text
-    )
+    text = _scrub_root_ids(clean_definition(flatten(raw))).replace("~", " ")
+    return _GENDER_MARKER.sub(_iast_marker, text)
 
 
 def _field(tag: str, chunk: str) -> str:
