@@ -116,7 +116,7 @@ def fetch(out: Path, files: tuple[str, ...] = CORE_FILES) -> dict:
             "bytes": len(data),
             "sha256": hashlib.sha256(data).hexdigest(),
         }
-        print(f"  got {path} ({len(data) / 1e6:.1f} MB)")
+        sys.stdout.write(f"  got {path} ({len(data) / 1e6:.1f} MB)\n")
         manifest_path.write_text(json.dumps(manifest, indent=2))  # resume point
 
     (out / "SOURCE.md").write_text(SOURCE_MD)
@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     manifest = fetch(args.out, ALL_FILES if args.all else CORE_FILES)
     total = sum(f["bytes"] for f in manifest["files"].values())
-    print(f"{len(manifest['files'])} files, {total / 1e6:.1f} MB in {args.out}")
+    sys.stdout.write(f"{len(manifest['files'])} files, {total / 1e6:.1f} MB in {args.out}\n")
     return 0
 
 
