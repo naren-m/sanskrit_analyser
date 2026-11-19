@@ -41,7 +41,8 @@ _DEF_WORD = re.compile(r'[A-Za-z/]+')
 _DEF_TRAIL_REF = re.compile(r'[\d,\-]{4,}[a-z]?\s*$')
 _DEF_DOUBLED = re.compile(r'(\w{4,})\1+')
 _DEF_ACCENT = re.compile(r'(?<=[A-Za-z])/(?=[A-Za-z])')
-_DEF_BODY_START = re.compile(r'^(?:(?:mfn|mf|m|f|n|ind|cl|p{1,2})\.?$|[0-9(&A-Z])')
+# Local change: also accepts the whole 'mf(A)n.' gender marker (see _lex_marker).
+_DEF_BODY_START = re.compile(r'^(?:(?:mfn|mf|m|f|n|ind|cl|p{1,2})\.?$|mf\([A-Za-z]+\)n\.$|[0-9(&A-Z])')
 # MW states a derived word's origin as 'fr. √ 1. viṣ'; CDSL glues its own entry
 # id onto some roots: 'sañj.228458'.
 _CITED_ROOT = re.compile(r'√\s*(?:(?:\d+\.?|and)\s*)*([^\s,;)\]]+)')
@@ -85,15 +86,29 @@ def _scrub_root_ids(text: str) -> str:
 # --- end copied block -----------------------------------------------------------
 
 
+# '<lex>mf(<s>A/</s>)n.</lex>' must stay one token: 'mf(A)n.', not 'mf( A/ )n.'.
+_LEX = re.compile(r"<lex>(.*?)</lex>", re.S)
+# Leading SLP1 gender marker, converted to IAST once cleaning is done ('mf(A)n.' -> 'mf(ā)n.').
+_GENDER_MARKER = re.compile(r"^mf\(([A-Za-z]+)\)n\.")
+
+
+def _lex_marker(m: re.Match) -> str:
+    return " " + re.sub(r"[/\s]", "", _TAG.sub("", m.group(1))) + " "
+
+
 def flatten(raw: str) -> str:
     """Flat text from a raw MW XML fragment (tags and markup removed)."""
+    raw = _LEX.sub(_lex_marker, raw)
     raw = _MARKS.sub("", _XML_BOOKKEEPING.sub(" ", raw))
     return _WS.sub(" ", html.unescape(_TAG.sub(" ", raw))).replace("¦", "").strip()
 
 
 def clean_body(raw: str) -> str:
     """Plain-text gloss from a raw MW ``<body>`` fragment."""
-    return _scrub_root_ids(clean_definition(flatten(raw)))
+    text = _scrub_root_ids(clean_definition(flatten(raw)))
+    return _GENDER_MARKER.sub(
+        lambda m: f"mf({transliterate(m.group(1), sanscript.SLP1, sanscript.IAST)})n.", text
+    )
 
 
 def _field(tag: str, chunk: str) -> str:
