@@ -23,10 +23,10 @@ from sanskrit_analyzer.disambiguation.rules import (
     RuleBasedDisambiguatorConfig,
 )
 from sanskrit_analyzer.engines.base import EngineBase
-from sanskrit_analyzer.engines.runner import EngineRunner
+from sanskrit_analyzer.engines.runner import EngineRunner, EngineRunResult
 from sanskrit_analyzer.models.dhatu import DhatuInfo, Pada
 from sanskrit_analyzer.models.scripts import Script, ScriptVariants
-from sanskrit_analyzer.models.tree import AnalysisTree, CacheTier
+from sanskrit_analyzer.models.tree import AnalysisTree, BaseWord, CacheTier, SandhiGroup
 from sanskrit_analyzer.tree_builder import TreeBuilder, TreeBuilderConfig
 from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1
 from sanskrit_analyzer.validation.split_validator import SplitValidator
@@ -325,6 +325,52 @@ class Analyzer:
 
         run_result = await self._runner.analyze(normalized_slp1, engines=engines)
 
+        tree = self._build_tree(run_result, original_text, normalized_slp1, mode.value)
+
+        # Run disambiguation if multiple parses and enabled
+        if (
+            len(tree.parse_forest) > 1
+            and self._disambiguation
+            and tree.confidence.overall < self._config.disambiguation.min_confidence_skip
+        ):
+            tree = await self._disambiguate_tree(tree, context)
+
+        # Determine return behavior
+        if return_all_parses is None:
+            return_all_parses = mode_config.return_all_parses
+        if not return_all_parses:
+            self._keep_best_parse(tree)
+
+        # Store in cache
+        if self._cache:
+            await self._cache.set(
+                cache_key,
+                original_text,
+                normalized_slp1,
+                mode.value,
+                tree.to_dict(),
+            )
+
+        return tree
+
+    @staticmethod
+    def _keep_best_parse(tree: AnalysisTree) -> None:
+        """Trim the parse forest to its best parse, in place."""
+        if not tree.parse_forest:
+            return
+        best = tree.best_parse
+        if best:
+            tree.parse_forest = [best]
+            tree.selected_parse = 0
+
+    def _build_tree(
+        self,
+        run_result: EngineRunResult,
+        original_text: str,
+        normalized_slp1: str,
+        mode: str,
+    ) -> AnalysisTree:
+        """Build the parse tree from an engine run, via the split validator when it applies."""
         # Validate and re-score splits if validator is available.
         # The validator rescores VIDYUT splits against a small curated
         # vocabulary; applying it to segments from other engines (e.g. the
@@ -347,52 +393,20 @@ class Analyzer:
                 normalized_slp1,
             )
             # Build tree from validated segments
-            tree = self._tree_builder.build_from_segments(
+            return self._tree_builder.build_from_segments(
                 validated_segments,
                 original_text,
                 normalized_slp1,
                 engine_name="vidyut+validator",
-                mode=mode.value,
+                mode=mode,
             )
-        else:
-            # Build parse tree from the engine run (original path)
-            tree = self._tree_builder.build(
-                run_result,
-                original_text,
-                normalized_slp1,
-                mode.value,
-            )
-
-        # Run disambiguation if multiple parses and enabled
-        if (
-            len(tree.parse_forest) > 1
-            and self._disambiguation
-            and tree.confidence.overall < self._config.disambiguation.min_confidence_skip
-        ):
-            tree = await self._disambiguate_tree(tree, context)
-
-        # Determine return behavior
-        if return_all_parses is None:
-            return_all_parses = mode_config.return_all_parses
-
-        if not return_all_parses and tree.parse_forest:
-            # Keep only best parse
-            best = tree.best_parse
-            if best:
-                tree.parse_forest = [best]
-                tree.selected_parse = 0
-
-        # Store in cache
-        if self._cache:
-            await self._cache.set(
-                cache_key,
-                original_text,
-                normalized_slp1,
-                mode.value,
-                tree.to_dict(),
-            )
-
-        return tree
+        # Build parse tree from the engine run (original path)
+        return self._tree_builder.build(
+            run_result,
+            original_text,
+            normalized_slp1,
+            mode,
+        )
 
     async def _disambiguate_tree(
         self,
@@ -475,13 +489,7 @@ class Analyzer:
         Returns:
             Reconstructed AnalysisTree.
         """
-        from sanskrit_analyzer.models.morphology import Meaning, MorphologicalTag
-        from sanskrit_analyzer.models.tree import (
-            BaseWord,
-            ConfidenceMetrics,
-            ParseTree,
-            SandhiGroup,
-        )
+        from sanskrit_analyzer.models.tree import ConfidenceMetrics, ParseTree
 
         # Use cached values if not provided
         original_text = original_text or cached.get("original_text", "")
@@ -502,101 +510,10 @@ class Analyzer:
         # Rebuild parse_forest
         parse_forest: list[ParseTree] = []
         for pt_dict in cached.get("parse_forest", []):
-            sandhi_groups: list[SandhiGroup] = []
-            for sg_dict in pt_dict.get("sandhi_groups", []):
-                base_words: list[BaseWord] = []
-                for bw_dict in sg_dict.get("base_words", []):
-                    # Rebuild morphology
-                    morph = None
-                    morph_dict = bw_dict.get("morphology")
-                    if morph_dict:
-                        morph = MorphologicalTag(
-                            pos=morph_dict.get("pos"),
-                            gender=morph_dict.get("gender"),
-                            number=morph_dict.get("number"),
-                            case=morph_dict.get("case"),
-                            person=morph_dict.get("person"),
-                            tense=morph_dict.get("tense"),
-                            voice=morph_dict.get("voice"),
-                            raw_tag=morph_dict.get("raw_tag"),
-                        )
-
-                    # Rebuild dhatu. The serialized form (DhatuInfo.to_dict)
-                    # drops the required ``scripts`` field, so reconstruct via
-                    # the canonical COMMON_DHATUS entry when possible; otherwise
-                    # build a minimal valid DhatuInfo (matching the real
-                    # dataclass signature, which takes ``meanings``/``scripts``,
-                    # not a singular ``meaning``).
-                    dhatu = None
-                    dhatu_dict = bw_dict.get("dhatu")
-                    if dhatu_dict:
-                        from sanskrit_analyzer.models.dhatu import COMMON_DHATUS
-
-                        root = dhatu_dict.get("dhatu", "")
-                        # NOTE: COMMON_DHATUS entries are shared singletons; the
-                        # rebuilt tree references the canonical DhatuInfo rather
-                        # than a per-call copy. DhatuInfo is treated as
-                        # read-only here, so the sharing is safe.
-                        dhatu = COMMON_DHATUS.get(root)
-                        if dhatu is None:
-                            meaning = dhatu_dict.get("meaning")
-                            dhatu = DhatuInfo(
-                                dhatu=root,
-                                scripts=ScriptVariants.from_text(
-                                    root, Script.SLP1
-                                ),
-                                gana=dhatu_dict.get("gana") or 0,
-                                pada=dhatu_dict.get("pada") or "",
-                                meanings=dhatu_dict.get("meanings")
-                                or ([meaning] if meaning else []),
-                            )
-
-                    # Rebuild meanings
-                    meanings = [
-                        Meaning(text=m) if isinstance(m, str) else Meaning(text=str(m))
-                        for m in bw_dict.get("meanings", [])
-                    ]
-
-                    # Rebuild scripts for word
-                    bw_scripts = None
-                    scripts_dict = bw_dict.get("scripts")
-                    if scripts_dict:
-                        bw_scripts = ScriptVariants(
-                            devanagari=scripts_dict.get("devanagari", ""),
-                            iast=scripts_dict.get("iast", ""),
-                            slp1=scripts_dict.get("slp1", ""),
-                        )
-
-                    base_words.append(BaseWord(
-                        lemma=bw_dict.get("lemma", ""),
-                        surface_form=bw_dict.get("surface_form", ""),
-                        scripts=bw_scripts,
-                        morphology=morph,
-                        meanings=meanings,
-                        dhatu=dhatu,
-                        confidence=bw_dict.get("confidence", 0.0),
-                    ))
-
-                # Rebuild scripts for sandhi group
-                sg_scripts = None
-                sg_scripts_dict = sg_dict.get("scripts")
-                if sg_scripts_dict:
-                    sg_scripts = ScriptVariants(
-                        devanagari=sg_scripts_dict.get("devanagari", ""),
-                        iast=sg_scripts_dict.get("iast", ""),
-                        slp1=sg_scripts_dict.get("slp1", ""),
-                    )
-
-                sandhi_groups.append(SandhiGroup(
-                    surface_form=sg_dict.get("surface_form", ""),
-                    scripts=sg_scripts,
-                    sandhi_type=sg_dict.get("sandhi_type"),
-                    sandhi_rule=sg_dict.get("sandhi_rule"),
-                    is_compound=sg_dict.get("is_compound", False),
-                    compound_type=sg_dict.get("compound_type"),
-                    base_words=base_words,
-                ))
-
+            sandhi_groups = [
+                self._sandhi_group_from_dict(sg_dict)
+                for sg_dict in pt_dict.get("sandhi_groups", [])
+            ]
             parse_forest.append(ParseTree(
                 parse_id=pt_dict.get("parse_id", ""),
                 confidence=pt_dict.get("confidence", 0.0),
@@ -616,6 +533,103 @@ class Analyzer:
             confidence=confidence,
             mode=mode,
             cached_at=cache_tier,
+        )
+
+    @staticmethod
+    def _scripts_from_dict(scripts_dict: dict[str, Any] | None) -> ScriptVariants | None:
+        """Rebuild a cached ScriptVariants, or None when the cache had none."""
+        if not scripts_dict:
+            return None
+        return ScriptVariants(
+            devanagari=scripts_dict.get("devanagari", ""),
+            iast=scripts_dict.get("iast", ""),
+            slp1=scripts_dict.get("slp1", ""),
+        )
+
+    @staticmethod
+    def _dhatu_from_dict(dhatu_dict: dict[str, Any] | None) -> DhatuInfo | None:
+        """Rebuild a cached DhatuInfo, or None when the cache had none."""
+        # Rebuild dhatu. The serialized form (DhatuInfo.to_dict)
+        # drops the required ``scripts`` field, so reconstruct via
+        # the canonical COMMON_DHATUS entry when possible; otherwise
+        # build a minimal valid DhatuInfo (matching the real
+        # dataclass signature, which takes ``meanings``/``scripts``,
+        # not a singular ``meaning``).
+        if not dhatu_dict:
+            return None
+        from sanskrit_analyzer.models.dhatu import COMMON_DHATUS
+
+        root = dhatu_dict.get("dhatu", "")
+        # NOTE: COMMON_DHATUS entries are shared singletons; the
+        # rebuilt tree references the canonical DhatuInfo rather
+        # than a per-call copy. DhatuInfo is treated as
+        # read-only here, so the sharing is safe.
+        dhatu = COMMON_DHATUS.get(root)
+        if dhatu is None:
+            meaning = dhatu_dict.get("meaning")
+            dhatu = DhatuInfo(
+                dhatu=root,
+                scripts=ScriptVariants.from_text(root, Script.SLP1),
+                gana=dhatu_dict.get("gana") or 0,
+                pada=dhatu_dict.get("pada") or "",
+                meanings=dhatu_dict.get("meanings")
+                or ([meaning] if meaning else []),
+            )
+        return dhatu
+
+    @classmethod
+    def _base_word_from_dict(cls, bw_dict: dict[str, Any]) -> BaseWord:
+        """Rebuild one cached BaseWord with its morphology, dhatu and meanings."""
+        from sanskrit_analyzer.models.morphology import Meaning, MorphologicalTag
+
+        # Rebuild morphology
+        morph = None
+        morph_dict = bw_dict.get("morphology")
+        if morph_dict:
+            morph = MorphologicalTag(
+                pos=morph_dict.get("pos"),
+                gender=morph_dict.get("gender"),
+                number=morph_dict.get("number"),
+                case=morph_dict.get("case"),
+                person=morph_dict.get("person"),
+                tense=morph_dict.get("tense"),
+                voice=morph_dict.get("voice"),
+                raw_tag=morph_dict.get("raw_tag"),
+            )
+
+        dhatu = cls._dhatu_from_dict(bw_dict.get("dhatu"))
+
+        # Rebuild meanings
+        meanings = [
+            Meaning(text=m) if isinstance(m, str) else Meaning(text=str(m))
+            for m in bw_dict.get("meanings", [])
+        ]
+
+        return BaseWord(
+            lemma=bw_dict.get("lemma", ""),
+            surface_form=bw_dict.get("surface_form", ""),
+            scripts=cls._scripts_from_dict(bw_dict.get("scripts")),
+            morphology=morph,
+            meanings=meanings,
+            dhatu=dhatu,
+            confidence=bw_dict.get("confidence", 0.0),
+        )
+
+    @classmethod
+    def _sandhi_group_from_dict(cls, sg_dict: dict[str, Any]) -> SandhiGroup:
+        """Rebuild one cached SandhiGroup and its base words."""
+        base_words = [
+            cls._base_word_from_dict(bw_dict)
+            for bw_dict in sg_dict.get("base_words", [])
+        ]
+        return SandhiGroup(
+            surface_form=sg_dict.get("surface_form", ""),
+            scripts=cls._scripts_from_dict(sg_dict.get("scripts")),
+            sandhi_type=sg_dict.get("sandhi_type"),
+            sandhi_rule=sg_dict.get("sandhi_rule"),
+            is_compound=sg_dict.get("is_compound", False),
+            compound_type=sg_dict.get("compound_type"),
+            base_words=base_words,
         )
 
     async def analyze_batch(

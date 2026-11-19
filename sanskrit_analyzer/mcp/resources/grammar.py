@@ -11,6 +11,98 @@ from mcp.types import Resource
 ResourceReader = Callable[[str], Awaitable[str | None]]
 
 
+# Resource specs served by build_grammar_resources; each call returns a fresh list.
+_GRAMMAR_RESOURCES: list[Resource] = [
+    # Sandhi Rules Resources
+    Resource(
+        uri="grammar://sandhi-rules",  # type: ignore[arg-type]
+        name="Sandhi Rules Index",
+        description="Overview of sandhi (euphonic combination) rules",
+        mimeType="application/json",
+    ),
+    Resource(
+        uri="grammar://sandhi-rules/vowel",  # type: ignore[arg-type]
+        name="Vowel Sandhi Rules (ac-sandhi)",
+        description="Rules for vowel sandhi (ac-sandhi)",
+        mimeType="application/json",
+    ),
+    Resource(
+        uri="grammar://sandhi-rules/consonant",  # type: ignore[arg-type]
+        name="Consonant Sandhi Rules (hal-sandhi)",
+        description="Rules for consonant sandhi (hal-sandhi)",
+        mimeType="application/json",
+    ),
+    Resource(
+        uri="grammar://sandhi-rules/visarga",  # type: ignore[arg-type]
+        name="Visarga Sandhi Rules",
+        description="Rules for visarga sandhi",
+        mimeType="application/json",
+    ),
+    # Pratyaya Resources
+    Resource(
+        uri="grammar://pratyayas",  # type: ignore[arg-type]
+        name="Pratyayas Index",
+        description="Overview of pratyayas (suffixes)",
+        mimeType="application/json",
+    ),
+    Resource(
+        uri="grammar://pratyayas/krt",  # type: ignore[arg-type]
+        name="Krt Pratyayas",
+        description="Primary verbal suffixes (kṛt pratyayas)",
+        mimeType="application/json",
+    ),
+    Resource(
+        uri="grammar://pratyayas/taddhita",  # type: ignore[arg-type]
+        name="Taddhita Pratyayas",
+        description="Secondary nominal suffixes (taddhita pratyayas)",
+        mimeType="application/json",
+    ),
+    Resource(
+        uri="grammar://pratyayas/tin",  # type: ignore[arg-type]
+        name="Tin Pratyayas",
+        description="Verb endings (tiṅ pratyayas)",
+        mimeType="application/json",
+    ),
+    Resource(
+        uri="grammar://pratyayas/sup",  # type: ignore[arg-type]
+        name="Sup Pratyayas",
+        description="Noun endings (sup pratyayas)",
+        mimeType="application/json",
+    ),
+    # Sutra Resources
+    Resource(
+        uri="grammar://sutras",  # type: ignore[arg-type]
+        name="Ashtadhyayi Overview",
+        description="Overview of Panini's Ashtadhyayi (8 chapters, 4 sections each)",
+        mimeType="application/json",
+    ),
+    Resource(
+        uri="grammar://sutras/1/1",  # type: ignore[arg-type]
+        name="Adhyaya 1, Pada 1",
+        description="Sutras from Ashtadhyayi 1.1",
+        mimeType="application/json",
+    ),
+    Resource(
+        uri="grammar://sutras/1/2",  # type: ignore[arg-type]
+        name="Adhyaya 1, Pada 2",
+        description="Sutras from Ashtadhyayi 1.2",
+        mimeType="application/json",
+    ),
+    Resource(
+        uri="grammar://sutras/1/3",  # type: ignore[arg-type]
+        name="Adhyaya 1, Pada 3",
+        description="Sutras from Ashtadhyayi 1.3",
+        mimeType="application/json",
+    ),
+    Resource(
+        uri="grammar://sutras/1/4",  # type: ignore[arg-type]
+        name="Adhyaya 1, Pada 4",
+        description="Sutras from Ashtadhyayi 1.4",
+        mimeType="application/json",
+    ),
+]
+
+
 def _load_yaml(filename: str) -> dict[str, Any]:
     """Load YAML data file from the data directory."""
     data_dir = Path(__file__).parent.parent.parent / "data"
@@ -26,95 +118,7 @@ def _load_yaml(filename: str) -> dict[str, Any]:
 def build_grammar_resources() -> tuple[list[Resource], ResourceReader]:
     """Build the grammar resource specs and their reader (see build_dhatu_resources)."""
 
-    resources = [
-            # Sandhi Rules Resources
-            Resource(
-                uri="grammar://sandhi-rules",  # type: ignore[arg-type]
-                name="Sandhi Rules Index",
-                description="Overview of sandhi (euphonic combination) rules",
-                mimeType="application/json",
-            ),
-            Resource(
-                uri="grammar://sandhi-rules/vowel",  # type: ignore[arg-type]
-                name="Vowel Sandhi Rules (ac-sandhi)",
-                description="Rules for vowel sandhi (ac-sandhi)",
-                mimeType="application/json",
-            ),
-            Resource(
-                uri="grammar://sandhi-rules/consonant",  # type: ignore[arg-type]
-                name="Consonant Sandhi Rules (hal-sandhi)",
-                description="Rules for consonant sandhi (hal-sandhi)",
-                mimeType="application/json",
-            ),
-            Resource(
-                uri="grammar://sandhi-rules/visarga",  # type: ignore[arg-type]
-                name="Visarga Sandhi Rules",
-                description="Rules for visarga sandhi",
-                mimeType="application/json",
-            ),
-            # Pratyaya Resources
-            Resource(
-                uri="grammar://pratyayas",  # type: ignore[arg-type]
-                name="Pratyayas Index",
-                description="Overview of pratyayas (suffixes)",
-                mimeType="application/json",
-            ),
-            Resource(
-                uri="grammar://pratyayas/krt",  # type: ignore[arg-type]
-                name="Krt Pratyayas",
-                description="Primary verbal suffixes (kṛt pratyayas)",
-                mimeType="application/json",
-            ),
-            Resource(
-                uri="grammar://pratyayas/taddhita",  # type: ignore[arg-type]
-                name="Taddhita Pratyayas",
-                description="Secondary nominal suffixes (taddhita pratyayas)",
-                mimeType="application/json",
-            ),
-            Resource(
-                uri="grammar://pratyayas/tin",  # type: ignore[arg-type]
-                name="Tin Pratyayas",
-                description="Verb endings (tiṅ pratyayas)",
-                mimeType="application/json",
-            ),
-            Resource(
-                uri="grammar://pratyayas/sup",  # type: ignore[arg-type]
-                name="Sup Pratyayas",
-                description="Noun endings (sup pratyayas)",
-                mimeType="application/json",
-            ),
-            # Sutra Resources
-            Resource(
-                uri="grammar://sutras",  # type: ignore[arg-type]
-                name="Ashtadhyayi Overview",
-                description="Overview of Panini's Ashtadhyayi (8 chapters, 4 sections each)",
-                mimeType="application/json",
-            ),
-            Resource(
-                uri="grammar://sutras/1/1",  # type: ignore[arg-type]
-                name="Adhyaya 1, Pada 1",
-                description="Sutras from Ashtadhyayi 1.1",
-                mimeType="application/json",
-            ),
-            Resource(
-                uri="grammar://sutras/1/2",  # type: ignore[arg-type]
-                name="Adhyaya 1, Pada 2",
-                description="Sutras from Ashtadhyayi 1.2",
-                mimeType="application/json",
-            ),
-            Resource(
-                uri="grammar://sutras/1/3",  # type: ignore[arg-type]
-                name="Adhyaya 1, Pada 3",
-                description="Sutras from Ashtadhyayi 1.3",
-                mimeType="application/json",
-            ),
-            Resource(
-                uri="grammar://sutras/1/4",  # type: ignore[arg-type]
-                name="Adhyaya 1, Pada 4",
-                description="Sutras from Ashtadhyayi 1.4",
-                mimeType="application/json",
-            ),
-        ]
+    resources = list(_GRAMMAR_RESOURCES)
 
     async def read_resource(uri: str) -> str | None:
         uri = str(uri)

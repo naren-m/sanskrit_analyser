@@ -2,11 +2,8 @@
 
 import streamlit as st
 
-
-def inject_css() -> None:
-    """Inject custom CSS styles into the Streamlit app."""
-    st.markdown(
-        """
+# Injected verbatim by inject_css (inner indentation is part of the string).
+_CUSTOM_CSS = """
         <style>
         /* Tree structure lines */
         .tree-node {
@@ -264,7 +261,13 @@ def inject_css() -> None:
             margin-bottom: 0.2rem !important;
         }
         </style>
-        """,
+        """
+
+
+def inject_css() -> None:
+    """Inject custom CSS styles into the Streamlit app."""
+    st.markdown(
+        _CUSTOM_CSS,
         unsafe_allow_html=True,
     )
 
