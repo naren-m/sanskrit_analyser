@@ -15,9 +15,6 @@
  "sanskrit_analyzer/cache/tiered.py": {
   "SML003": 1
  },
- "sanskrit_analyzer/config.py": {
-  "SML009": 2
- },
  "sanskrit_analyzer/deep_read/facade.py": {
   "SML003": 8
  },
@@ -28,8 +25,7 @@
   "SML003": 1
  },
  "sanskrit_analyzer/disambiguation/llm.py": {
-  "SML003": 1,
-  "SML009": 1
+  "SML003": 1
  },
  "sanskrit_analyzer/engines/base.py": {
   "SML003": 1
@@ -57,8 +53,7 @@
   "SML003": 4
  },
  "sanskrit_analyzer/reader/llm.py": {
-  "SML003": 1,
-  "SML009": 1
+  "SML003": 1
  },
  "sanskrit_analyzer/ui/api_client.py": {
   "SML003": 1
