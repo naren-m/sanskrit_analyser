@@ -6,9 +6,6 @@
  "sanskrit_analyzer/api/routes/analyze.py": {
   "SML004": 1
  },
- "sanskrit_analyzer/ashtadhyayi_data.py": {
-  "SML006": 2
- },
  "sanskrit_analyzer/cache/redis_cache.py": {
   "SML003": 1
  },
