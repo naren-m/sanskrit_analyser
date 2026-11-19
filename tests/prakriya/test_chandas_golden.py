@@ -73,6 +73,10 @@ def _decompose(pattern: str) -> str:
 #: pāda interiors break the family tail: neither ākhyānikī, upajāti nor āryā.
 AKHYANIKI_BROKEN_ODD = "GGLGGLLLLGG/LGLGGLLLLGG/GGLGGLLLLGL/LGLGGLLLLGG"
 
+#: 60 syllables whose mātrā totals hit the āryā cuts 12/30/42/57 and then run on
+#: to 119: the cut points alone must not name it āryā.
+ARYA_CUTS_THEN_RUNS_ON = "G" * 28 + "L" + "G" * 31
+
 FIXED = [v for v in VERSES if v["ganas"]]
 ids = lambda cases: [c["id"] for c in cases]  # noqa: E731
 
@@ -127,9 +131,9 @@ def test_ardhasama_odd_pada_anceps_is_narrow(scan, expected):
 @pytest.mark.parametrize(
     "text",
     [v["text"] for v in IRREGULAR]
-    + ["ka ka ka ka ka", "", "   ", "\n\n", "12345", "...", _lg_text(AKHYANIKI_BROKEN_ODD)],
+    + ["ka ka ka ka ka", "", "   ", "\n\n", "12345", "...", _lg_text(AKHYANIKI_BROKEN_ODD), _lg_text(ARYA_CUTS_THEN_RUNS_ON)],
     ids=[v["id"] for v in IRREGULAR]
-    + ["nonsense", "empty", "spaces", "newlines", "digits", "dots", "akhyaniki-broken-odd-pada"],
+    + ["nonsense", "empty", "spaces", "newlines", "digits", "dots", "akhyaniki-broken-odd-pada", "arya-cuts-then-runs-on"],
 )
 def test_not_verse_is_not_identified(second_opinion, text):
     got = chandas.identify(_slp1(text))

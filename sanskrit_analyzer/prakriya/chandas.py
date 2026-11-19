@@ -260,9 +260,9 @@ def _is_jati(flat: str, name: str) -> bool:
     b, c, d = a + b, a + b + c, a + b + c + d
     if a not in totals:
         return False
-    if b in totals and c in totals and (d in totals or d - 1 in totals):
+    if b in totals and c in totals and running in (d, d - 1):
         return True
-    return b - 1 in totals and c - 1 in totals and (d - 1 in totals or d - 2 in totals)
+    return b - 1 in totals and c - 1 in totals and running in (d - 1, d - 2)
 
 
 @lru_cache(maxsize=1)
