@@ -28,9 +28,6 @@
  "sanskrit_analyzer/dhatu/dhatupatha.py": {
   "SML003": 1
  },
- "sanskrit_analyzer/dhatu/resolver.py": {
-  "SML005": 1
- },
  "sanskrit_analyzer/disambiguation/llm.py": {
   "SML003": 1,
   "SML009": 1
@@ -48,8 +45,7 @@
   "SML004": 1
  },
  "sanskrit_analyzer/mcp/server.py": {
-  "SML003": 2,
-  "SML005": 2
+  "SML003": 2
  },
  "sanskrit_analyzer/mcp/tools/analysis.py": {
   "SML003": 4

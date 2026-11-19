@@ -1,6 +1,7 @@
 """MCP server implementation for Sanskrit Analyzer."""
 
 import argparse
+import functools
 import json
 import os
 import time
@@ -22,8 +23,15 @@ from sanskrit_analyzer.mcp.tools.grammar import build_grammar_tools
 from sanskrit_analyzer.mcp.resources.dhatus import build_dhatu_resources
 from sanskrit_analyzer.mcp.resources.grammar import build_grammar_resources
 
-# Server start time for uptime calculation
-_start_time: float = 0.0
+
+@dataclass
+class _ServerClock:
+    """Holds the server start time. ``create_app`` sets it; 0.0 means not started."""
+
+    started_at: float = 0.0
+
+
+_clock = _ServerClock()
 _VERSION = "0.1.0"
 
 
@@ -99,24 +107,26 @@ def create_server() -> Server:
 
 
 # Health-probe objects are cached so a monitoring poll doesn't reload the
-# Dhatupatha and Analyzer (an expensive load) on every request.
-_health_kosha: Any = None
-_health_analyzer: Any = None
+# Dhatupatha and Analyzer (an expensive load) on every request. A failed build
+# raises and is not cached, so the next poll retries.
+@functools.cache
+def _health_kosha() -> Any:
+    from sanskrit_analyzer.dhatu.dhatupatha import get_dhatu_kosha
+
+    return get_dhatu_kosha()
+
+
+@functools.cache
+def _health_analyzer() -> Any:
+    from sanskrit_analyzer import Analyzer
+    from sanskrit_analyzer.config import Config
+
+    return Analyzer(Config())
 
 
 def _get_health_probes() -> tuple[Any, Any]:
     """Lazily build and cache the Dhatupatha/Analyzer used by the health check."""
-    global _health_kosha, _health_analyzer
-    if _health_kosha is None:
-        from sanskrit_analyzer.dhatu.dhatupatha import get_dhatu_kosha
-
-        _health_kosha = get_dhatu_kosha()
-    if _health_analyzer is None:
-        from sanskrit_analyzer import Analyzer
-        from sanskrit_analyzer.config import Config
-
-        _health_analyzer = Analyzer(Config())
-    return _health_kosha, _health_analyzer
+    return _health_kosha(), _health_analyzer()
 
 
 async def health_check(request: Request) -> JSONResponse:
@@ -148,7 +158,8 @@ async def health_check(request: Request) -> JSONResponse:
     status_code = 200 if all_healthy else 503
 
     # Calculate uptime
-    uptime_seconds = time.time() - _start_time if _start_time > 0 else 0
+    started_at = _clock.started_at
+    uptime_seconds = time.time() - started_at if started_at > 0 else 0
 
     return JSONResponse(
         {
@@ -170,8 +181,7 @@ def create_app(config: MCPServerConfig | None = None) -> Starlette:
     Returns:
         Starlette application instance.
     """
-    global _start_time
-    _start_time = time.time()
+    _clock.started_at = time.time()
 
     if config is None:
         config = MCPServerConfig.from_env()
