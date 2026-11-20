@@ -28,10 +28,7 @@ GOLD = Path(__file__).resolve().parents[1] / "data" / "corpus_meters.json"
 CASES = json.loads(GOLD.read_text())
 
 # Verified gaps, strict: delete the entry when the identifier learns the meter.
-KNOWN_GAPS = {
-    "upajati_3.23.32": "vidyut has no upajAti entry; 506 corpus verses whose pādas "
-    "freely mix indravajrA and upendravajrA come back unnamed",
-}
+KNOWN_GAPS: dict[str, str] = {}
 
 
 @pytest.mark.parametrize("case", CASES, ids=[c["id"] for c in CASES])
