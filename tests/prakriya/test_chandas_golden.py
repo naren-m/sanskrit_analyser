@@ -69,8 +69,8 @@ def _decompose(pattern: str) -> str:
     return "-".join(out)
 
 
-#: ākhyānikī-shaped, but pāda c ends laghu where an odd pāda must be exact, and
-#: pāda interiors break the family tail: neither ākhyānikī, upajāti nor āryā.
+#: Plain negative control: broken pāda interiors (``LLLL``) fit no meter, so
+#: nothing is identified.
 AKHYANIKI_BROKEN_ODD = "GGLGGLLLLGG/LGLGGLLLLGG/GGLGGLLLLGL/LGLGGLLLLGG"
 
 #: 60 syllables whose mātrā totals hit the āryā cuts 12/30/42/57 and then run on
@@ -87,6 +87,7 @@ ids = lambda cases: [c["id"] for c in cases]  # noqa: E731
 def test_identifies_every_golden_verse(second_opinion, verse):
     got = chandas.identify(_slp1(verse["text"]))
     assert got.name is not None and got.name.startswith(_expected(verse)), got
+    assert len(got.scans) == len(verse["text"].split("\n"))
 
 
 @pytest.mark.parametrize(
@@ -119,6 +120,8 @@ def test_specific_rules(second_opinion, verse_id, expected_name, expected_iast):
         # pāda a ends laghu: puṣpitāgrā keeps pāda-final anceps on odd pādas
         ("LLLLLLGLGLGL/LLLLGLLGLGLGG/LLLLLLGLGLGG/LLLLGLLGLGLGG", "puzpitAgrA"),
         ("GGLGGLLGLGG/LGLGGLLGLGG/GGLGGLLGLGG/LGLGGLLGLGG", "AKyAnikI"),
+        # ākhyānikī alternation but odd pāda c ends laghu: upajāti, not ākhyānikī
+        ("GGLGGLLGLGG/LGLGGLLGLGG/GGLGGLLGLGL/LGLGGLLGLGG", "upajAti"),
     ],
 )
 def test_ardhasama_odd_pada_anceps_is_narrow(scan, expected):
