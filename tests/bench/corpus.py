@@ -38,6 +38,9 @@ class Row:
     text: str           # cleaned Devanagari verse
     meaning: str        # raw word-by-word gloss line
     translation: str
+    # Gold padas (SLP1) when they do not come from an IITK gloss line.
+    # () = this corpus has no gold; None = parse `meaning` with gold_padas().
+    gold: tuple[str, ...] | None = None
 
 
 def clean_verse(raw: str) -> str:
@@ -112,3 +115,64 @@ def split_rows(rows: list[Row], split: str, n: int, seed: int = 0) -> list[Row]:
     pool = [r for r in rows if r.kanda in SPLITS[split]]
     random.Random(seed).shuffle(pool)
     return pool[:n]
+
+
+# --- other corpora: text the DCS-trained proposer never saw ------------------
+
+_GITA_ROMAN = (("chh", "\x00"), ("ch", "c"), ("\x00", "ch"), ("śh", "ś"), ("ṣh", "ṣ"),
+               ("ṛi", "ṛ"), ("ṝi", "ṝ"), ("ṁ", "ṃ"), ("’", "'"))
+
+
+def gita_roman_to_slp1(word: str) -> str:
+    """gita/gita's romanization (uvācha, kṣhetre, ṛi) -> SLP1."""
+    for old, new in _GITA_ROMAN:
+        word = word.replace(old, new)
+    return transliterate(word, Script.IAST, Script.SLP1)
+
+
+def gita_gold(word_meanings: str) -> list[str]:
+    """Gold pieces from "key—meaning; key—meaning": keys split on spaces and hyphens."""
+    out: list[str] = []
+    for item in (word_meanings or "").split(";"):
+        key = item.split("—", 1)[0] if "—" in item else ""
+        out += [gita_roman_to_slp1(piece) for piece in re.split(r"[\s-]+", key.strip()) if piece]
+    return out
+
+
+def load_gita(ramayanam_root: Path) -> list[Row]:
+    """Bhagavadgītā from ramayanam's gita pack (github.com/gita/gita verse.json).
+
+    Gold is the human word-by-word key list. It is independent of DCS, splits
+    compounds to members, and has some spelling noise (dhṛitarāśhtra without
+    the ṭ dot), so read scores as relative between engines, not absolute.
+    """
+    import json
+
+    path = Path(ramayanam_root) / "corpus_packs" / "gita" / "sources" / "verse.json"
+    rows = []
+    for v in json.loads(path.read_text(encoding="utf-8")):
+        gold = tuple(gita_gold(v.get("word_meanings", "")))
+        if gold:
+            rows.append(Row(f"BG {v['chapter_number']}.{v['verse_number']}", 0,
+                            clean_verse(v["text"]), "", "", gold))
+    return rows
+
+
+def load_plain(path: Path) -> list[Row]:
+    """A corpus with no gold (JSON list with a "devanagari" field), e.g. the
+    Saṅgītaratnākara. Only label-free metrics apply: verify, coverage, agreement."""
+    import json
+
+    rows = []
+    for v in json.loads(Path(path).read_text(encoding="utf-8")):
+        text = clean_verse(v.get("devanagari", ""))
+        if text:
+            ref = ".".join(str(v.get(k, "")) for k in ("chapter_num", "prakarana_num", "verse_num"))
+            rows.append(Row(ref, 0, text, "", "", ()))
+    return rows
+
+
+def sample(rows: list[Row], n: int, seed: int = 0) -> list[Row]:
+    rows = list(rows)
+    random.Random(seed).shuffle(rows)
+    return rows[:n]
