@@ -157,3 +157,40 @@ def interpret(record: dict[str, Any], model: str | None = None,
                       + "\n- ".join(errors)}]
     return {"source": "llm", "model": model, "attempts": attempt + 1,
             "checks_passed": not errors, "check_errors": errors, **answer}
+
+
+# --- translation-only mode ------------------------------------------------------
+
+_TRANSLATE_SYSTEM = """You translate one Sanskrit verse into plain, faithful English.
+You get the verse and every word with its grammar, already verified by a Paninian engine.
+Use that grammar: who does what, to whom, when. Do not add commentary or sutra numbers.
+Answer with JSON only: {"translation": "one or two English sentences"}"""
+
+
+def _short(w: dict[str, Any]) -> str:
+    surface = w.get("compound_surface_iast") or w["surface_iast"]
+    return f"{surface} ({w['lemma']}: {_describe(w)})"
+
+
+def build_translate_prompt(record: dict[str, Any]) -> str:
+    return "\n".join([f"Verse (IAST): {record['input']['iast']}", "Words:"]
+                     + [f"- {_short(w)}" for w in record["words"]])
+
+
+def translate(record: dict[str, Any], model: str | None = None, chat=_chat) -> dict[str, Any]:
+    """English translation only, grounded in the verified words. One retry if empty."""
+    model = model or DEFAULT_MODEL
+    messages = [{"role": "system", "content": _TRANSLATE_SYSTEM},
+                {"role": "user", "content": build_translate_prompt(record)}]
+    for attempt in (1, 2):
+        try:
+            answer = chat(messages, model)
+        except Exception as exc:
+            return {"source": "llm", "model": model, "attempts": attempt,
+                    "error": f"LLM call failed: {exc}"}
+        text = (answer or {}).get("translation", "").strip()
+        if text:
+            return {"source": "llm", "model": model, "attempts": attempt, "translation": text}
+        messages += [{"role": "assistant", "content": json.dumps(answer or {})},
+                     {"role": "user", "content": 'The "translation" field was empty. Answer again.'}]
+    return {"source": "llm", "model": model, "attempts": 2, "error": "empty translation twice"}

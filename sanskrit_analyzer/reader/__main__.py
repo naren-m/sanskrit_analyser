@@ -60,10 +60,31 @@ def render(record: dict, show_trace: bool = False) -> str:
     return "\n".join(out)
 
 
+def render_translation(record: dict) -> str:
+    """Verse, meter, translation: the short form for --translate."""
+    from sanskrit_analyzer.models.scripts import Script
+    from sanskrit_analyzer.utils import transliterate
+
+    out = [transliterate(record["input"]["slp1"], Script.SLP1, Script.DEVANAGARI),
+           record["input"]["iast"]]
+    ch = record.get("chandas") or {}
+    if ch.get("name"):
+        out.append(f"meter: {ch.get('name_iast') or ch['name']}")
+    tr = record.get("translation") or {}
+    out.append("")
+    out.append(tr.get("translation") or f"(no translation: {tr.get('error', 'LLM unavailable')})")
+    s = record["stats"]
+    out.append(f"\n[{s['verified']}/{s['words']} words verified; split by {record['segmenter']}; "
+               f"{tr.get('model', '')}]")
+    return "\n".join(out)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m sanskrit_analyzer.reader")
     ap.add_argument("verse", help="one verse, any script")
     ap.add_argument("--no-llm", action="store_true", help="skip the meaning layer")
+    ap.add_argument("--translate", action="store_true",
+                    help="print only the verse, its meter and an English translation")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--trace", action="store_true", help="print sūtra traces")
     ap.add_argument("--model", default=None)
@@ -71,6 +92,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="who proposes the split: ByT5, the DCS char model (SANSKRIT_SLM_CKPT), best of both, or cascade (char model first, ByT5 when in doubt)")
     args = ap.parse_args(argv)
     logging.disable(logging.WARNING)
+    if args.translate:
+        record = read_sloka(args.verse, model=args.model, proposer=args.proposer, translate=True)
+        sys.stdout.write((json.dumps(record, ensure_ascii=False, indent=2) if args.json
+                          else render_translation(record)) + "\n")
+        return 0
     record = read_sloka(args.verse, llm=not args.no_llm, model=args.model, proposer=args.proposer)
     print(json.dumps(record, ensure_ascii=False, indent=2) if args.json
           else render(record, args.trace))

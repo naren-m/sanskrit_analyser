@@ -282,7 +282,10 @@ def split_record(text_slp1: str, words: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def read_sloka(text: str, llm: bool = False, model: str | None = None,
-               proposer: str = "byt5") -> dict[str, Any]:
+               proposer: str = "byt5", translate: bool = False) -> dict[str, Any]:
+    """Read one verse. llm=True adds the full meaning layer (anvaya, roles,
+    glosses, translation); translate=True adds only an English translation,
+    one short LLM call grounded in the verified words."""
     n = normalize(text)
     record: dict[str, Any] = {
         "input": {"raw": n.raw, "script": n.script, "slp1": n.slp1,
@@ -307,4 +310,7 @@ def read_sloka(text: str, llm: bool = False, model: str | None = None,
     if llm:
         from sanskrit_analyzer.reader.llm import interpret
         record["interpretation"] = interpret(record, model=model)
+    if translate:
+        from sanskrit_analyzer.reader.llm import translate as translate_record
+        record["translation"] = translate_record(record, model=model)
     return record
