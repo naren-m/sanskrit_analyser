@@ -59,9 +59,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--trace", action="store_true", help="print sūtra traces")
     ap.add_argument("--model", default=None)
+    ap.add_argument("--proposer", choices=("byt5", "slm", "best"), default="byt5",
+                    help="who proposes the split: ByT5, the DCS char model (SANSKRIT_SLM_CKPT), or best of both")
     args = ap.parse_args(argv)
     logging.disable(logging.WARNING)
-    record = read_sloka(args.verse, llm=not args.no_llm, model=args.model)
+    record = read_sloka(args.verse, llm=not args.no_llm, model=args.model, proposer=args.proposer)
     print(json.dumps(record, ensure_ascii=False, indent=2) if args.json
           else render(record, args.trace))
     return 0

@@ -1,6 +1,7 @@
 """Offline unit tests for the bench helpers (no corpus, no model weights)."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -120,3 +121,54 @@ def test_load_rows_and_split_by_kanda(tmp_path: Path) -> None:
     assert {r.kanda for r in dev} == {1}
     assert {r.kanda for r in held} == {7}
     assert split_rows(rows, "dev", 10, seed=1) == split_rows(rows, "dev", 10, seed=1)
+
+
+# --- extra corpora: Gītā (gita/gita word meanings) and label-free texts -------
+
+from tests.bench.corpus import gita_gold, gita_roman_to_slp1, load_gita, load_plain  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    ("roman", "want"),
+    [
+        ("uvācha", "uvAca"),            # ch = c
+        ("ichchhā", "icCA"),            # chh = ch
+        ("kṣhetre", "kzetre"),          # ṣh = ṣ
+        ("śhītoṣhṇa", "SItozRa"),       # śh = ś
+        ("dhṛitarāśhtraḥ", "DftarAStraH"),  # ṛi = ṛ (source lacks the ṭ dot; kept as is)
+        ("saṁgaḥ", "saMgaH"),           # ṁ = ṃ
+    ],
+)
+def test_gita_roman_to_slp1(roman: str, want: str) -> None:
+    assert gita_roman_to_slp1(roman) == want
+
+
+def test_gita_gold_takes_keys_and_splits_members() -> None:
+    wm = "dhṛitarāśhtraḥ uvācha—Dhritarashtra said; dharma-kṣhetre—the land of dharma; cha—and"
+    assert gita_gold(wm) == ["DftarAStraH", "uvAca", "Darma", "kzetre", "ca"]
+
+
+def test_load_gita_and_plain(tmp_path: Path) -> None:
+    src = tmp_path / "corpus_packs" / "gita" / "sources"
+    src.mkdir(parents=True)
+    (src / "verse.json").write_text(json.dumps([{
+        "chapter_number": 2, "verse_number": 47,
+        "text": "कर्मण्येवाधिकारस्ते मा फलेषु कदाचन।\n\nमा कर्मफलहेतुर्भूर्मा ते सङ्गोऽस्त्वकर्मणि।।2.47।।\n",
+        "word_meanings": "karmaṇi—in action; eva—only"}]), encoding="utf-8")
+    rows = load_gita(tmp_path)
+    assert rows[0].ref == "BG 2.47" and rows[0].gold == ("karmaRi", "eva")
+    assert rows[0].text.endswith("सङ्गोऽस्त्वकर्मणि") and "2" not in rows[0].text
+
+    plain = tmp_path / "v.json"
+    plain.write_text(json.dumps([{"chapter_num": 1, "prakarana_num": 1, "verse_num": 1,
+                                  "devanagari": "वन्दे नादतनुं शङ्करम् ।"}]), encoding="utf-8")
+    prow = load_plain(plain)[0]
+    assert prow.ref == "1.1.1" and prow.gold == () and prow.text == "वन्दे नादतनुं शङ्करम्"
+
+
+def test_agreement_is_token_f1() -> None:
+    from tests.bench.run import agreement
+
+    assert agreement([["rAmo", "gacCati"]], [["rAmaH", "gacCati"]]) == 1.0   # spelling folded
+    assert agreement([["a", "b"]], [["a", "c"]]) == pytest.approx(0.5)
+    assert agreement([["a"]], [[]]) == 0.0

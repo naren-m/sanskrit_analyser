@@ -314,6 +314,10 @@ def _with_second_opinion(result: ChandasResult, slp1_verse: str) -> ChandasResul
 
 
 def identify(slp1_verse: str) -> ChandasResult:
+    # SLP1 is ASCII. Anything else is a character transliteration left behind
+    # (nukta, ZWJ, om, curly quotes). They carry no syllable weight, and
+    # vidyut's second opinion indexes a 256-entry table and panics on them.
+    slp1_verse = "".join(ch for ch in slp1_verse if ch.isascii())
     # dandas (".") and newlines separate lines; spaces separate words.
     lines = [ln.strip() for ln in re.split(r"[.\n]+", slp1_verse) if ln.strip()]
     line_weights = [w for w in (syllable_weights(ln) for ln in lines) if w]
