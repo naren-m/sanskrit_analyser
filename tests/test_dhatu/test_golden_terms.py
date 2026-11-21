@@ -42,9 +42,11 @@ GOLDEN_TERMS = [
     ("smfti", "smf"),         # memory
     ("samADi", "DA"),         # sam + ā + to place
     ("DAraRA", "Df"),         # to hold
-    pytest.param("prARa", "an", marks=pytest.mark.xfail(
-        reason="prefix-free root pra also attested; no signal separates them",
-        strict=False)),
+    # Direct Kosa reading, ranked in DhatuResolver._best_candidate: the Kosa
+    # lists prARa under pra+an (a finite-verb entry, is_verb=True) and under
+    # prefix-free prA. Rule 2 (finite-verb reading first) puts pra+an ahead,
+    # deterministically; no prefix peeling is involved.
+    ("prARa", "an"),          # pra + to breathe
     ("saMyama", "yam"),       # sam + to restrain
     ("tapas", "tap"),         # to burn, austerity
     pytest.param("karman", "kf", marks=pytest.mark.xfail(
