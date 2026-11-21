@@ -164,6 +164,51 @@ class LexiconSegmenter:
         c = self.vocab.get(w)
         return math.log(c) - self._logtotal if c else None
 
+    def _results_at(self, src: str) -> list[list[str]]:
+        """Junction results starting at each surface position, in
+        `self.results` order. One left-to-right rtrie walk replaces a
+        per-(pos, item, j) scan over every rule result."""
+        n = len(src)
+        res_at: list[list[str]] = [[] for _ in range(n + 1)]
+        for p in range(n):
+            node = self._rtrie
+            q = p
+            while q < n:
+                node = node.get(src[q])
+                if node is None:
+                    break
+                q += 1
+                res = node.get(_TERMINAL)
+                if res is not None:
+                    res_at[p].append(res)
+            if len(res_at[p]) > 1:
+                res_at[p].sort(key=self._res_rank.__getitem__)
+        return res_at
+
+    def _push_nasals(self, push, j: int, w: str, sc: float, words: tuple) -> None:
+        """Opt-in pada-final nasal alternation edges ending at `j`."""
+        for fin in _NASAL_VARIANTS[w[-1]]:
+            alt = w[:-1] + fin
+            ws2 = self._score(alt)
+            if ws2 is not None:
+                push((j, ""), (sc + ws2, words + (alt,)))
+
+    def _push_junctions(self, push, results: list[str], j: int, w: str,
+                        sc: float, words: tuple) -> None:
+        """Junction edges: invert one sandhi rule whose result starts at `j`."""
+        for res in results:
+            for f, s in self.redges[res]:
+                w2 = w + f
+                # rules carry underlying finals (as/ur); lexicon and gold carry
+                # pausa forms (aH/uH) — try both, emit the attested one
+                for cand in (w2, pausa(w2)):
+                    ws2 = self._score(cand)
+                    if ws2 is None:
+                        continue
+                    push((j + len(res), s),
+                         (sc + ws2 - RULE_PENALTY, words + (cand,)))
+                    break
+
     def kbest(self, src: str, k: int = DEFAULT_K,
               oov_penalty: float | None = None,
               nasal_variants: bool = False) -> list[tuple[float, list[str]]]:
@@ -190,23 +235,7 @@ class LexiconSegmenter:
                 seen.add(state)
                 order.append(state)
 
-        # results starting at each surface position, in self.results order —
-        # replaces the per-(pos,item,j) `for res in self.results` scan (792
-        # results) with one left-to-right rtrie walk reused across all states.
-        res_at: list[list[str]] = [[] for _ in range(n + 1)]
-        for p in range(n):
-            node = self._rtrie
-            q = p
-            while q < n:
-                node = node.get(src[q])
-                if node is None:
-                    break
-                q += 1
-                res = node.get(_TERMINAL)
-                if res is not None:
-                    res_at[p].append(res)
-            if len(res_at[p]) > 1:
-                res_at[p].sort(key=self._res_rank.__getitem__)
+        res_at = self._results_at(src)
 
         # the nasal edge (opt-in) can fire even where the span is not a pada
         # prefix, so it needs the full length scan; every other edge stops being
@@ -243,26 +272,9 @@ class LexiconSegmenter:
                     if nasal_variants and w[-1] in _NASAL_VARIANTS \
                             and j < n \
                             and src[j] not in _VOWELS and src[j] not in "MH'":
-                        for fin in _NASAL_VARIANTS[w[-1]]:
-                            alt = w[:-1] + fin
-                            ws2 = self._score(alt)
-                            if ws2 is not None:
-                                push((j, ""), (sc + ws2, words + (alt,)))
+                        self._push_nasals(push, j, w, sc, words)
                     if node is not None:
-                        for res in res_at[j]:
-                            for f, s in self.redges[res]:
-                                w2 = w + f
-                                # rules carry underlying finals (as/ur); lexicon
-                                # and gold carry pausa forms (aH/uH) — try both,
-                                # emit the attested one
-                                for cand in (w2, pausa(w2)):
-                                    ws2 = self._score(cand)
-                                    if ws2 is None:
-                                        continue
-                                    push((j + len(res), s),
-                                         (sc + ws2 - RULE_PENALTY,
-                                          words + (cand,)))
-                                    break
+                        self._push_junctions(push, res_at[j], j, w, sc, words)
                     # once the span stops being a pada prefix, no verbatim or
                     # junction edge can fire further; only the nasal edge (which
                     # replaces the span's last char) can still match past here.
