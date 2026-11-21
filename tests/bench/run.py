@@ -321,7 +321,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m tests.bench.run")
     ap.add_argument("--ramayanam", type=Path, help="ramayanam checkout (not needed with --smoke)")
     ap.add_argument("--smoke", action="store_true",
-                    help="offline: reader engine only, first --n verses of tests/data/corpus_verses.json")
+                    help=("offline: reader engine only, first --n verses of "
+                          "tests/data/corpus_verses.json"))
     ap.add_argument("--split", choices=("dev", "heldout"), default="dev")
     ap.add_argument("--n", type=int, help="verses (default 100; 3 with --smoke)")
     ap.add_argument("--engines", default="dp,prakriya", help="dp,byt5,prakriya,reader,reader-slm,reader-best "
