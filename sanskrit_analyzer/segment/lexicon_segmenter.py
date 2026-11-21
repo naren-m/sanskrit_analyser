@@ -164,10 +164,10 @@ class LexiconSegmenter:
         c = self.vocab.get(w)
         return math.log(c) - self._logtotal if c else None
 
-    def _results_by_start(self, src: str) -> list[list[str]]:
-        """Sandhi results starting at each surface position, in self.results
-        order: one left-to-right rtrie walk reused across all states (replaces
-        a per-(pos,item,j) scan of every result)."""
+    def _results_at(self, src: str) -> list[list[str]]:
+        """Junction results starting at each surface position, in
+        `self.results` order. One left-to-right rtrie walk replaces a
+        per-(pos, item, j) scan over every rule result."""
         n = len(src)
         res_at: list[list[str]] = [[] for _ in range(n + 1)]
         for p in range(n):
@@ -185,12 +185,22 @@ class LexiconSegmenter:
                 res_at[p].sort(key=self._res_rank.__getitem__)
         return res_at
 
-    def _junction_edges(self, w, j, res_at, sc, words, push):
-        for res in res_at[j]:
+    def _push_nasals(self, push, j: int, w: str, sc: float, words: tuple) -> None:
+        """Opt-in pada-final nasal alternation edges ending at `j`."""
+        for fin in _NASAL_VARIANTS[w[-1]]:
+            alt = w[:-1] + fin
+            ws2 = self._score(alt)
+            if ws2 is not None:
+                push((j, ""), (sc + ws2, words + (alt,)))
+
+    def _push_junctions(self, push, results: list[str], j: int, w: str,
+                        sc: float, words: tuple) -> None:
+        """Junction edges: invert one sandhi rule whose result starts at `j`."""
+        for res in results:
             for f, s in self.redges[res]:
                 w2 = w + f
-                # rules carry underlying finals (as/ur); lexicon and gold
-                # carry pausa forms (aH/uH) — try both, emit the attested one
+                # rules carry underlying finals (as/ur); lexicon and gold carry
+                # pausa forms (aH/uH) — try both, emit the attested one
                 for cand in (w2, pausa(w2)):
                     ws2 = self._score(cand)
                     if ws2 is None:
@@ -198,44 +208,6 @@ class LexiconSegmenter:
                     push((j + len(res), s),
                          (sc + ws2 - RULE_PENALTY, words + (cand,)))
                     break
-
-    def _expand(self, src, pos, pend, sc, words, base, res_at, push,
-                oov_penalty, nasal_variants):
-        """Push every edge leaving (pos, pend) for one (score, padas) item."""
-        n = len(src)
-        jmax = min(n, pos + MAX_WORD)
-        node = base
-        j = pos
-        while j < jmax:
-            node = None if node is None else node.get(src[j])
-            j += 1
-            w = pend + src[pos:j]
-            # edge order mirrors the old scan exactly (verbatim, nasal,
-            # junction, oov) so state-discovery order — and thus the k-best
-            # result — is byte-identical.
-            if node is not None and _TERMINAL in node:
-                push((j, ""), (sc + self._score(w), words + (w,)))
-            if nasal_variants and w[-1] in _NASAL_VARIANTS \
-                    and j < n \
-                    and src[j] not in _VOWELS and src[j] not in "MH'":
-                for fin in _NASAL_VARIANTS[w[-1]]:
-                    alt = w[:-1] + fin
-                    ws2 = self._score(alt)
-                    if ws2 is not None:
-                        push((j, ""), (sc + ws2, words + (alt,)))
-            if node is not None:
-                self._junction_edges(w, j, res_at, sc, words, push)
-            # once the span stops being a pada prefix, no verbatim or junction
-            # edge can fire further; only the nasal edge (which replaces the
-            # span's last char) can still match past here.
-            if node is None and not nasal_variants:
-                break
-        if oov_penalty is not None:
-            # unknown-span edge: consume the maximal span src[pos:jmax] as a
-            # single OOV pada (fires once per item).
-            w = pend + src[pos:jmax]
-            if w not in self.vocab:
-                push((jmax, ""), (sc + oov_penalty * len(w), words + (w,)))
 
     def kbest(self, src: str, k: int = DEFAULT_K,
               oov_penalty: float | None = None,
@@ -263,7 +235,7 @@ class LexiconSegmenter:
                 seen.add(state)
                 order.append(state)
 
-        res_at = self._results_by_start(src)
+        res_at = self._results_at(src)
 
         # the nasal edge (opt-in) can fire even where the span is not a pada
         # prefix, so it needs the full length scan; every other edge stops being
@@ -277,6 +249,7 @@ class LexiconSegmenter:
             pos, pend = st
             if pos == n:
                 continue
+            jmax = min(n, pos + MAX_WORD)
             # trie node for the pending-initial prefix; None => `pend` is not a
             # prefix of any pada, so no span from here can be/extend to a pada.
             base = trie
@@ -285,6 +258,34 @@ class LexiconSegmenter:
                 if base is None:
                     break
             for sc, words in list(best[st]):
-                self._expand(src, pos, pend, sc, words, base, res_at, push,
-                             oov_penalty, nasal_variants)
+                node = base
+                j = pos
+                while j < jmax:
+                    node = None if node is None else node.get(src[j])
+                    j += 1
+                    w = pend + src[pos:j]
+                    # edge order below mirrors the old scan exactly (verbatim,
+                    # nasal, junction, oov) so state-discovery order — and thus
+                    # the k-best result — is byte-identical.
+                    if node is not None and _TERMINAL in node:
+                        push((j, ""), (sc + self._score(w), words + (w,)))
+                    if nasal_variants and w[-1] in _NASAL_VARIANTS \
+                            and j < n \
+                            and src[j] not in _VOWELS and src[j] not in "MH'":
+                        self._push_nasals(push, j, w, sc, words)
+                    if node is not None:
+                        self._push_junctions(push, res_at[j], j, w, sc, words)
+                    # once the span stops being a pada prefix, no verbatim or
+                    # junction edge can fire further; only the nasal edge (which
+                    # replaces the span's last char) can still match past here.
+                    if node is None and not nasal_variants:
+                        break
+                if oov_penalty is not None:
+                    # unknown-span edge: consume the maximal span src[pos:jmax]
+                    # as a single OOV pada (fires once per item, as the old scan
+                    # did outside the length loop with j at its final value).
+                    w = pend + src[pos:jmax]
+                    if w not in self.vocab:
+                        push((jmax, ""), (sc + oov_penalty * len(w),
+                                          words + (w,)))
         return [(sc, list(ws)) for sc, ws in best.get((n, ""), [])]
