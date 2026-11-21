@@ -56,6 +56,10 @@ def test_parse_meaning(line: str, want: dict[str, str]) -> None:
         ("varaM", "varam"),     # anusvāra vs m
         ("vAg", "vAk"),         # final voicing
         ("rAma'", "rAma"),      # punctuation dropped
+        ("dvaMdva", "tvamtva"),  # anusvāra before a consonant ... (keys are also devoiced)
+        ("dvandva", "tvamtva"),  # ... and the class nasal fold to one key
+        ("saMtuzwaH", "samtuzwaH"),
+        ("aNga", "amka"),
         ("niSitES", "niSitEH"),  # visarga as S before a palatal
         ("rAmaz", "rAmaH"),     # visarga as z before a retroflex
     ],
@@ -72,6 +76,7 @@ def test_norm_slp1(word: str, want: str) -> None:
         (["svADyAyaniratam"], ["svADyAya", "niratam"], 1),
         # compound members re-joined with vowel sandhi (a + A -> A, a + i -> e)
         (["kumBakarRAtmajaH"], ["kumBakarRa", "AtmajaS"], 1),
+        (["dvandva"], ["dvaMdva"], 1),                      # nasal spelling is not a miss
         (["gajendraH"], ["gaja", "indraH"], 1),
         # merging across a pada boundary is
         (["guRavAn", "kaH"], ["guRavAnkaH"], 0),

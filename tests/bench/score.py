@@ -14,12 +14,15 @@ _MAX_RUN = 6
 def norm_slp1(word: str) -> str:
     """SLP1 key with sandhi *spelling* folded away.
 
-    Anusvāra vs m, the visarga surfaces (ḥ / s / r, and -o for -aḥ) and
+    Anusvāra vs m (and vs the class nasal before a consonant), the visarga surfaces (ḥ / s / r, and -o for -aḥ) and
     final-consonant voicing (vāg / vāk) differ between running text and the
     gloss line without being different words.
     """
     s = re.sub(r"[^A-Za-z]", "", word or "")
     s = s.replace("M", "m")
+    # A nasal before a consonant is one sound spelled two ways: anusvāra or the
+    # class nasal (dvaMdva / dvandva, saMtuzwa / santuzwa). Fold both to m.
+    s = re.sub(r"[NYRn](?=[kKgGcCjJwWqQtTdDpPbBSzsh])", "m", s)
     s = re.sub(r"o$", "aH", s)
     s = re.sub(r"[srSz]$", "H", s)
     return s.translate(_VOICING)
