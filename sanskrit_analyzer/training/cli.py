@@ -10,6 +10,8 @@ from sanskrit_analyzer.training.config import TrainingConfig
 from sanskrit_analyzer.training.corpus_loader import CorpusLoader, CorpusLoadError
 from sanskrit_analyzer.training.data_generator import BatchAnalyzer, DisambiguationGenerator
 
+logger = logging.getLogger(__name__)
+
 
 def setup_logging(level: str) -> None:
     """Configure logging for CLI."""
@@ -89,7 +91,7 @@ async def generate_disambig_data(
 def _validate_corpus_path(corpus_path: Path) -> bool:
     """Validate corpus path exists, log error if not."""
     if not corpus_path.exists():
-        logging.getLogger(__name__).error(f"Corpus file not found: {corpus_path}")
+        logger.error(f"Corpus file not found: {corpus_path}")
         return False
     return True
 
@@ -115,15 +117,14 @@ def _coerce_confidence(value: object) -> float | None:
 
 def _print_summary(count: int, output_path: Path) -> None:
     """Print generation summary."""
-    print(f"\nSummary:")
-    print(f"  Examples generated: {count}")
-    print(f"  Output file: {output_path}")
+    sys.stdout.write("\nSummary:\n")
+    sys.stdout.write(f"  Examples generated: {count}\n")
+    sys.stdout.write(f"  Output file: {output_path}\n")
 
 
 def cmd_generate_grammar(args: argparse.Namespace) -> int:
     """Handle generate-grammar command."""
     setup_logging(args.log_level)
-    logger = logging.getLogger(__name__)
 
     corpus_path = Path(args.corpus)
     output_path = Path(args.output)
@@ -150,7 +151,6 @@ def cmd_generate_grammar(args: argparse.Namespace) -> int:
 def cmd_generate_disambig(args: argparse.Namespace) -> int:
     """Handle generate-disambig command."""
     setup_logging(args.log_level)
-    logger = logging.getLogger(__name__)
 
     corpus_path = Path(args.corpus)
     output_path = Path(args.output)
@@ -179,7 +179,6 @@ def cmd_validate(args: argparse.Namespace) -> int:
     from sanskrit_analyzer.training.format_converter import GrammarFormatConverter
 
     setup_logging(args.log_level)
-    logger = logging.getLogger(__name__)
 
     input_path = Path(args.input)
     if not input_path.exists():
@@ -209,16 +208,16 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 invalid_count += 1
                 errors.append(f"Line {i}: Invalid JSON - {e}")
 
-    print(f"\nValidation Summary:")
-    print(f"  Valid examples: {valid_count}")
-    print(f"  Invalid examples: {invalid_count}")
+    sys.stdout.write("\nValidation Summary:\n")
+    sys.stdout.write(f"  Valid examples: {valid_count}\n")
+    sys.stdout.write(f"  Invalid examples: {invalid_count}\n")
 
     if errors and args.verbose:
-        print(f"\nErrors:")
+        sys.stdout.write("\nErrors:\n")
         for err in errors[:20]:  # Show first 20 errors
-            print(f"  {err}")
+            sys.stdout.write(f"  {err}\n")
         if len(errors) > 20:
-            print(f"  ... and {len(errors) - 20} more errors")
+            sys.stdout.write(f"  ... and {len(errors) - 20} more errors\n")
 
     return 0 if invalid_count == 0 else 1
 
@@ -232,7 +231,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
     input_path = Path(args.input)
     if not input_path.exists():
-        print(f"Error: Input file not found: {input_path}")
+        logger.error(f"Input file not found: {input_path}")
         return 1
 
     total = 0
@@ -274,20 +273,20 @@ def cmd_stats(args: argparse.Namespace) -> int:
     }
 
     if args.json:
-        print(json.dumps(stats, indent=2))
+        sys.stdout.write(json.dumps(stats, indent=2) + "\n")
     else:
-        print(f"\nTraining Data Statistics:")
-        print(f"  Total examples: {total}")
-        print(f"  Average confidence: {avg_confidence:.3f}")
-        print(f"\n  Top morphology types:")
+        sys.stdout.write("\nTraining Data Statistics:\n")
+        sys.stdout.write(f"  Total examples: {total}\n")
+        sys.stdout.write(f"  Average confidence: {avg_confidence:.3f}\n")
+        sys.stdout.write("\n  Top morphology types:\n")
         for pos, count in morphology_counter.most_common(10):
-            print(f"    {pos}: {count}")
+            sys.stdout.write(f"    {pos}: {count}\n")
 
     return 0
 
 
-def main() -> int:
-    """Main entry point for training CLI."""
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the sanskrit-train argument parser with every subcommand."""
     parser = argparse.ArgumentParser(
         description="Sanskrit Analyzer Training Data Generator",
         prog="sanskrit-train",
@@ -300,7 +299,13 @@ def main() -> int:
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    _add_generate_commands(subparsers)
+    _add_inspect_commands(subparsers)
+    return parser
 
+
+def _add_generate_commands(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    """Register the generate-grammar and generate-disambig subcommands."""
     # generate-grammar command
     grammar_parser = subparsers.add_parser(
         "generate-grammar",
@@ -353,6 +358,9 @@ def main() -> int:
     )
     disambig_parser.set_defaults(func=cmd_generate_disambig)
 
+
+def _add_inspect_commands(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    """Register the validate and stats subcommands."""
     # validate command
     validate_parser = subparsers.add_parser(
         "validate",
@@ -388,6 +396,10 @@ def main() -> int:
     )
     stats_parser.set_defaults(func=cmd_stats)
 
+
+def main() -> int:
+    """Main entry point for training CLI."""
+    parser = _build_parser()
     args = parser.parse_args()
 
     if args.command is None:

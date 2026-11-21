@@ -8,11 +8,14 @@ skipped wholesale until the goldens are re-calibrated against the local path.
 """
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
 
 from sanskrit_analyzer import AnalysisMode, Analyzer, Config
+
+logger = logging.getLogger(__name__)
 
 GOLDEN_FILE = Path(__file__).parent / "data" / "yoga_sutra_splits_golden.json"
 
@@ -41,6 +44,7 @@ def analyzer():
         config.cache.sqlite_enabled = False
         return Analyzer(config)
     except Exception:
+        logger.debug("Analyzer failed to build", exc_info=True)
         pytest.skip("Analyzer not available")
 
 

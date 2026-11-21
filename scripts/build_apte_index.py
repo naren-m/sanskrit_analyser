@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import logging
 import os
 import sqlite3
 import sys
@@ -22,6 +23,8 @@ import zipfile
 from pathlib import Path
 
 LICENCE = "GPL-3.0"
+
+logger = logging.getLogger(__name__)
 
 _spec = importlib.util.spec_from_file_location(
     "build_mw_index", Path(__file__).resolve().with_name("build_mw_index.py")
@@ -78,8 +81,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--xml", required=True, type=Path, help="ap90.xml or the zip")
     ap.add_argument("--out", required=True, type=Path, help="output SQLite path")
     args = ap.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     n = build(args.xml, args.out)
-    print(f"wrote {n} rows to {args.out} (data licence: {LICENCE})")
+    logger.info(f"wrote {n} rows to {args.out} (data licence: {LICENCE})")
     return 0
 
 

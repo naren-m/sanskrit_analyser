@@ -9,13 +9,18 @@ This example demonstrates the core functionality of the Sanskrit Analyzer librar
 """
 
 import asyncio
+import logging
+import sys
 from sanskrit_analyzer import Analyzer
 from sanskrit_analyzer.config import Config
 
+logger = logging.getLogger(__name__)
+
 
 async def main():
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     # Initialize the analyzer with default configuration
-    print("Initializing Sanskrit Analyzer...")
+    logger.info("Initializing Sanskrit Analyzer...")
     config = Config()
     analyzer = Analyzer(config)
 
@@ -27,39 +32,39 @@ async def main():
     ]
 
     for sentence in sentences:
-        print(f"\n{'=' * 60}")
-        print(f"Input: {sentence}")
-        print(f"{'=' * 60}")
+        sys.stdout.write(f"\n{'=' * 60}\n")
+        sys.stdout.write(f"Input: {sentence}\n")
+        sys.stdout.write(f"{'=' * 60}\n")
 
         # Analyze the text
         result = await analyzer.analyze(sentence, mode="educational")
 
         # Display basic information
-        print(f"\nSentence ID: {result.sentence_id}")
-        print(f"Normalized (SLP1): {result.normalized_slp1}")
-        print(f"Overall Confidence: {result.confidence.overall:.2%}")
+        sys.stdout.write(f"\nSentence ID: {result.sentence_id}\n")
+        sys.stdout.write(f"Normalized (SLP1): {result.normalized_slp1}\n")
+        sys.stdout.write(f"Overall Confidence: {result.confidence.overall:.2%}\n")
 
         # Script variants
-        print(f"\nScript Variants:")
-        print(f"  Devanagari: {result.scripts.devanagari}")
-        print(f"  IAST: {result.scripts.iast}")
-        print(f"  SLP1: {result.scripts.slp1}")
+        sys.stdout.write("\nScript Variants:\n")
+        sys.stdout.write(f"  Devanagari: {result.scripts.devanagari}\n")
+        sys.stdout.write(f"  IAST: {result.scripts.iast}\n")
+        sys.stdout.write(f"  SLP1: {result.scripts.slp1}\n")
 
         # Parse results
-        print(f"\nNumber of parse candidates: {len(result.parse_forest)}")
+        sys.stdout.write(f"\nNumber of parse candidates: {len(result.parse_forest)}\n")
 
         # Show the best (first) parse
         if result.parse_forest:
             best_parse = result.parse_forest[0]
-            print(f"\nBest Parse (confidence: {best_parse.confidence:.2%}):")
+            sys.stdout.write(f"\nBest Parse (confidence: {best_parse.confidence:.2%}):\n")
 
             for sg in best_parse.sandhi_groups:
-                print(f"\n  Sandhi Group: {sg.surface_form}")
+                sys.stdout.write(f"\n  Sandhi Group: {sg.surface_form}\n")
 
                 for word in sg.base_words:
-                    print(f"    Word: {word.lemma}")
-                    print(f"      Surface: {word.surface_form}")
-                    print(f"      Confidence: {word.confidence:.2%}")
+                    sys.stdout.write(f"    Word: {word.lemma}\n")
+                    sys.stdout.write(f"      Surface: {word.surface_form}\n")
+                    sys.stdout.write(f"      Confidence: {word.confidence:.2%}\n")
 
                     if word.morphology:
                         morph = word.morphology
@@ -77,23 +82,23 @@ async def main():
                         if morph.tense:
                             morph_parts.append(f"Tense: {morph.tense}")
                         if morph_parts:
-                            print(f"      Morphology: {', '.join(morph_parts)}")
+                            sys.stdout.write(f"      Morphology: {', '.join(morph_parts)}\n")
 
                     if word.dhatu:
-                        print(f"      Dhatu: √{word.dhatu.dhatu}")
+                        sys.stdout.write(f"      Dhatu: √{word.dhatu.dhatu}\n")
                         if word.dhatu.meaning:
-                            print(f"      Meaning: {word.dhatu.meaning}")
+                            sys.stdout.write(f"      Meaning: {word.dhatu.meaning}\n")
 
                     if word.meanings:
-                        print(f"      Meanings: {', '.join(word.meanings[:3])}")
+                        sys.stdout.write(f"      Meanings: {', '.join(word.meanings[:3])}\n")
 
     # Show health check
-    print(f"\n{'=' * 60}")
-    print("Analyzer Health Check:")
+    sys.stdout.write(f"\n{'=' * 60}\n")
+    sys.stdout.write("Analyzer Health Check:\n")
     health = await analyzer.health_check()
-    print(f"  Status: {health.get('status', 'unknown')}")
-    print(f"  Version: {health.get('version', 'unknown')}")
-    print(f"  Engines: {', '.join(health.get('engines', []))}")
+    sys.stdout.write(f"  Status: {health.get('status', 'unknown')}\n")
+    sys.stdout.write(f"  Version: {health.get('version', 'unknown')}\n")
+    sys.stdout.write(f"  Engines: {', '.join(health.get('engines', []))}\n")
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from sanskrit_analyzer.config import (
+    DEFAULT_OLLAMA_URL,
     AnalysisMode,
     CacheConfig,
     Config,
@@ -294,8 +295,8 @@ class TestConfigEnvOverrides:
 @pytest.mark.parametrize(
     ("env_value", "expected"),
     [
-        (None, "http://localhost:11434"),
-        ("http://ollama.test:11434", "http://ollama.test:11434"),
+        (None, DEFAULT_OLLAMA_URL),
+        ("http://ollama.test:8080", "http://ollama.test:8080"),
     ],
 )
 def test_ollama_url_resolution(
@@ -307,7 +308,7 @@ def test_ollama_url_resolution(
     else:
         monkeypatch.setenv("SANSKRIT_OLLAMA_URL", env_value)
     assert ollama_url() == expected
-    assert DisambiguationConfig().ollama_url == "http://localhost:11434"
+    assert DisambiguationConfig().ollama_url == DEFAULT_OLLAMA_URL
 
 
 class TestConfigDefaultCreation:
@@ -329,7 +330,7 @@ class TestConfigDefaultCreation:
         content = config_path.read_text()
         assert "Sanskrit Analyzer Configuration" in content
         assert "default_mode: production" in content
-        assert "ollama_url: http://localhost:11434" in content
+        assert f"ollama_url: {DEFAULT_OLLAMA_URL}" in content
 
     def test_load_existing_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test loading existing config file."""

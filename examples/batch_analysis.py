@@ -11,10 +11,14 @@ This example demonstrates how to:
 
 import asyncio
 import json
+import logging
+import sys
 from pathlib import Path
 from collections import Counter
 from sanskrit_analyzer import Analyzer
 from sanskrit_analyzer.config import Config
+
+logger = logging.getLogger(__name__)
 
 
 # Sample verses from Bhagavad Gita (Chapter 1)
@@ -52,7 +56,7 @@ async def analyze_batch(analyzer: Analyzer, texts: list[str]) -> list[dict]:
                 "text": text,
                 "error": str(e),
             })
-            print(f"Error analyzing '{text}': {e}")
+            logger.warning("Error analyzing '%s': %s", text, e, exc_info=True)
 
     return results
 
@@ -133,46 +137,47 @@ def calculate_statistics(results: list[dict]) -> dict:
 
 
 async def main():
-    print("=" * 60)
-    print("Sanskrit Analyzer - Batch Analysis Example")
-    print("=" * 60)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    sys.stdout.write("=" * 60 + "\n")
+    sys.stdout.write("Sanskrit Analyzer - Batch Analysis Example\n")
+    sys.stdout.write("=" * 60 + "\n")
 
     # Initialize analyzer
-    print("\nInitializing analyzer...")
+    logger.info("Initializing analyzer...")
     config = Config()
     analyzer = Analyzer(config)
 
     # Analyze batch
-    print(f"\nAnalyzing {len(SAMPLE_VERSES)} verses...")
+    logger.info(f"Analyzing {len(SAMPLE_VERSES)} verses...")
     results = await analyze_batch(analyzer, SAMPLE_VERSES)
 
     # Calculate statistics
     stats = calculate_statistics(results)
 
     # Display statistics
-    print("\n" + "=" * 60)
-    print("CORPUS STATISTICS")
-    print("=" * 60)
-    print(f"\nTotal texts analyzed: {stats['total_texts']}")
-    print(f"Successful analyses: {stats['successful_analyses']}")
-    print(f"Failed analyses: {stats['failed_analyses']}")
-    print(f"\nTotal words extracted: {stats['total_words']}")
-    print(f"Unique lemmas: {stats['unique_words']}")
-    print(f"Average confidence: {stats['average_confidence']:.2%}")
+    sys.stdout.write("\n" + "=" * 60 + "\n")
+    sys.stdout.write("CORPUS STATISTICS\n")
+    sys.stdout.write("=" * 60 + "\n")
+    sys.stdout.write(f"\nTotal texts analyzed: {stats['total_texts']}\n")
+    sys.stdout.write(f"Successful analyses: {stats['successful_analyses']}\n")
+    sys.stdout.write(f"Failed analyses: {stats['failed_analyses']}\n")
+    sys.stdout.write(f"\nTotal words extracted: {stats['total_words']}\n")
+    sys.stdout.write(f"Unique lemmas: {stats['unique_words']}\n")
+    sys.stdout.write(f"Average confidence: {stats['average_confidence']:.2%}\n")
 
-    print("\nTop 10 words by frequency:")
+    sys.stdout.write("\nTop 10 words by frequency:\n")
     for word, count in stats["top_words"]:
-        print(f"  {word}: {count}")
+        sys.stdout.write(f"  {word}: {count}\n")
 
-    print("\nPOS distribution:")
+    sys.stdout.write("\nPOS distribution:\n")
     for pos, count in stats["pos_distribution"].items():
-        print(f"  {pos}: {count}")
+        sys.stdout.write(f"  {pos}: {count}\n")
 
-    print(f"\nUnique dhatus (verbal roots): {stats['unique_dhatus']}")
+    sys.stdout.write(f"\nUnique dhatus (verbal roots): {stats['unique_dhatus']}\n")
     if stats["top_dhatus"]:
-        print("Top dhatus:")
+        sys.stdout.write("Top dhatus:\n")
         for dhatu, count in stats["top_dhatus"]:
-            print(f"  √{dhatu}: {count}")
+            sys.stdout.write(f"  √{dhatu}: {count}\n")
 
     # Export to JSON
     output_dir = Path(__file__).parent / "output"
@@ -189,7 +194,7 @@ async def main():
             }
         }, f, ensure_ascii=False, indent=2)
 
-    print(f"\nResults exported to: {output_file}")
+    logger.info(f"Results exported to: {output_file}")
 
 
 if __name__ == "__main__":
