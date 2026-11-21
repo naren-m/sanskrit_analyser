@@ -179,7 +179,8 @@ class Analysis:
     morphology: dict[str, str] = field(default_factory=dict)
     krt: str | None = None  # kṛt suffix of a derived reading, e.g. "Ryat", "kvi~p"
     upasargas: list[str] = field(default_factory=list)  # canonical SLP1 prefixes peeled
-    upasarga_gloss: str | None = None  # curated gloss of the peeled prefixes (root gloss is in dhatu.english)
+    # Curated gloss of the peeled prefixes; the root gloss is in dhatu.english.
+    upasarga_gloss: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = {
