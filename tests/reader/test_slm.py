@@ -119,10 +119,15 @@ def test_analysis_to_code(kind: str, morph: str, code: str | None) -> None:
     assert analysis_to_code(kind, morph) == code
 
 
-@pytest.mark.parametrize("surface", ["rAmaH", "gacCati", "uvAca", "aTa"])
-def test_candidates_round_trip_through_verify(surface: str) -> None:
+@pytest.mark.parametrize(
+    ("surface", "want_in"),
+    [("rAmaH", None), ("gacCati", None), ("uvAca", None), ("aTa", None),
+     ("kftvA", "kf.a"), ("gataH", "gam.k1ms")],
+)
+def test_candidates_round_trip_through_verify(surface: str, want_in: str | None) -> None:
     cands = candidates(surface)
     assert cands
+    assert want_in is None or want_in in cands
     for cand in cands:
         lemma, _, code = cand.rpartition(".")
         assert verifies(surface, lemma, code), cand
@@ -186,14 +191,18 @@ class _FakeScorer(SLMProposer):
         # kosha has no analysis: the free decode's lemma is derived, and the best derived code wins
         ("gataH", {"gam.k1ms": 2.0, "gam.k1msP": 1.0}, "gam.k1ms", "gam.n7ns"),
         ("gataH", {"gam.k1ms": 1.0, "gam.k1msP": 2.0}, "gam.k1msP", "gam.n7ns"),
+        # real kosha (no monkeypatch): k and a codes sit beside the kosha's n and u codes
+        ("gataH", {"gam.k1ms": 2.0, "gam.n1ms": 1.0}, "gam.k1ms", "FREE.zz"),
+        ("kftvA", {"kf.a": 2.0, "kf.u": 1.0}, "kf.a", "FREE.zz"),
     ],
 )
 def test_constrained_tag_picks_best_verified_candidate(
         padapatha, scores, want, free, monkeypatch) -> None:
     from sanskrit_analyzer.reader import slm
 
-    real = slm.candidates   # gataH is in the kosha; hide it to exercise the derive path
-    monkeypatch.setattr(slm, "candidates", lambda w: () if w == "gataH" else real(w))
+    if free == "gam.n7ns":   # these rows hide gataH from the kosha to exercise the empty-set path
+        real = slm.candidates
+        monkeypatch.setattr(slm, "candidates", lambda w: () if w == "gataH" else real(w))
     fake = _FakeScorer(scores, free)
     got = fake.tag(padapatha, constrained=True)
     assert got == want

@@ -150,15 +150,21 @@ def _code_space() -> tuple[str, ...]:
                  + verbs)
 
 
+def _krt_space() -> tuple[str, ...]:
+    """The codes analyze_pada cannot emit: absolutive and participles (k)."""
+    return tuple(c for c in _code_space() if c == "a" or c[0] == "k")
+
+
 @lru_cache(maxsize=4096)
-def derived_candidates(surface: str, lemma: str) -> tuple[str, ...]:
+def derived_candidates(surface: str, lemma: str, krt_only: bool = False) -> tuple[str, ...]:
     """Generate-and-match: codes for which ``lemma`` derives ``surface`` through derive.py.
 
-    This reaches words the kosha lacks, participles (k) and absolutives (a). It
-    tries the whole code space, so it is meant for the words analyze_pada left empty.
+    This reaches the participles (k) and absolutives (a) the kosha tags as n or u.
+    The whole code space is slow, so ``krt_only`` restricts it to those two families
+    for use on words the kosha already knows.
     """
-    out = [f"{lemma}.{code}" for code in _code_space()
-           if lemma and verifies(surface, lemma, code, ())]
+    space = _krt_space() if krt_only else _code_space()
+    out = [f"{lemma}.{code}" for code in space if lemma and verifies(surface, lemma, code, ())]
     return tuple(out[:MAX_CANDIDATES])
 
 
@@ -178,7 +184,11 @@ def candidates(surface: str) -> tuple[str, ...]:
         cand = f"{a.lemma}.{code}" if code and a.lemma else None
         if cand and cand not in out and verifies(surface, a.lemma, code, analyses):
             out[cand] = None
-    return tuple(list(out)[:MAX_CANDIDATES])
+    out = dict.fromkeys(list(out)[:MAX_CANDIDATES])
+    # the kosha tags participles and absolutives as n / u: add their k and a codes
+    for lemma in dict.fromkeys(c.rpartition(".")[0] for c in list(out)):
+        out.update(dict.fromkeys(derived_candidates(surface, lemma, True)))
+    return tuple(out)
 
 
 def align(padapatha: str, tags: str) -> list:
@@ -361,10 +371,16 @@ class SLMProposer:
         for n, (surface, is_member) in enumerate(pieces):
             cands = () if is_member else candidates(surface)
             free = None
-            if not cands and not is_member:
-                # kosha has nothing: try the free decode's lemma through the derive paths
+            if not is_member:
                 free = self._greedy(prompt, chosen, one_word=True)
-                cands = derived_candidates(surface, free.rpartition(".")[0]) if free else ()
+                free_lemma = free.rpartition(".")[0] if free else ""
+                if cands:
+                    # the free decode's lemma may be one the kosha lacks for this surface
+                    extra = derived_candidates(surface, free_lemma, True) if free_lemma else ()
+                    cands = tuple(dict.fromkeys([*cands, *extra]))
+                elif free_lemma:
+                    # kosha has nothing: derive the free decode's lemma over the whole code space
+                    cands = derived_candidates(surface, free_lemma)
             if cands:
                 final = n == len(pieces) - 1
                 chosen.append(max(cands, key=lambda c: self.score(prompt, chosen, c, final)))
