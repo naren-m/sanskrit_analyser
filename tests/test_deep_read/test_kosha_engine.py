@@ -184,3 +184,44 @@ def test_non_words_stay_unresolved(form):
     out = engine.analyze_word(form)
     assert out["resolved"] is False
     assert out["analyses"][0]["kind"] == "unknown"
+
+
+# ------------------- irregular-stem fallback robustness -------------------
+
+def _dup_candidates(monkeypatch):
+    monkeypatch.setattr(engine, "desandhi_candidates", lambda slp: [slp, slp])
+    return 1  # duplicate candidates must collapse to one analysis
+
+
+def _failing_derivation(monkeypatch):
+    calls = []
+
+    def boom():
+        calls.append(1)
+        raise RuntimeError("prakriya down")
+
+    monkeypatch.setattr(engine, "_build_irregular_forms", boom)
+    engine.analyze_word("पथिन्")
+    engine.analyze_word("पथिन्")
+    assert len(calls) == 1  # failure cached, not rebuilt per miss
+    return 0
+
+
+FALLBACK_CASES = [
+    ("dedup-through-seen", _dup_candidates),
+    ("failure-cached", _failing_derivation),
+]
+
+
+@requires_vidyut
+@pytest.mark.parametrize("name,setup", FALLBACK_CASES, ids=[c[0] for c in FALLBACK_CASES])
+def test_irregular_fallback_table(name, setup, monkeypatch):
+    engine._irregular_forms.cache_clear()
+    try:
+        want = setup(monkeypatch)
+        out = engine.analyze_word("पथिन्")
+        got = len([a for a in out["analyses"] if a["kind"] != "unknown"])
+        assert got == want, f"{name}: {out['analyses']}"
+    finally:
+        monkeypatch.undo()
+        engine._irregular_forms.cache_clear()
