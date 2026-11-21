@@ -1,7 +1,8 @@
 """SanskritBench-local: one per-layer scoreboard for verse understanding.
 
-Phase 0 of ``naren-m/sanskrit_model: docs/plan/2026-11-13-sanskrit-understanding-plan.md``. Each row of the
-report is one engine; each column is one layer of understanding. The first run
+Phase 0 of
+``naren-m/sanskrit_model: docs/plan/2026-11-13-sanskrit-understanding-plan.md``.
+Each row of the report is one engine; each column is one layer of understanding. The first run
 on ``main`` is the baseline every later change is gated against.
 
 Layers scored now:
@@ -43,8 +44,7 @@ from typing import Any
 from sanskrit_analyzer.dhatu.dhatupatha import strip_anubandhas
 from sanskrit_analyzer.models.scripts import Script
 from sanskrit_analyzer.utils import transliterate
-from tests.bench.corpus import (gold_padas, load_gita, load_plain, load_rows, sample,
-                                split_rows)
+from tests.bench.corpus import gold_padas, load_gita, load_plain, load_rows, sample, split_rows
 from tests.bench.score import meter_match, norm_slp1, recovered
 
 logger = logging.getLogger(__name__)
@@ -288,7 +288,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ramayanam", type=Path, required=True, help="ramayanam checkout")
     ap.add_argument("--split", choices=("dev", "heldout"), default="dev")
     ap.add_argument("--n", type=int, default=100)
-    ap.add_argument("--engines", default="dp,prakriya", help="dp,byt5,prakriya,reader,reader-slm,reader-best "
+    ap.add_argument("--engines", default="dp,prakriya",
+                    help="dp,byt5,prakriya,reader,reader-slm,reader-best "
                     "(reader-slm/-best need SANSKRIT_SLM_CKPT)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--corpus", choices=("ramayana", "gita", "plain"), default="ramayana",

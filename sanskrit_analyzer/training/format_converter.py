@@ -2,7 +2,6 @@
 
 from typing import Any
 
-
 # Expected schema for grammar training output
 GRAMMAR_OUTPUT_SCHEMA = {
     "type": "object",

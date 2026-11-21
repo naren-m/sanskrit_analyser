@@ -1,11 +1,9 @@
 """Tests for SplitValidator: candidate generation, scoring, and validation."""
 
-import pytest
 
 from sanskrit_analyzer.engines.base import Segment
 from sanskrit_analyzer.validation.split_validator import SplitValidator
 from sanskrit_analyzer.validation.vocabulary import Vocabulary
-
 
 # ---------------------------------------------------------------------------
 # Helpers

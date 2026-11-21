@@ -11,7 +11,10 @@ Sources (SLP1, from sanskrit-lexicon.uni-koeln.de via pycdsl):
 
 Outputs TSV, SLP1 throughout, to match project convention.
 """
-import logging, re, sqlite3, os, sys
+import logging
+import os
+import re
+import sqlite3
 
 logger = logging.getLogger(__name__)
 
@@ -157,9 +160,10 @@ def norm(t):
 def crosswalk():
     idx = load_project_unadi()
     src = f"{OUT}/vyutpatti-skd.tsv"
-    lines = [l.rstrip("\n").split("\t") for l in open(src, encoding="utf-8")]
+    lines = [line.rstrip("\n").split("\t") for line in open(src, encoding="utf-8")]
     hdr = lines[0] + ["unadi_ref_project", "unadi_match"]
-    i_ref = hdr.index("unadi_ref"); i_q = hdr.index("sutra_quoted")
+    i_ref = hdr.index("unadi_ref")
+    i_q = hdr.index("sutra_quoted")
     out = [tuple(hdr)]
     agree = disagree = unresolved = 0
     for r in lines[1:]:
@@ -169,9 +173,11 @@ def crosswalk():
             proj = idx.get(norm(quoted), "")
         if cited and proj:
             status = "agree" if cited == proj else "SHIFTED"
-            agree += status == "agree"; disagree += status == "SHIFTED"
+            agree += status == "agree"
+            disagree += status == "SHIFTED"
         elif cited and not proj:
-            status = "unverified"; unresolved += 1
+            status = "unverified"
+            unresolved += 1
         out.append(tuple(r + [proj, status]))
     write("vyutpatti-skd.tsv", out)
     logger.info(f"unadi crosswalk: {agree} agree, {disagree} SHIFTED, {unresolved} unverified")
@@ -179,7 +185,8 @@ def crosswalk():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    skd(); vcp()
+    skd()
+    vcp()
     dump("KRM", "krdantarupamala.tsv")
     dump("ARMH", "abhidhanaratnamala.tsv")
     dump("ABCH", "abhidhanacintamani.tsv")

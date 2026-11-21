@@ -46,7 +46,7 @@ class DhatuBlock:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "DhatuBlock":
+    def from_dict(cls, d: dict[str, Any]) -> DhatuBlock:
         return cls(
             root=d.get("root"),
             root_dev=d.get("root_dev"),
@@ -83,7 +83,7 @@ class Analysis:
         return d
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Analysis":
+    def from_dict(cls, d: dict[str, Any]) -> Analysis:
         dhatu = d.get("dhatu")
         return cls(
             kind=d.get("kind", "unknown"),
@@ -123,7 +123,7 @@ class Token:
         return out
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Token":
+    def from_dict(cls, d: dict[str, Any]) -> Token:
         return cls(
             surface=d.get("surface"),
             slp1=d.get("slp1"),
@@ -158,7 +158,7 @@ class DeepReadResult:
         return out
 
     @classmethod
-    def from_legacy(cls, d: dict[str, Any]) -> "DeepReadResult":
+    def from_legacy(cls, d: dict[str, Any]) -> DeepReadResult:
         """Wrap a legacy Deep Read result dict into the typed model losslessly."""
         return cls(
             input=d.get("input", ""),

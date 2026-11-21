@@ -514,8 +514,7 @@ def _iter_base_words(tree: Any):
     if parse is None:
         return
     for sandhi_group in getattr(parse, "sandhi_groups", None) or []:
-        for base_word in getattr(sandhi_group, "base_words", None) or []:
-            yield base_word
+        yield from getattr(sandhi_group, "base_words", None) or []
 
 
 def _well_segmented(base_words: list[Any], n_input_words: int) -> bool:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812 - torch convention: F is torch.nn.functional
 
 
 class ProjectionHead(nn.Module):
@@ -54,7 +54,7 @@ class ProjectionHead(nn.Module):
         )
 
     @classmethod
-    def load(cls, path: Path) -> "ProjectionHead":
+    def load(cls, path: Path) -> ProjectionHead:
         payload = torch.load(path, map_location="cpu", weights_only=True)
         head = cls(**payload["config"])
         head.load_state_dict(payload["state_dict"])

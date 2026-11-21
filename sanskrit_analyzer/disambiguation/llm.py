@@ -59,7 +59,9 @@ class LLMDisambiguator:
         result = await disambiguator.disambiguate(candidates, context)
     """
 
-    SYSTEM_PROMPT = """You are a Sanskrit linguistics expert. Your task is to rank parse candidates for a Sanskrit text based on semantic coherence, grammatical correctness, and contextual appropriateness.
+    SYSTEM_PROMPT = """You are a Sanskrit linguistics expert. Your task is to rank \
+parse candidates for a Sanskrit text based on semantic coherence, grammatical correctness, \
+and contextual appropriateness.
 
 For each candidate, evaluate:
 1. Semantic coherence - do the lemmas make sense together?

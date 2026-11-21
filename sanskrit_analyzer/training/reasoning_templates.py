@@ -2,7 +2,6 @@
 
 from typing import Any
 
-
 REASONING_TEMPLATES: dict[str, str] = {
     "case_agreement": (
         "Rule 'case_agreement' matched: {nominative} ({nom_case}) agrees with verb {verb}. "

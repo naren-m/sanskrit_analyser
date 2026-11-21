@@ -446,7 +446,9 @@ class Analyzer:
             # Reorder parse forest based on disambiguation
             if result.candidates:
                 new_order = [c.index for c in result.candidates]
-                tree.parse_forest = [tree.parse_forest[i] for i in new_order if i < len(tree.parse_forest)]
+                tree.parse_forest = [
+                    tree.parse_forest[i] for i in new_order if i < len(tree.parse_forest)
+                ]
                 tree.selected_parse = 0
 
                 # Update overall confidence
@@ -669,7 +671,6 @@ class Analyzer:
         stats = CorpusStats()
 
         if self._cache:
-            tier_stats = self._cache.stats
             if self._cache._memory:
                 mem_stats = self._cache._memory.stats
                 stats.memory_entries = mem_stats.size

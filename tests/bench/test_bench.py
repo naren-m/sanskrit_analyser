@@ -37,7 +37,10 @@ def test_clean_verse(raw: str, want: str) -> None:
 @pytest.mark.parametrize(
     ("line", "want"),
     [
-        ("महाप्राज्ञः highly learned, वरम् choicest", {"महाप्राज्ञः": "highly learned", "वरम्": "choicest"}),
+        (
+            "महाप्राज्ञः highly learned, वरम् choicest",
+            {"महाप्राज्ञः": "highly learned", "वरम्": "choicest"},
+        ),
         # ASCII-colon visarga in the key
         ("जनक: Janaka, उवाच spoke.", {"जनकः": "Janaka", "उवाच": "spoke"}),
         ("", {}),
@@ -107,7 +110,9 @@ def _corpus(root: Path) -> Path:
         d.mkdir(parents=True)
         for v in (1, 2):
             ref = f"{kanda}::1::{v}::"
-            (d / f"{name}_sarga_1_sloka.txt").open("a").write(f"{ref}रामो गच्छति ।।{kanda}.1.{v}।।\n")
+            (d / f"{name}_sarga_1_sloka.txt").open("a").write(
+                f"{ref}रामो गच्छति ।।{kanda}.1.{v}।।\n"
+            )
             (d / f"{name}_sarga_1_meaning.txt").open("a").write(f"{ref}रामः Rama, गच्छति goes\n")
             (d / f"{name}_sarga_1_translation.txt").open("a").write(f"{ref}Rama goes.\n")
     return root

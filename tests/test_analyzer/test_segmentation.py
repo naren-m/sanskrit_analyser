@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from sanskrit_analyzer import Analyzer, AnalysisMode
+from sanskrit_analyzer import AnalysisMode, Analyzer
 from sanskrit_analyzer.config import Config
 
 

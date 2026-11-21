@@ -8,12 +8,12 @@ from sanskrit_analyzer.training.format_converter import (
 )
 from sanskrit_analyzer.training.reasoning_templates import (
     REASONING_TEMPLATES,
+    detect_applicable_rule,
     fill_template,
     generate_case_agreement_reasoning,
-    generate_verb_agreement_reasoning,
     generate_sandhi_reasoning,
     generate_semantic_reasoning,
-    detect_applicable_rule,
+    generate_verb_agreement_reasoning,
 )
 
 
@@ -29,7 +29,10 @@ class TestGrammarFormatConverter:
                 {
                     "surface_form": "रामो",
                     "base_words": [
-                        {"lemma": "राम", "pos": "noun", "case": "nom", "number": "sg", "gender": "m"}
+                        {
+                            "lemma": "राम", "pos": "noun", "case": "nom",
+                            "number": "sg", "gender": "m",
+                        }
                     ],
                 }
             ],
