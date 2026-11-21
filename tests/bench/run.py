@@ -283,7 +283,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ramayanam", type=Path, required=True, help="ramayanam checkout")
     ap.add_argument("--split", choices=("dev", "heldout"), default="dev")
     ap.add_argument("--n", type=int, default=100)
-    ap.add_argument("--engines", default="dp,prakriya", help="dp,byt5,prakriya,reader,reader-slm,reader-slm-constrained,reader-best "
+    ap.add_argument("--engines", default="dp,prakriya",
+                    help="dp,byt5,prakriya,reader,reader-slm,reader-slm-constrained,"
+                    "reader-best "
                     "(reader-slm*/-best need SANSKRIT_SLM_CKPT)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--corpus", choices=("ramayana", "gita", "plain"), default="ramayana",

@@ -259,7 +259,7 @@ class SLMProposer:
         return ids + self.tok.encode(" ".join(chosen) + (" " if chosen else ""))
 
     def _greedy(self, prompt: str, chosen: list[str] | None = None, one_word: bool = False) -> str:
-        """Greedy decode after ``prompt`` (and the ``chosen`` tags). ``one_word``: stop at a space."""
+        """Greedy decode after ``prompt`` and the ``chosen`` tags; ``one_word`` stops at a space."""
         import torch
 
         ids = self._context(prompt, chosen or [])
