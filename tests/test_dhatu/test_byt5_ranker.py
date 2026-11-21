@@ -102,6 +102,7 @@ _needs_byt5 = pytest.mark.skipif(
 )
 
 
+@pytest.mark.slow
 @_needs_byt5
 def test_byt5_segments_real_compound():
     members = ByT5Adapter().segment("इक्ष्वाकुवंशप्रभवो रामो नाम जनैः श्रुतः")
@@ -110,6 +111,7 @@ def test_byt5_segments_real_compound():
     assert any("vaṃśa" in m for m in members)
 
 
+@pytest.mark.slow
 @_needs_byt5
 def test_identifier_with_byt5_resolves_roots():
     from sanskrit_analyzer.dhatu import DhatuIdentifier

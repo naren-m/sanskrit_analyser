@@ -59,8 +59,7 @@ class TestEmbedderProtocol:
         )
 
     # isinstance() on the runtime Protocol reads embedding_dim, which loads
-    # google/byt5-small even with lazy=True.
-    @pytest.mark.slow
+    # the model unless embedding_dim is known without loading.
     def test_byt5_is_embedder_instance(self):
         """ByT5SanskritEmbedder also conforms structurally (regression guard)."""
         try:

@@ -76,6 +76,20 @@ class TestByT5SanskritEmbedderConstruction:
         embedder = ByT5SanskritEmbedder(lazy=True)
         assert embedder.revision == _DEFAULT_REVISION
 
+    @pytest.mark.parametrize(
+        "model_name, expected_dim",
+        [
+            ("chronbmm/sanskrit5-multitask", 1472),
+            ("google/byt5-small", 1472),
+            ("google/byt5-base", 1536),
+        ],
+    )
+    def test_embedding_dim_does_not_load_known_model(self, model_name, expected_dim):
+        embedder = ByT5SanskritEmbedder(model_name=model_name, lazy=True)
+        assert embedder.embedding_dim == expected_dim
+        assert embedder.encode([]).shape == (0, expected_dim)
+        assert embedder._model is None
+
     def test_encode_empty_does_not_load_model(self):
         """Empty input returns a (0, d) array without forcing a model load."""
         embedder = ByT5SanskritEmbedder(lazy=True)
@@ -112,8 +126,10 @@ class TestByT5SanskritEmbedderEncode:
         norms = np.linalg.norm(vectors, axis=1)
         np.testing.assert_allclose(norms, np.ones(2), rtol=1e-4, atol=1e-4)
 
-    @pytest.mark.slow  # the class fixture loads google/byt5-small
-    def test_encode_empty_list_returns_empty_array(self, embedder):
+    def test_encode_empty_list_returns_empty_array(self):
+        embedder = ByT5SanskritEmbedder(
+            model_name="google/byt5-small", device="cpu", lazy=True
+        )
         vectors = embedder.encode([])
         assert isinstance(vectors, np.ndarray)
         assert vectors.shape == (0, embedder.embedding_dim)

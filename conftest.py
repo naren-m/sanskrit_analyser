@@ -41,3 +41,59 @@ def pytest_configure(config: pytest.Config) -> None:
     if config.pluginmanager.hasplugin("asyncio"):
         return
     raise pytest.UsageError(_MISSING_ASYNCIO)
+
+
+# ---------------------------------------------------------------------------
+# Weight-loading guard: the non-slow tier must never download or load weights.
+# ---------------------------------------------------------------------------
+
+# (module path, attribute path) of every entry point that loads/downloads weights.
+GUARDED_ENTRY_POINTS = [
+    ("transformers", "PreTrainedModel.from_pretrained"),
+    ("transformers", "PreTrainedTokenizerBase.from_pretrained"),
+    ("sentence_transformers", "SentenceTransformer.__init__"),
+    ("huggingface_hub", "hf_hub_download"),
+    ("huggingface_hub", "snapshot_download"),
+    ("huggingface_hub.file_download", "hf_hub_download"),
+    ("huggingface_hub._snapshot_download", "snapshot_download"),
+]
+
+
+def _guard_message(test_name: str, target: str) -> str:
+    return (
+        f"{test_name} called {target}, which loads or downloads model weights. "
+        "Mark the test with @pytest.mark.slow, or mock the load."
+    )
+
+
+def _resolve(module_name: str, attr_path: str):
+    """Return (owner, attr_name), or None if the module/attribute is absent."""
+    import importlib
+
+    try:
+        owner = importlib.import_module(module_name)
+    except ImportError:
+        return None
+    *parents, name = attr_path.split(".")
+    for part in parents:
+        owner = getattr(owner, part, None)
+        if owner is None:
+            return None
+    return (owner, name) if hasattr(owner, name) else None
+
+
+@pytest.fixture(autouse=True)
+def _forbid_weight_loading_outside_slow(request, monkeypatch):
+    if request.node.get_closest_marker("slow") is not None:
+        return
+    for module_name, attr_path in GUARDED_ENTRY_POINTS:
+        resolved = _resolve(module_name, attr_path)
+        if resolved is None:
+            continue
+        owner, name = resolved
+        message = _guard_message(request.node.nodeid, f"{module_name}.{attr_path}")
+
+        def _raise(*args, _message=message, **kwargs):
+            raise RuntimeError(_message)
+
+        monkeypatch.setattr(owner, name, _raise)
