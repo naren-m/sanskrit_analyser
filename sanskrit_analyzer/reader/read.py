@@ -16,7 +16,7 @@ from sanskrit_analyzer.prakriya import chandas as chandas_mod
 from sanskrit_analyzer.prakriya.engine import _chandas_record
 from sanskrit_analyzer.prakriya.normalize import normalize
 from sanskrit_analyzer.reader.derive import credible, stem_attested, taddhita_head, verify_word
-from sanskrit_analyzer.reader.sandhi import vowel_join
+from sanskrit_analyzer.reader.sandhi import split_is_licensed, vowel_join
 from sanskrit_analyzer.reader.tags import Morph, decode
 from sanskrit_analyzer.utils import transliterate
 
@@ -246,6 +246,14 @@ def read_words(text: str, proposer: str = "byt5") -> tuple[list[dict[str, Any]],
     return words, f"best:{label}"
 
 
+def split_record(text_slp1: str, words: list[dict[str, Any]]) -> dict[str, Any]:
+    """Do Pāṇini's rules re-join the chosen words into the input? Measures only."""
+    padas = [m["surface"] for w in words for m in (w.get("compound_members") or [w])]
+    lic = split_is_licensed(text_slp1, padas)
+    sutras = sorted({j.sutra.split()[0] for j in lic.rejoin.junctions if j.sutra}) if lic.rejoin else []
+    return {"licensed": lic.ok, "unruled_junctions": len(lic.unruled), "sutras": sutras}
+
+
 def read_sloka(text: str, llm: bool = False, model: str | None = None,
                proposer: str = "byt5") -> dict[str, Any]:
     n = normalize(text)
@@ -268,6 +276,7 @@ def read_sloka(text: str, llm: bool = False, model: str | None = None,
         "by_source": {s: sum(w["source"] == s for w in words)
                       for s in sorted({w["source"] for w in words})},
     }
+    record["split"] = split_record(n.slp1, words)
     if llm:
         from sanskrit_analyzer.reader.llm import interpret
         record["interpretation"] = interpret(record, model=model)
