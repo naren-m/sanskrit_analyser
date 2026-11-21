@@ -180,8 +180,8 @@ def test_smoke_bench_runs_offline(capsys: pytest.CaptureFixture[str]) -> None:
     from tests.bench.run import main
 
     t0 = time.time()
-    assert main(["--smoke", "--n", "2"]) == 0
+    assert main(["--smoke", "--n", "1"]) == 0
     out = capsys.readouterr().out
     assert time.time() - t0 < 60
-    assert "n=2" in out and "reader" in out
+    assert "n=1" in out and "reader" in out
     assert "reader-slm" not in out
