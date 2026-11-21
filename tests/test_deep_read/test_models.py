@@ -38,6 +38,11 @@ def test_analysis_round_trip_with_and_without_dhatu():
     }
     assert Analysis.from_dict(verb).to_dict() == verb
 
+    primary = {"kind": "nominal", "lemma": "rAma", "dhatu": None,
+               "morphology": {}, "primary": True}
+    assert Analysis.from_dict(primary).to_dict() == primary
+    assert Analysis.from_dict(primary).primary is True
+
 
 def test_token_round_trip_resolved():
     tok = {

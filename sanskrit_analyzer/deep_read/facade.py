@@ -467,6 +467,7 @@ def _token_from_base_word(base_word: Any) -> dict[str, Any]:
         "lemma": lemma,
         "dhatu": dhatu_block,
         "morphology": _morphology_dict(base_word),
+        "primary": True,
     }
     slp1 = _slp1_of(base_word)
     # The /deep-read page renders ``surface`` in a Devanagari span; surface_form

@@ -67,6 +67,7 @@ class Analysis:
     dhatu: DhatuBlock | None = None
     morphology: dict[str, str] = field(default_factory=dict)
     krt: str | None = None  # kṛt suffix of a derived reading, e.g. "Ryat"
+    primary: bool | None = None  # True on the lead reading; None in legacy dicts
 
     def to_dict(self) -> dict[str, Any]:
         d = {
@@ -77,6 +78,8 @@ class Analysis:
         }
         if self.krt:  # only when present, so legacy dicts round-trip unchanged
             d["krt"] = self.krt
+        if self.primary is not None:
+            d["primary"] = self.primary
         return d
 
     @classmethod
@@ -88,6 +91,7 @@ class Analysis:
             dhatu=DhatuBlock.from_dict(dhatu) if dhatu else None,
             morphology=dict(d.get("morphology") or {}),
             krt=d.get("krt"),
+            primary=d.get("primary"),
         )
 
 
