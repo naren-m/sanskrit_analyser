@@ -1,0 +1,58 @@
+{
+  "resolves": [
+    {
+      "form": "पथिन्",
+      "kind": "nominal",
+      "lemma": "paTin"
+    },
+    {
+      "form": "अहन्",
+      "kind": "verb",
+      "root": "han"
+    },
+    {
+      "form": "पप्रच्छ",
+      "kind": "verb",
+      "root": "pracC",
+      "lakara": "li~w"
+    },
+    {
+      "form": "चकार",
+      "kind": "verb",
+      "root": "kf",
+      "lakara": "li~w"
+    },
+    {
+      "form": "जगाम",
+      "kind": "verb",
+      "root": "gam",
+      "lakara": "li~w"
+    },
+    {
+      "form": "पृच्छति",
+      "kind": "verb",
+      "root": "pracC",
+      "lakara": "la~w"
+    },
+    {
+      "form": "पन्थानम्",
+      "kind": "nominal",
+      "lemma": "paTin"
+    },
+    {
+      "form": "अह्ना",
+      "kind": "nominal",
+      "lemma": "ahan"
+    },
+    {
+      "form": "श्वानम्",
+      "kind": "nominal",
+      "lemma": "Svan"
+    }
+  ],
+  "unresolved": [
+    "पथिम्",
+    "अब्क",
+    "पप्रच्छक्ष"
+  ]
+}

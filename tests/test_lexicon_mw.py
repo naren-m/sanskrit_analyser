@@ -59,7 +59,8 @@ def test_lookup_mw_any_script(mw_db, word):
     assert [e.fields["hom"] for e in entries] == ["1", "2"]
     e = entries[1]
     assert e.source == "mw" and e.key == "rAma" and e.page == "877,3"
-    assert e.fields["lnum"] == "4" and e.fields["key_stem"] == "rAma"
+    assert e.lnum == "4" and "lnum" not in e.fields
+    assert e.fields["key_stem"] == "rAma"
     assert "Rama, son of Dasharatha & hero" in e.text
     assert e.licence == "CC BY-SA 4.0"
     assert "Cologne" in e.acknowledgement
@@ -74,6 +75,13 @@ def test_body_cleaning_strips_accents_and_ids(mw_db):
     (s,) = lexicon.lookup("saNga", sources=["mw"])
     assert s.text == "m. fr. √ 1. sañj, cf. agni"
     assert "228458" not in s.text and "/" not in s.text
+
+
+def test_mw_entries_never_carry_promoted_columns_in_fields(mw_db):
+    words = ("rAma", "agni", "saNga", "rAjan")
+    entries = [e for w in words for e in lexicon.lookup(w, sources=["mw"])]
+    assert entries
+    assert all(not (lexicon._PROMOTED & e.fields.keys()) for e in entries)
 
 
 def test_prefix_sorted_distinct(mw_db):

@@ -114,6 +114,7 @@ class Entry:
     key: str                                 # SLP1 headword
     text: str                                # gloss or etymology body
     page: str | None = None
+    lnum: str | None = None                  # CDSL line number, sqlite-backed sources
     fields: dict[str, str] = field(default_factory=dict)
     acknowledgement: str | None = None       # provenance string, MW only
     licence: str | None = None               # e.g. "CC BY-SA 4.0", MW only
@@ -227,6 +228,7 @@ def _index(source: str) -> dict[str, tuple[Entry, ...]]:
                     key=key,
                     text=text,
                     page=(row.get("page") or "").strip() or None,
+                    lnum=(row.get("lnum") or "").strip() or None,
                     fields={
                         k: v.strip()
                         for k, v in row.items()
@@ -257,7 +259,7 @@ def _sqlite_lookup(source: str, key: str) -> list[Entry]:
     spec = _SOURCES[source]
     out = []
     for k, stem, lnum, page, text, hom in rows:
-        extra = {"lnum": lnum, "hom": hom, "key_stem": stem}
+        extra = {"hom": hom, "key_stem": stem}
         out.append(
             Entry(
                 source=source,
@@ -265,6 +267,7 @@ def _sqlite_lookup(source: str, key: str) -> list[Entry]:
                 key=k,
                 text=text,
                 page=page or None,
+                lnum=str(lnum) if lnum else None,
                 fields={n: str(v) for n, v in extra.items() if v},
                 acknowledgement=acknowledgement,
                 licence=licence,
