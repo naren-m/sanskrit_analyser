@@ -455,21 +455,46 @@ def _analysis_key(a: Analysis) -> tuple:
             tuple(sorted(a.morphology.items())))
 
 
+# Surface forms whose kosha readings lack the dictionary stem: the bare stem
+# maha/mahA is the first member of compounds and the standalone adjective
+# 'great' (lemma mahat), but the kosha only offers root mahi/mah readings.
+_STEM_LEMMAS = {"maha": "mahat", "mahA": "mahat"}
+
+
+def _rank(analyses: list[Analysis]) -> list[Analysis]:
+    """Order by ``_KIND_ORDER``.
+
+    The sort is stable, so ties keep the kosha's lookup order (itself
+    deterministic: desandhi candidates in order, entries in kosha order).
+    A lemma-agreement vote key was tried and dropped: it lowered lemma
+    accuracy on the in-repo gold, so agreement ranking is still open.
+    """
+    return sorted(analyses, key=lambda a: _KIND_ORDER.get(a.kind, 99))
+
+
 def _gate_and_rank(analyses: list[Analysis], slp: str,
                    candidates: list[str]) -> list[Analysis]:
     """Drop spurious readings of closed-class words and names, then order.
 
     Particles keep only their indeclinable reading; epic proper nouns lose
-    their verb readings and lead with the nominal. Everything else keeps the
-    ``_KIND_ORDER`` sort.
+    their verb readings and lead with the nominal; maha/mahA lead with the
+    nominal ``mahat``. Everything else is ordered by :func:`_rank`.
     """
     if slp in PARTICLES:
         kept = [a for a in analyses if a.kind == "indeclinable"]
         return kept or [Analysis(kind="indeclinable", lemma=slp)]
+    if slp in _STEM_LEMMAS:
+        stem = _STEM_LEMMAS[slp]
+
+        def is_lead(a: Analysis) -> bool:
+            return a.kind == "nominal" and a.lemma == stem
+
+        lead = [a for a in analyses if is_lead(a)] or [Analysis(kind="nominal", lemma=stem)]
+        return lead + _rank([a for a in analyses if not is_lead(a)])
     name = next((a.lemma for a in analyses if a.lemma in PROPER_NOUNS), None) \
         or next((c for c in candidates if c in PROPER_NOUNS), None)
     if name is None:
-        return sorted(analyses, key=lambda a: _KIND_ORDER.get(a.kind, 99))
+        return _rank(analyses)
     kept = [a for a in analyses if a.kind != "verb"]
     if not any(a.kind == "nominal" for a in kept):
         kept.append(Analysis(kind="nominal", lemma=name))

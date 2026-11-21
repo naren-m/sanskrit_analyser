@@ -41,6 +41,29 @@ GATE_CASES = {
         "gacCati", ["gacCati"],
         [Analysis(kind="nominal", lemma="gam"), _verb("gam")],
         ["verb", "nominal"], "gam"),
+    "maha leads with nominal mahat, mahi stays alternate": (
+        "mahA", ["mahA", "maha"],
+        [Analysis(kind="derived", lemma="mahi"), Analysis(kind="nominal", lemma="mahA")],
+        ["nominal", "derived", "nominal"], "mahat"),
+    "maha reuses an existing mahat reading": (
+        "maha", ["maha"],
+        [Analysis(kind="derived", lemma="mahi"), Analysis(kind="nominal", lemma="mahat")],
+        ["nominal", "derived"], "mahat"),
+    "tie within a kind keeps lookup order, not lemma votes": (
+        "xa", ["xa"],
+        [Analysis(kind="nominal", lemma="aa"), Analysis(kind="nominal", lemma="zz"),
+         Analysis(kind="nominal", lemma="zz", morphology={"vibhakti": "praTamA"})],
+        ["nominal", "nominal", "nominal"], "aa"),
+    "kind order beats lookup order": (
+        "xa", ["xa"],
+        [Analysis(kind="nominal", lemma="n"), Analysis(kind="nominal", lemma="n",
+                                                       morphology={"vibhakti": "praTamA"}),
+         Analysis(kind="derived", lemma="d")],
+        ["derived", "nominal", "nominal"], "d"),
+    "full tie keeps lookup order": (
+        "xa", ["xa"],
+        [Analysis(kind="nominal", lemma="b"), Analysis(kind="nominal", lemma="a")],
+        ["nominal", "nominal"], "b"),
 }
 
 
