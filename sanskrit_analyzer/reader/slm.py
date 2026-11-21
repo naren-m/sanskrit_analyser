@@ -74,6 +74,60 @@ def code_to_morph(code: str) -> Morph:
     return Morph("unknown")
 
 
+_CASE_CODE = {v: k for k, v in _CASE.items()}
+_GENDER_CODE = {v: k for k, v in _GENDER.items()}
+_NUMBER_CODE = {v: k for k, v in _NUMBER.items()}
+_PERSON_CODE = {v: k for k, v in _PERSON.items()}
+# kosha lakāra (anubandha tildes stripped) -> the tense+mood letters code_to_morph reads back
+_LAKARA_CODE = {"law": "rI", "low": "rM", "viDiliN": "rO", "laN": "i", "liw": "a",
+                "lfw": "fI", "luw": "fI", "luN": "J", "ASIrliN": "B"}
+MAX_CANDIDATES = 24
+
+
+def analysis_to_code(kind: str, morph: str) -> str | None:
+    """A PadaAnalysis (kind, morph summary) -> DCS code; the inverse of ``code_to_morph``.
+
+    ``morph`` is the summary analyze_pada prints, e.g. "la~w kartari praTama eka" or
+    "puM praTamA eka". Shapes with no DCS code give None.
+    """
+    f = morph.replace("~", "").split()
+    if f == ["avyaya"]:
+        return "u"
+    try:
+        if kind == "Tinanta":
+            lakara, prayoga, person, number = f
+            if prayoga not in ("kartari", "karmaRi") or lakara not in _LAKARA_CODE:
+                return None
+            return (f"v{_PERSON_CODE[person]}{_NUMBER_CODE[number]}{_LAKARA_CODE[lakara]}"
+                    + ("P" if prayoga == "karmaRi" else ""))
+        if kind == "Subanta":
+            gender, case, number = f
+            return f"n{_CASE_CODE[case]}{_GENDER_CODE[gender]}{_NUMBER_CODE[number]}"
+    except (ValueError, KeyError):
+        return None
+    return None
+
+
+@lru_cache(maxsize=4096)
+def candidates(surface: str) -> tuple[str, ...]:
+    """Every "lemma.CODE" whose analysis vidyut verifies for this padapāṭha word.
+
+    Analyses come from analyze_pada, are mapped to DCS codes, and each code is
+    run through ``verify_word``: a code is kept only when ``code_to_morph(code)``
+    verifies again, so the model can never pick a tag Pāṇini would reject.
+    """
+    from sanskrit_analyzer.prakriya.analyzer import analyze_pada
+    from sanskrit_analyzer.reader.derive import verify_word
+
+    out: dict[str, None] = {}
+    for a in analyze_pada(surface, limit=50):
+        code = analysis_to_code(a.kind, a.morph)
+        cand = f"{a.lemma}.{code}" if code and a.lemma else None
+        if cand and cand not in out and verify_word(surface, a.lemma, code_to_morph(code)).verified:
+            out[cand] = None
+    return tuple(list(out)[:MAX_CANDIDATES])
+
+
 def align(padapatha: str, tags: str) -> list:
     """Pair each padapāṭha piece (words and compound members) with its "lemma.CODE"."""
     from sanskrit_analyzer.reader.read import Hypothesis
@@ -200,24 +254,70 @@ class SLMProposer:
         self.model.to(self.device).eval()
         self.tok = CharTokenizer.load(vocab)
 
-    def _greedy(self, prompt: str) -> str:
+    def _context(self, prompt: str, chosen: list[str]) -> list[int]:
+        ids = [self.tok.bos_id] + self.tok.encode(prompt) + [self.tok.sep_id]
+        return ids + self.tok.encode(" ".join(chosen) + (" " if chosen else ""))
+
+    def _greedy(self, prompt: str, chosen: list[str] | None = None, one_word: bool = False) -> str:
+        """Greedy decode after ``prompt`` (and the ``chosen`` tags). ``one_word``: stop at a space."""
         import torch
 
-        ids = [self.tok.bos_id] + self.tok.encode(prompt) + [self.tok.sep_id]
+        ids = self._context(prompt, chosen or [])
+        space = self.tok.encode(" ")[0]
         start, limit = len(ids), min(self.model.block_size, len(ids) + 2 * len(prompt) + 24)
         x = torch.tensor([ids], device=self.device)
         with torch.no_grad():
             while x.shape[1] < limit:
                 nxt = self.model(x)[0, -1].argmax().view(1, 1)
                 x = torch.cat([x, nxt], dim=1)
-                if int(nxt) == self.tok.eos_id:
+                if int(nxt) == self.tok.eos_id or (one_word and int(nxt) == space):
                     break
         return self.tok.decode(x[0, start:].tolist()).strip()
 
-    def propose(self, text_slp1: str) -> list:
+    def score(self, prompt: str, chosen: list[str], candidate: str, final: bool = False) -> float:
+        """Log-probability of ``candidate`` as the next tag, plus its terminator.
+
+        ``prompt`` is the ``<dtag>`` padapāṭha prompt, ``chosen`` the tags already
+        picked for earlier words. The terminator is a space, or <eos> after the
+        last word, so a candidate that is a prefix of another does not win free.
+        Tests inject a fake by overriding this method.
+        """
+        import torch
+
+        ctx = self._context(prompt, chosen)
+        cand = self.tok.encode(candidate) + [self.tok.eos_id if final else self.tok.encode(" ")[0]]
+        x = torch.tensor([(ctx + cand)[-self.model.block_size:]], device=self.device)
+        with torch.no_grad():
+            logp = torch.log_softmax(self.model(x)[0].float(), dim=-1)
+        base = x.shape[1] - len(cand)
+        return sum(float(logp[base - 1 + i, t]) for i, t in enumerate(cand))
+
+    def tag(self, padapatha: str, constrained: bool = True) -> str:
+        """Tag line for a padapāṭha. Constrained: per piece, the best-scoring verified candidate.
+
+        A piece with no verified candidate (and every compound member, which has no
+        word-level derivation) is decoded freely and stays unverified downstream.
+        ``constrained=False`` is the plain greedy ``<dtag>`` decode.
+        """
+        prompt = f"<dtag>{padapatha}"
+        if not constrained:
+            return self._greedy(prompt)
+        pieces = [(p, i < len(parts) - 1) for w in padapatha.split()
+                  for parts in [[x for x in w.split("-") if x]] for i, p in enumerate(parts)]
+        chosen: list[str] = []
+        for n, (surface, is_member) in enumerate(pieces):
+            cands = () if is_member else candidates(surface)
+            if cands:
+                final = n == len(pieces) - 1
+                chosen.append(max(cands, key=lambda c: self.score(prompt, chosen, c, final)))
+            else:
+                chosen.append(self._greedy(prompt, chosen, one_word=True) or f"{surface}.")
+        return " ".join(chosen)
+
+    def propose(self, text_slp1: str, constrained: bool = False) -> list:
         """Sandhied SLP1 line -> one Hypothesis per padapāṭha piece, tagged in context."""
         padapatha = self._greedy(f"<dseg>{text_slp1.strip()}")
-        tags = self._greedy(f"<dtag>{padapatha}") if padapatha else ""
+        tags = self.tag(padapatha, constrained) if padapatha else ""
         return align(padapatha, tags)
 
 

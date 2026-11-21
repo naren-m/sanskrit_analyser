@@ -82,22 +82,23 @@ def _engines(names: list[str]) -> dict[str, Engine]:
             for p in analyze_verse(text)["padas"]
         ]
 
-    def reader_with(proposer: str):
+    def reader_with(proposer: str, constrained: bool = False):
         def reader(text: str) -> list[Token]:
-            return _reader_tokens(text, proposer)
+            return _reader_tokens(text, proposer, constrained)
         return reader
 
-    def _reader_tokens(text: str, proposer: str) -> list[Token]:
+    def _reader_tokens(text: str, proposer: str, constrained: bool) -> list[Token]:
         from sanskrit_analyzer.reader.read import read_words
 
         out: list[Token] = []
-        for w in read_words(text, proposer)[0]:
+        for w in read_words(text, proposer, constrained)[0]:
             for m in w.get("compound_members") or [w]:
                 out.append((m["surface"], m["lemma"], m["verified"]))
         return out
 
     table = {"dp": deep(False), "byt5": deep(True), "prakriya": prakriya,
              "reader": reader_with("byt5"), "reader-slm": reader_with("slm"),
+             "reader-slm-constrained": reader_with("slm", constrained=True),
              "reader-best": reader_with("best")}
     return {n: table[n] for n in names}
 
@@ -261,13 +262,13 @@ def format_report(report: dict[str, Any]) -> str:
     lines = [
         f"split={report['split']} n={report['n']} seed={report['seed']} git={report['git']}",
         f"meter_acc={m['meter_acc']:.3f} (n={m['meter_n']})  meter_named={m['meter_named']:.3f}",
-        f"{'engine':12} {'seg_recall':>10} {'split':>6} {'verify':>7} {'lemma':>6} "
+        f"{'engine':22} {'seg_recall':>10} {'split':>6} {'verify':>7} {'lemma':>6} "
         f"{'cover':>6} {'agree':>6} {'s/verse':>8}",
     ]
     na = lambda v, ok: f"{v:.3f}" if ok else "n/a"  # noqa: E731
     gold = report.get("has_gold", True)
     for name, e in report["engines"].items():
-        lines.append(f"{name:12} {na(e['seg_recall'], gold):>10} {na(e['split_ratio'], gold):>6} "
+        lines.append(f"{name:22} {na(e['seg_recall'], gold):>10} {na(e['split_ratio'], gold):>6} "
                      f"{e['verify']:>7.3f} {na(e['lemma_acc'], e['lemma_n'] > 0):>6} "
                      f"{e['coverage']:>6.3f} {e['agree']:>6.3f} {e['sec_per_verse']:>8.2f}")
     lines.append(f"agree = token F1 against '{report.get('agree_with')}'. "
@@ -282,8 +283,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ramayanam", type=Path, required=True, help="ramayanam checkout")
     ap.add_argument("--split", choices=("dev", "heldout"), default="dev")
     ap.add_argument("--n", type=int, default=100)
-    ap.add_argument("--engines", default="dp,prakriya", help="dp,byt5,prakriya,reader,reader-slm,reader-best "
-                    "(reader-slm/-best need SANSKRIT_SLM_CKPT)")
+    ap.add_argument("--engines", default="dp,prakriya", help="dp,byt5,prakriya,reader,reader-slm,reader-slm-constrained,reader-best "
+                    "(reader-slm*/-best need SANSKRIT_SLM_CKPT)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--corpus", choices=("ramayana", "gita", "plain"), default="ramayana",
                     help="gita: ramayanam's gita pack (gold = gita/gita word keys). "

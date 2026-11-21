@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 
 from sanskrit_analyzer.reader.read import coverage
-from sanskrit_analyzer.reader.slm import CharTokenizer, align, code_to_morph
+from sanskrit_analyzer.reader.derive import verify_word
+from sanskrit_analyzer.reader.slm import (
+    CharTokenizer, SLMProposer, align, analysis_to_code, candidates, code_to_morph)
 from sanskrit_analyzer.reader.tags import Morph
 
 
@@ -88,3 +90,89 @@ def test_coverage_penalises_drops_and_duplicates(surfaces, better_than) -> None:
 
     text = "".join(surfaces)
     assert coverage(text, words(surfaces)) > coverage(text, words(better_than))
+
+
+@pytest.mark.parametrize(
+    ("kind", "morph", "code"),
+    [
+        ("Subanta", "avyaya", "u"),
+        ("Subanta", "puM praTamA eka", "n1ms"),
+        ("Subanta", "napuMsaka saptamI eka", "n7ns"),
+        ("Subanta", "strI samboDanam bahu", "n8fp"),
+        ("Tinanta", "la~w kartari praTama eka", "v3srI"),
+        ("Tinanta", "li~w kartari uttama bahu", "v1pa"),
+        ("Tinanta", "la~w karmaRi praTama dvi", "v3drIP"),
+        ("Tinanta", "lo~w kartari maDyama bahu", "v2prM"),
+        ("Tinanta", "lu~N kartari praTama eka", "v3sJ"),
+        ("Tinanta", "la~w BAve praTama eka", None),
+        ("Tinanta", "gibberish", None),
+    ],
+)
+def test_analysis_to_code(kind: str, morph: str, code: str | None) -> None:
+    assert analysis_to_code(kind, morph) == code
+
+
+@pytest.mark.parametrize("surface", ["rAmaH", "gacCati", "uvAca", "aTa"])
+def test_candidates_round_trip_through_verify(surface: str) -> None:
+    cands = candidates(surface)
+    assert cands
+    for cand in cands:
+        lemma, _, code = cand.rpartition(".")
+        assert verify_word(surface, lemma, code_to_morph(code)).verified, cand
+
+
+class _FakeScorer(SLMProposer):
+    """An SLMProposer with no model: a table scorer and canned free decodes."""
+
+    def __init__(self, scores: dict[str, float]):
+        self.scores, self.calls = scores, []
+
+    def score(self, prompt, chosen, candidate, final=False):
+        self.calls.append((list(chosen), candidate))
+        return self.scores.get(candidate, 0.0)
+
+    def _greedy(self, prompt, chosen=None, one_word=False):
+        return "FREE.zz" if one_word else "greedy.line"
+
+
+@pytest.mark.parametrize(
+    ("padapatha", "scores", "want"),
+    [
+        # the higher-scoring verified candidate wins, whatever the free decode says
+        ("rAmaH gacCati", {"rAma.n1ms": 2.0, "ram.n1mp": 1.0, "gam.n7ns": 3.0, "gam.n7ms": 1.5},
+         "rAma.n1ms gam.n7ns"),
+        ("rAmaH gacCati", {"ram.n6fs": 5.0, "gam.v3srI": 1.0}, "ram.n6fs gam.v3srI"),
+        # no verified candidate: free decode for that word only, the rest stay constrained
+        ("rAmaH zzzq aTa", {"rAma.n1ms": 1.0}, "rAma.n1ms FREE.zz aTa.u"),
+        # a compound member has no word-level derivation: decoded freely
+        ("rAma-gacCati", {"gam.n7ns": 9.0}, "FREE.zz gam.n7ns"),
+    ],
+)
+def test_constrained_tag_picks_best_verified_candidate(padapatha, scores, want) -> None:
+    fake = _FakeScorer(scores)
+    got = fake.tag(padapatha, constrained=True)
+    assert got == want
+    for surface, tag in zip(padapatha.replace("-", " ").split(), got.split()):
+        lemma, _, code = tag.rpartition(".")
+        if lemma != "FREE":
+            assert verify_word(surface, lemma, code_to_morph(code)).verified, tag
+    # the scorer sees the tags already chosen for earlier words
+    assert all(chosen == got.split()[:len(chosen)] for chosen, _ in fake.calls)
+
+
+def test_unconstrained_tag_is_the_free_greedy_decode() -> None:
+    fake = _FakeScorer({"rAma.n1ms": 9.0})
+    assert fake.tag("rAmaH gacCati", constrained=False) == "greedy.line"
+    assert fake.calls == []
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not os.environ.get("SANSKRIT_SLM_CKPT"), reason="SANSKRIT_SLM_CKPT not set")
+def test_real_model_constrained_tags_are_verified() -> None:
+    from sanskrit_analyzer.reader.slm import get_proposer
+
+    tags = get_proposer().tag("rAmaH vanam gacCati", constrained=True).split()
+    assert len(tags) == 3
+    for surface, tag in zip(["rAmaH", "vanam", "gacCati"], tags):
+        lemma, _, code = tag.rpartition(".")
+        assert verify_word(surface, lemma, code_to_morph(code)).verified

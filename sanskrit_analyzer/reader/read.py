@@ -144,20 +144,19 @@ def _repair(hyps: list[Hypothesis]) -> list[Hypothesis]:
 PROPOSERS = ("byt5", "slm", "best")
 
 
-def _slm_hypotheses(text_slp1: str) -> list[Hypothesis] | None:
+def _slm_hypotheses(text_slp1: str, constrained: bool = False) -> list[Hypothesis] | None:
     from sanskrit_analyzer.reader.slm import get_proposer
 
     proposer = get_proposer()
-    return proposer.propose(text_slp1) or None if proposer is not None else None
+    return proposer.propose(text_slp1, constrained) or None if proposer is not None else None
 
 
-def _propose(text: str, proposer: str) -> tuple[list[Hypothesis], str]:
+def _propose(text: str, proposer: str, constrained: bool = False) -> tuple[list[Hypothesis], str]:
     """Hypotheses from the named proposer, falling back to the DP segmenter."""
     n = normalize(text)
-    fn = _slm_hypotheses if proposer == "slm" else _byt5_hypotheses
     hyps = None
     try:
-        hyps = fn(n.slp1)
+        hyps = _slm_hypotheses(n.slp1, constrained) if proposer == "slm" else _byt5_hypotheses(n.slp1)
     except Exception as exc:
         logger.warning("%s proposer failed: %s", proposer, exc)
     if not hyps:
@@ -222,18 +221,22 @@ def coverage(text_slp1: str, words: list[dict[str, Any]]) -> float:
     return difflib.SequenceMatcher(None, key(text_slp1), key(flat), autojunk=False).ratio()
 
 
-def read_words(text: str, proposer: str = "byt5") -> tuple[list[dict[str, Any]], str]:
+def read_words(text: str, proposer: str = "byt5",
+               constrained: bool = False) -> tuple[list[dict[str, Any]], str]:
     """Segment and verify. Returns (words, segmenter label).
 
     proposer: "byt5" (default), "slm" (the DCS-trained char model, reader.slm),
     or "best": run both and keep the one with the higher verified share plus
     coverage (ties go to ByT5). Coverage catches dropped and doubled words,
     which verification cannot see. Pāṇini disposes either way.
+
+    constrained: with proposer "slm", pick each tag among the analyses vidyut
+    verifies (SLMProposer.tag) instead of decoding it freely.
     """
     if proposer not in PROPOSERS:
         raise ValueError(f"proposer must be one of {PROPOSERS}")
     if proposer != "best":
-        hyps, label = _propose(text, proposer)
+        hyps, label = _propose(text, proposer, constrained)
         return _assemble(hyps), label
     slp1 = normalize(text).slp1
     candidates = []
