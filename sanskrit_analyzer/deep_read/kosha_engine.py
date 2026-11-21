@@ -32,6 +32,7 @@ from typing import Any
 # ``sanskrit_analyzer.vidyut_data`` / ``utils.desandhi``. The redundant
 # ``x as x`` aliases mark the ones this module does not itself call as
 # deliberate re-exports: downstream callers (ramayanam) import them from here.
+from sanskrit_analyzer.deep_read.closed_class import PARTICLES, PROPER_NOUNS
 from sanskrit_analyzer.dhatu.resolver import DhatuResolver
 from sanskrit_analyzer.utils.desandhi import desandhi_candidates
 from sanskrit_analyzer.utils.desandhi import visarga_candidates as visarga_candidates
@@ -182,6 +183,7 @@ class Analysis:
     upasargas: list[str] = field(default_factory=list)  # canonical SLP1 prefixes peeled
     # Curated gloss of the peeled prefixes; the root gloss is in dhatu.english.
     upasarga_gloss: str | None = None
+    primary: bool | None = None  # set by analyze_word; True on the lead reading
 
     def to_dict(self) -> dict[str, Any]:
         d = {
@@ -190,6 +192,8 @@ class Analysis:
             "dhatu": self.dhatu.to_dict() if self.dhatu else None,
             "morphology": self.morphology,
         }
+        if self.primary is not None:
+            d["primary"] = self.primary
         if self.krt:
             d["krt"] = self.krt
         if self.upasargas:
@@ -451,6 +455,34 @@ def _analysis_key(a: Analysis) -> tuple:
             tuple(sorted(a.morphology.items())))
 
 
+def _gate_and_rank(analyses: list[Analysis], slp: str,
+                   candidates: list[str]) -> list[Analysis]:
+    """Drop spurious readings of closed-class words and names, then order.
+
+    Particles keep only their indeclinable reading; epic proper nouns lose
+    their verb readings and lead with the nominal. Everything else keeps the
+    ``_KIND_ORDER`` sort.
+    """
+    if slp in PARTICLES:
+        kept = [a for a in analyses if a.kind == "indeclinable"]
+        return kept or [Analysis(kind="indeclinable", lemma=slp)]
+    name = next((a.lemma for a in analyses if a.lemma in PROPER_NOUNS), None) \
+        or next((c for c in candidates if c in PROPER_NOUNS), None)
+    if name is None:
+        return sorted(analyses, key=lambda a: _KIND_ORDER.get(a.kind, 99))
+    kept = [a for a in analyses if a.kind != "verb"]
+    if not any(a.kind == "nominal" for a in kept):
+        kept.append(Analysis(kind="nominal", lemma=name))
+    return sorted(kept, key=lambda a: -1 if a.kind == "nominal" else _KIND_ORDER.get(a.kind, 99))
+
+
+def _mark_primary(analyses: list[Analysis]) -> list[dict[str, Any]]:
+    """Serialize, flagging the first (lead) reading as primary."""
+    for i, a in enumerate(analyses):
+        a.primary = i == 0
+    return [a.to_dict() for a in analyses]
+
+
 def analyze_word(devanagari: str) -> dict[str, Any]:
     """Analyze a single Devanagari pada -> {surface, slp1, resolved, analyses}.
 
@@ -466,15 +498,17 @@ def analyze_word(devanagari: str) -> dict[str, Any]:
             "surface": surface,
             "slp1": None,
             "resolved": False,
-            "analyses": [Analysis(kind="unknown").to_dict()],
+            "analyses": _mark_primary([Analysis(kind="unknown")]),
             "error": f"transliteration failed: {exc}",
         }
 
     analyses: list[Analysis] = []
     seen: set[tuple] = set()
+    candidates: list[str] = []
     try:
+        candidates = desandhi_candidates(slp)
         kosha = _kosha()
-        for cand in desandhi_candidates(slp):
+        for cand in candidates:
             for entry in kosha.get(cand):
                 a = _classify(entry)
                 key = _analysis_key(a)
@@ -483,7 +517,7 @@ def analyze_word(devanagari: str) -> dict[str, Any]:
                 seen.add(key)
                 analyses.append(a)
         if not analyses:  # only for words the kosha misses, so hits never change
-            for a in _irregular_analyses(desandhi_candidates(slp)):
+            for a in _irregular_analyses(candidates):
                 key = _analysis_key(a)
                 if key not in seen:
                     seen.add(key)
@@ -498,20 +532,20 @@ def analyze_word(devanagari: str) -> dict[str, Any]:
             "surface": surface,
             "slp1": slp,
             "resolved": False,
-            "analyses": [Analysis(kind="unknown").to_dict()],
+            "analyses": _mark_primary([Analysis(kind="unknown")]),
             "error": str(exc),
         }
 
     resolved = bool(analyses)
     if not resolved:
         analyses = [Analysis(kind="unknown")]
-    # Stable sort: lead with the most salient reading (finite verb first).
-    analyses.sort(key=lambda a: _KIND_ORDER.get(a.kind, 99))
+    # Lead with the most salient reading (finite verb first) unless gated.
+    analyses = _gate_and_rank(analyses, slp, candidates)
     out = {
         "surface": surface,
         "slp1": slp,
         "resolved": resolved,
-        "analyses": [a.to_dict() for a in analyses],
+        "analyses": _mark_primary(analyses),
     }
     if not resolved:
         out["reason"] = _unresolved_reason(slp)

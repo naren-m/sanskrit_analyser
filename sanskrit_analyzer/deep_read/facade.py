@@ -159,7 +159,8 @@ class DeepRead:
                         "slp1": None,
                         "resolved": False,
                         "analyses": [{"kind": "unknown", "lemma": None,
-                                      "dhatu": None, "morphology": {}}],
+                                      "dhatu": None, "morphology": {},
+                                      "primary": True}],
                     }
                     for piece in pieces
                 ],
@@ -217,7 +218,8 @@ class DeepRead:
                     "slp1": None,
                     "resolved": False,
                     "analyses": [{"kind": "unknown", "lemma": None,
-                                  "dhatu": None, "morphology": {}}],
+                                  "dhatu": None, "morphology": {},
+                                      "primary": True}],
                 }
             # Re-rank so homographs (रामः → noun राम, not the short-root verb √rā)
             # surface the plausible reading first; use the ByT5 POS when present.
@@ -227,6 +229,10 @@ class DeepRead:
             # facade and DhatuIdentifier().identify() agree on root ownership
             # (yogaḥ → yuj, not the Kośa's raw "yoji"). No-op offline.
             resolve_roots(tok["analyses"], tok.get("slp1"))
+            # rank_analyses and resolve_roots can reorder/insert at [0], so
+            # mark last: ``primary`` must track [0].
+            for i, a in enumerate(tok["analyses"]):
+                a["primary"] = i == 0
             tokens.append(tok)
 
         try:
@@ -467,6 +473,7 @@ def _token_from_base_word(base_word: Any) -> dict[str, Any]:
         "lemma": lemma,
         "dhatu": dhatu_block,
         "morphology": _morphology_dict(base_word),
+        "primary": True,
     }
     slp1 = _slp1_of(base_word)
     # The /deep-read page renders ``surface`` in a Devanagari span; surface_form
