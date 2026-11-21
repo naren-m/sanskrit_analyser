@@ -34,9 +34,10 @@ from typing import Any
 # deliberate re-exports: downstream callers (ramayanam) import them from here.
 from sanskrit_analyzer.deep_read.closed_class import PARTICLES, PROPER_NOUNS
 from sanskrit_analyzer.dhatu.resolver import DhatuResolver
+from sanskrit_analyzer.models.scripts import Script
 from sanskrit_analyzer.utils.desandhi import desandhi_candidates
 from sanskrit_analyzer.utils.desandhi import visarga_candidates as visarga_candidates
-from sanskrit_analyzer.utils.normalize import clean_devanagari
+from sanskrit_analyzer.utils.normalize import clean_devanagari, detect_script
 from sanskrit_analyzer.vidyut_data import VidyutUnavailable
 from sanskrit_analyzer.vidyut_data import is_available as is_available
 from sanskrit_analyzer.vidyut_data import kosha as _kosha
@@ -209,15 +210,32 @@ class Analysis:
 # Pure helpers (no vidyut needed) -- the easily-testable core.
 # ---------------------------------------------------------------------------
 
+def as_devanagari(text: str) -> str:
+    """Return ``text`` in Devanagari, transliterating IAST or SLP1 input.
+
+    Everything after the tokenizer (kosha lookup, segmenter, the ``slp``
+    default) reads Devanagari, so IAST/SLP1 lines used to come back with no
+    tokens at all. Devanagari (or mixed) text is returned unchanged.
+    """
+    if not text.strip():
+        return text
+    script = detect_script(text)
+    if script == Script.DEVANAGARI:
+        return text
+    from sanskrit_analyzer.utils.transliterate import transliterate
+
+    return transliterate(text, script, Script.DEVANAGARI)
+
+
 def tokenize(text: str) -> list[str]:
     """Split a Sanskrit line into pada tokens on whitespace/danda/punctuation.
 
-    We do NOT attempt sandhi-aware compound splitting here: ``vidyut.cheda`` is
-    unavailable in this environment, so each whitespace-delimited unit is one
-    token. Tokens are trimmed to their Devanagari run.
+    Accepts Devanagari, IAST or SLP1 (see :func:`as_devanagari`); tokens are
+    always Devanagari. We do NOT attempt sandhi-aware compound splitting here:
+    each whitespace-delimited unit is one token, trimmed to its Devanagari run.
     """
     tokens: list[str] = []
-    for raw in _TOKEN_SPLIT_RE.split(clean_devanagari(text or "")):
+    for raw in _TOKEN_SPLIT_RE.split(clean_devanagari(as_devanagari(text or ""))):
         raw = raw.strip()
         if not raw or not _HAS_DEVA_LETTER_RE.search(raw):
             continue  # skip pure digits / punctuation / verse-ref markers

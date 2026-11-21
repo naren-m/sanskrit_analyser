@@ -106,7 +106,7 @@ class DeepRead:
 
     def analyze_via_segmenter(self, text: str) -> DeepReadResult | None:
         """Local DP segmentation + kosha enrichment, or ``None``."""
-        d = self._analyze_via_segmenter(text)
+        d = self._analyze_via_segmenter(engine.as_devanagari(text or ""))
         return DeepReadResult.from_legacy(d) if d is not None else None
 
     # Deprecated: the remote Dharmamitra API is gone; kept for back-compat.
@@ -114,7 +114,7 @@ class DeepRead:
 
     def analyze_via_analyzer(self, text: str) -> DeepReadResult | None:
         """Upstream :class:`Analyzer` segmentation path, or ``None``."""
-        d = self._analyze_via_analyzer(text)
+        d = self._analyze_via_analyzer(engine.as_devanagari(text or ""))
         return DeepReadResult.from_legacy(d) if d is not None else None
 
     # ------------------------------------------------------- dict-shaped core
@@ -125,8 +125,21 @@ class DeepRead:
         use_segmenter: bool = True,
         use_byt5: bool = True,
     ) -> dict[str, Any]:
-        text = (text or "").strip()
+        original = (text or "").strip()
+        # Every path below reads Devanagari; report the caller's own input.
+        result = self._analyze_devanagari(
+            engine.as_devanagari(original), prefer_analyzer, use_segmenter, use_byt5
+        )
+        result["input"] = original
+        return result
 
+    def _analyze_devanagari(
+        self,
+        text: str,
+        prefer_analyzer: bool,
+        use_segmenter: bool,
+        use_byt5: bool,
+    ) -> dict[str, Any]:
         if prefer_analyzer:
             via_analyzer = self._analyze_via_analyzer(text)
             if via_analyzer is not None and via_analyzer.get("tokens"):

@@ -63,9 +63,20 @@ def test_running_text_verse_keeps_padas_whole():
     assert by_surface["इक्ष्वाकुवंशप्रभवो"]["resolved"] is False
 
 
+# One line in each input script DeepRead accepts; all must read the same.
+VERB_LINE_CASES = {
+    "devanagari": "स गच्छति वनम्",
+    "iast": "sa gacchati vanam",
+    "slp1": "sa gacCati vanam",
+}
+
+
 @requires_vidyut
-def test_verb_shows_dhatu():
-    out = DeepRead().analyze("स गच्छति वनम्", use_dharmamitra=False).to_dict()
+@pytest.mark.parametrize("case", VERB_LINE_CASES, ids=list(VERB_LINE_CASES))
+def test_verb_shows_dhatu(case):
+    text = VERB_LINE_CASES[case]
+    out = DeepRead().analyze(text, use_dharmamitra=False).to_dict()
+    assert out["input"] == text
     roots = {
         a["dhatu"]["root"]
         for t in out["tokens"]
