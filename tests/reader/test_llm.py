@@ -79,3 +79,41 @@ def test_interpret_reports_a_dead_llm() -> None:
 def test_prompt_lists_grammar_not_raw_verse_only() -> None:
     prompt = build_prompt(RECORD)
     assert "2. gacchati | lemma gam | finite verb, present, 3rd person, singular" in prompt
+
+
+# --- translation-only mode ----------------------------------------------------
+
+from sanskrit_analyzer.reader.llm import build_translate_prompt, translate  # noqa: E402
+
+
+def test_translate_prompt_carries_verified_grammar() -> None:
+    prompt = build_translate_prompt(RECORD)
+    assert "rāmaḥ vanam gacchati" in prompt
+    assert "gacchati (gam: finite verb, present, 3rd person, singular)" in prompt
+
+
+@pytest.mark.parametrize(
+    ("answers", "want_text", "want_attempts"),
+    [
+        ([{"translation": "Rama goes to the forest."}], "Rama goes to the forest.", 1),
+        ([{"translation": ""}, {"translation": "Rama goes."}], "Rama goes.", 2),   # one retry
+        ([{}, {}], None, 2),                                                      # gives up
+    ],
+)
+def test_translate(answers, want_text, want_attempts) -> None:
+    calls = []
+
+    def chat(messages, model):
+        calls.append(messages)
+        return answers[len(calls) - 1]
+
+    out = translate(RECORD, model="fake", chat=chat)
+    assert out.get("translation") == want_text and out["attempts"] == want_attempts
+    assert out["source"] == "llm" and ("error" in out) is (want_text is None)
+
+
+def test_translate_reports_a_dead_llm() -> None:
+    def chat(messages, model):
+        raise ConnectionError("refused")
+
+    assert "LLM call failed" in translate(RECORD, model="fake", chat=chat)["error"]
