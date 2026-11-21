@@ -78,7 +78,8 @@ def test_body_cleaning_strips_accents_and_ids(mw_db):
 
 
 def test_mw_entries_never_carry_promoted_columns_in_fields(mw_db):
-    entries = [e for w in ("rAma", "agni", "saNga", "rAjan") for e in lexicon.lookup(w, sources=["mw"])]
+    words = ("rAma", "agni", "saNga", "rAjan")
+    entries = [e for w in words for e in lexicon.lookup(w, sources=["mw"])]
     assert entries
     assert all(not (lexicon._PROMOTED & e.fields.keys()) for e in entries)
 
