@@ -184,6 +184,7 @@ class Analysis:
     # Curated gloss of the peeled prefixes; the root gloss is in dhatu.english.
     upasarga_gloss: str | None = None
     primary: bool | None = None  # set by analyze_word; True on the lead reading
+    variant: str | None = None  # non-standard form note, e.g. epic non-samprasaraNa
 
     def to_dict(self) -> dict[str, Any]:
         d = {
@@ -194,6 +195,8 @@ class Analysis:
         }
         if self.primary is not None:
             d["primary"] = self.primary
+        if self.variant:
+            d["variant"] = self.variant
         if self.krt:
             d["krt"] = self.krt
         if self.upasargas:
@@ -455,10 +458,28 @@ def _analysis_key(a: Analysis) -> tuple:
             tuple(sorted(a.morphology.items())))
 
 
-# Surface forms whose kosha readings lack the dictionary stem: the bare stem
-# maha/mahA is the first member of compounds and the standalone adjective
-# 'great' (lemma mahat), but the kosha only offers root mahi/mah readings.
-_STEM_LEMMAS = {"maha": "mahat", "mahA": "mahat"}
+# Surface forms whose kosha readings lack, or do not lead with, the dictionary
+# stem: the bare stem maha/mahA is the first member of compounds and the
+# standalone adjective 'great' (lemma mahat), but the kosha only offers root
+# mahi/mah readings; paTi is the locative of paTin, not of the derived paT.
+_STEM_LEMMAS = {"maha": "mahat", "mahA": "mahat", "paTi": "paTin"}
+
+# Epic (non-samprasaraNa) presents of pracC: surface -> its standard form,
+# whose kosha reading supplies the root and morphology.
+_EPIC_PRESENTS = {"pracCati": "pfcCati"}
+
+
+def _epic_analyses(kosha: Any, slp: str) -> list[Analysis]:
+    standard = _EPIC_PRESENTS.get(slp)
+    if standard is None:
+        return []
+    found = []
+    for entry in kosha.get(standard):
+        a = _classify(entry)
+        if a.kind == "verb" and a.dhatu is not None:
+            a.variant = f"non-samprasAraNa form of {standard}"
+            found.append(a)
+    return found
 
 
 def _rank(analyses: list[Analysis]) -> list[Analysis]:
@@ -547,6 +568,8 @@ def analyze_word(devanagari: str) -> dict[str, Any]:
                 if key not in seen:
                     seen.add(key)
                     analyses.append(a)
+        if not analyses:
+            analyses = _epic_analyses(kosha, slp)
         if not analyses:
             analyses = _peel_upasargas(kosha, slp)
     except VidyutUnavailable:
