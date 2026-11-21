@@ -11,7 +11,10 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_all_five_sources_present():
+def test_all_five_sources_present(monkeypatch):
+    # A local MW/AP90 sqlite db must not change the TSV-backed list.
+    monkeypatch.setattr(lexicon, "resolve_mw_db", lambda: None)
+    monkeypatch.setattr(lexicon, "resolve_ap90_db", lambda: None)
     assert lexicon.available_sources() == [
         "abhidhanacintamani",
         "abhidhanaratnamala",
