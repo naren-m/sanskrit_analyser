@@ -1,6 +1,12 @@
 """Minimal vowel sandhi for re-joining split words (6.1.77, 6.1.87-88, 6.1.101)."""
 from __future__ import annotations
 
+import csv
+import re
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+
 # Vowel sandhi at a compound-member boundary: (last of left, first of right) -> joined.
 _SAVARNA = {"a": "A", "i": "I", "u": "U", "f": "F"}
 _SHORT = {"A": "a", "I": "i", "U": "u", "F": "f"}
@@ -25,12 +31,6 @@ def vowel_join(left: str, right: str) -> str:
 
 
 # --- Rule-table re-join and split validation (issue #75, phase A) -----------------
-import csv
-import re
-from dataclasses import dataclass
-from functools import lru_cache
-from pathlib import Path
-
 _DATA = Path(__file__).resolve().parent.parent / "data"
 _RULE_FILES = ("sandhi-rules-full.csv", "sandhi-rules-extra.csv")
 MAX_SURFACES = 512  # cap on partial joins kept per junction, so output cannot explode
@@ -140,5 +140,5 @@ def split_is_licensed(text_slp1: str, padas: list[str]) -> Licence:
     for r in joins:
         if _fold(r.surface) == target:
             return Licence(True, r, tuple(j for j in r.junctions if j.rule is None))
-    first = joins[0] if joins else None
-    return Licence(False, None, tuple(j for j in first.junctions if j.rule is None) if first else ())
+    unruled = tuple(j for j in joins[0].junctions if j.rule is None) if joins else ()
+    return Licence(False, None, unruled)

@@ -250,7 +250,8 @@ def split_record(text_slp1: str, words: list[dict[str, Any]]) -> dict[str, Any]:
     """Do Pāṇini's rules re-join the chosen words into the input? Measures only."""
     padas = [m["surface"] for w in words for m in (w.get("compound_members") or [w])]
     lic = split_is_licensed(text_slp1, padas)
-    sutras = sorted({j.sutra.split()[0] for j in lic.rejoin.junctions if j.sutra}) if lic.rejoin else []
+    js = lic.rejoin.junctions if lic.rejoin else ()
+    sutras = sorted({j.sutra.split()[0] for j in js if j.sutra})
     return {"licensed": lic.ok, "unruled_junctions": len(lic.unruled), "sutras": sutras}
 
 

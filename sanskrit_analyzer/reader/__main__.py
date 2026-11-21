@@ -19,8 +19,10 @@ def render(record: dict, show_trace: bool = False) -> str:
     out.append(f"words: {s['words']}, verified: {s['verified']} {s['by_source']}")
     sp = record.get("split")
     if sp:
-        out.append(f"split: {'licensed' if sp['licensed'] else 'NOT licensed'} by sandhi rules, "
-                   f"{sp['unruled_junctions']} unruled junctions, sūtras {', '.join(sp['sutras']) or '-'}\n")
+        verdict = "licensed" if sp["licensed"] else "NOT licensed"
+        sutras = ", ".join(sp["sutras"]) or "-"
+        out.append(f"split: {verdict} by sandhi rules, "
+                   f"{sp['unruled_junctions']} unruled junctions, sūtras {sutras}\n")
     else:
         out.append("")
     interp = record.get("interpretation") or {}
