@@ -85,6 +85,21 @@ _SQLITE_META = {
     "ap90": ("ap90", AP90_ACKNOWLEDGEMENT, AP90_LICENCE),
 }
 
+# Literal SQL per source. Table names cannot be bound as parameters, so each
+# query is spelled out rather than formatted from _SQLITE_META.
+_SQLITE_LOOKUP_SQL = {
+    "mw": "SELECT key, key_stem, lnum, page, text, hom FROM mw "
+    "WHERE key = ? ORDER BY rowid",
+    "ap90": "SELECT key, key_stem, lnum, page, text, hom FROM ap90 "
+    "WHERE key = ? ORDER BY rowid",
+}
+_SQLITE_PREFIX_SQL = {
+    "mw": "SELECT DISTINCT key FROM mw WHERE key >= ? AND key < ? "
+    "ORDER BY key LIMIT ?",
+    "ap90": "SELECT DISTINCT key FROM ap90 WHERE key >= ? AND key < ? "
+    "ORDER BY key LIMIT ?",
+}
+
 
 # Columns that become Entry attributes rather than staying in ``fields``.
 _PROMOTED = {"key", "page", "lnum"}
@@ -234,13 +249,9 @@ def _sqlite_lookup(source: str, key: str) -> list[Entry]:
     con = _sqlite_connect(source)
     if con is None:
         return []
-    table, acknowledgement, licence = _SQLITE_META[source]
+    _, acknowledgement, licence = _SQLITE_META[source]
     try:
-        rows = con.execute(
-            f"SELECT key, key_stem, lnum, page, text, hom FROM {table} "
-            "WHERE key = ? ORDER BY rowid",
-            (key,),
-        ).fetchall()
+        rows = con.execute(_SQLITE_LOOKUP_SQL[source], (key,)).fetchall()
     finally:
         con.close()
     spec = _SOURCES[source]
@@ -266,11 +277,9 @@ def _sqlite_prefix(source: str, partial: str, limit: int) -> list[str]:
     con = _sqlite_connect(source)
     if con is None:
         return []
-    table = _SQLITE_META[source][0]
     try:
         rows = con.execute(
-            f"SELECT DISTINCT key FROM {table} WHERE key >= ? AND key < ? "
-            "ORDER BY key LIMIT ?",
+            _SQLITE_PREFIX_SQL[source],
             (partial, partial + "\U0010ffff", limit),
         ).fetchall()
     finally:
