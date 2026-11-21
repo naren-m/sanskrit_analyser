@@ -48,6 +48,24 @@
       "form": "श्वानम्",
       "kind": "nominal",
       "lemma": "Svan"
+    },
+    {
+      "form": "पथि",
+      "kind": "nominal",
+      "lemma": "paTin",
+      "primary": true
+    },
+    {
+      "form": "प्रच्छति",
+      "kind": "verb",
+      "root": "pracC",
+      "lakara": "la~w"
+    },
+    {
+      "form": "परिपप्रच्छ",
+      "kind": "verb",
+      "root": "pracC",
+      "lakara": "li~w"
     }
   ],
   "unresolved": [

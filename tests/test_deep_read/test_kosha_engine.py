@@ -1,5 +1,8 @@
 """Candidate-analysis gating for the kosha engine (particles, proper nouns)."""
 
+import json
+from pathlib import Path
+
 import pytest
 
 from sanskrit_analyzer.deep_read import kosha_engine as engine
@@ -100,3 +103,32 @@ def test_finite_verb_still_leads_for_ordinary_word():
     res = engine.analyze_word("गच्छति")
     assert res["analyses"][0]["kind"] == "verb"
     assert [a["primary"] for a in res["analyses"]][:1] == [True]
+
+
+_SURFACE_FORMS = json.loads((Path(__file__).parent / "surface_forms.json").read_text("utf-8"))
+
+
+@requires_vidyut
+@pytest.mark.parametrize("row", _SURFACE_FORMS["resolves"], ids=lambda r: r["form"])
+def test_surface_form_resolves(row):
+    analyses = engine.analyze_word(row["form"])["analyses"]
+    # rows marked "primary" must be the lead reading; others may be any reading
+    pool = analyses[:1] if row.get("primary") else analyses
+    assert any(
+        a["kind"] == row["kind"]
+        and a["lemma"] == row.get("lemma", a["lemma"])
+        and (a["dhatu"] or {}).get("root") == row.get("root", (a["dhatu"] or {}).get("root"))
+        and a["morphology"].get("lakara") == row.get("lakara", a["morphology"].get("lakara"))
+        for a in pool)
+
+
+@requires_vidyut
+@pytest.mark.parametrize("form", _SURFACE_FORMS["unresolved"])
+def test_surface_form_stays_unresolved(form):
+    assert engine.analyze_word(form)["resolved"] is False
+
+
+@requires_vidyut
+def test_epic_present_is_marked_variant():
+    lead = engine.analyze_word("प्रच्छति")["analyses"][0]
+    assert "pfcCati" in lead["variant"]
