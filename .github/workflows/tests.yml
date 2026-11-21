@@ -1,0 +1,34 @@
+# Runs the offline test suite. Test-only: no deploy, registry or secrets
+# (homelab rule: app repo CI is for tests only).
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Install
+        run: uv sync --frozen --all-extras
+      # vidyut's kosha/sandhi/prakriya data (~77 MB). Without it the
+      # requires_vidyut tests skip instead of running.
+      - name: Cache vidyut data
+        uses: actions/cache@v4
+        with:
+          path: ~/.vidyut-data
+          key: vidyut-data-${{ hashFiles('uv.lock') }}
+      - name: Fetch vidyut data
+        run: test -d ~/.vidyut-data/kosha || uv run --frozen python -c "import vidyut, pathlib; vidyut.download_data(str(pathlib.Path.home() / '.vidyut-data'))"
+      - name: Test
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          OTEL_SDK_DISABLED: "true"
+        run: uv run --frozen pytest -q -m "not slow" -rs
