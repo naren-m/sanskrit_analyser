@@ -86,7 +86,7 @@ not a scoreboard row: it has no gold padas, so `seg_recall` is `n/a`.
 
 The report prints `proposer[reader] = {...}`, the proposer label `read_words` returned
 for each verse. In the sandbox the non-slow test tier refuses model-weight loads, so
-the smoke test runs the `reader` on its DP fallback (`{'dp': 1}`), about 1.5 s/verse. On
+the smoke test runs the `reader` on its DP fallback (`{'dp': n}`), about 1.5 s/verse. On
 a machine with the ByT5 weights it prints `{'byt5': n}` (about 7 s/verse). Only the
 `byt5` run is a reader measurement.
 

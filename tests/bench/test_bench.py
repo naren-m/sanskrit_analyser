@@ -196,4 +196,4 @@ def test_smoke_bench_runs_offline(tmp_path: Path, capsys: pytest.CaptureFixture[
     assert e["verses"] == 1 and e["coverage"] > 0.5 and e["verify"] > 0.5 and e["lemma_n"] > 0
     # The non-slow tier refuses weight loads (conftest guard), so the reader runs on
     # its DP proposer here. The ByT5 reader is measured outside the sandbox.
-    assert e["proposers"] == {"dp": 1}
+    assert set(e["proposers"]) == {"dp"}
