@@ -98,7 +98,7 @@ def _engines(names: list[str]) -> dict[str, Engine]:
 
     table = {"dp": deep(False), "byt5": deep(True), "prakriya": prakriya,
              "reader": reader_with("byt5"), "reader-slm": reader_with("slm"),
-             "reader-best": reader_with("best")}
+             "reader-best": reader_with("best"), "reader-cascade": reader_with("cascade")}
     return {n: table[n] for n in names}
 
 
@@ -228,21 +228,44 @@ def _git_sha() -> str:
         return "unknown"
 
 
-def _rows(corpus: str, ramayanam: Path, split: str, n: int, seed: int, plain: Path | None):
+def _chapter_range(spec: str | None) -> tuple[int, int] | None:
+    if not spec:
+        return None
+    lo, _, hi = spec.partition("-")
+    return int(lo), int(hi or lo)
+
+
+def _rows(corpus: str, ramayanam: Path, split: str, n: int, seed: int, plain: Path | None,
+          gita_chapters: str | None = None):
     """(rows, label, has_gold). Gītā and plain corpora have no dev/heldout split:
-    the DCS-trained proposer saw neither, and nothing here was tuned on them."""
+    the DCS-trained proposer saw neither. --gita-chapters splits the Gītā for
+    tuning (e.g. 1-9) versus evaluation (10-18)."""
     if corpus == "gita":
-        return sample(load_gita(ramayanam), n, seed), "gita", True
+        rows = load_gita(ramayanam)
+        rng = _chapter_range(gita_chapters)
+        if rng:
+            rows = [r for r in rows if rng[0] <= int(r.ref.split()[1].split(".")[0]) <= rng[1]]
+        label = f"gita{':' + gita_chapters if gita_chapters else ''}"
+        return sample(rows, n, seed), label, True
     if corpus == "plain":
         return sample(load_plain(plain), n, seed), f"plain:{plain.name}", False
     return split_rows(load_rows(ramayanam), split, n, seed), split, True
 
 
 def run(ramayanam: Path, split: str, n: int, engines: list[str], seed: int,
-        corpus: str = "ramayana", plain: Path | None = None) -> dict[str, Any]:
-    rows, label, has_gold = _rows(corpus, ramayanam, split, n, seed, plain)
+        corpus: str = "ramayana", plain: Path | None = None,
+        gita_chapters: str | None = None) -> dict[str, Any]:
+    from sanskrit_analyzer.reader import read as reader_mod
+
+    rows, label, has_gold = _rows(corpus, ramayanam, split, n, seed, plain, gita_chapters)
     lemma_gold = _lemma_gold(ramayanam) if corpus == "ramayana" else []
-    scored = {name: score_engine(fn, rows, lemma_gold) for name, fn in _engines(engines).items()}
+    scored = {}
+    for name, fn in _engines(engines).items():
+        reader_mod.CASCADE_STATS.clear()
+        scored[name] = score_engine(fn, rows, lemma_gold)
+        stats = reader_mod.CASCADE_STATS
+        total = stats["slm"] + stats["fallback"]
+        scored[name]["fallback_rate"] = stats["fallback"] / total if total else None
     outputs = {name: e.pop("_outputs") for name, e in scored.items()}
     first = next(iter(outputs), None)
     for name, e in scored.items():   # agreement with the first engine listed
@@ -262,15 +285,17 @@ def format_report(report: dict[str, Any]) -> str:
         f"split={report['split']} n={report['n']} seed={report['seed']} git={report['git']}",
         f"meter_acc={m['meter_acc']:.3f} (n={m['meter_n']})  meter_named={m['meter_named']:.3f}",
         f"{'engine':12} {'seg_recall':>10} {'split':>6} {'verify':>7} {'lemma':>6} "
-        f"{'cover':>6} {'agree':>6} {'s/verse':>8}",
+        f"{'cover':>6} {'agree':>6} {'s/verse':>8} {'byt5%':>6}",
     ]
     na = lambda v, ok: f"{v:.3f}" if ok else "n/a"  # noqa: E731
     gold = report.get("has_gold", True)
     for name, e in report["engines"].items():
         lines.append(f"{name:12} {na(e['seg_recall'], gold):>10} {na(e['split_ratio'], gold):>6} "
                      f"{e['verify']:>7.3f} {na(e['lemma_acc'], e['lemma_n'] > 0):>6} "
-                     f"{e['coverage']:>6.3f} {e['agree']:>6.3f} {e['sec_per_verse']:>8.2f}")
-    lines.append(f"agree = token F1 against '{report.get('agree_with')}'. "
+                     f"{e['coverage']:>6.3f} {e['agree']:>6.3f} {e['sec_per_verse']:>8.2f} "
+                     f"{'' if e.get('fallback_rate') is None else format(e['fallback_rate'], '.0%'):>6}")
+    lines.append("byt5% = share of verses where the cascade called ByT5. "
+                 f"agree = token F1 against '{report.get('agree_with')}'. "
                  "cover = letter similarity of input and padas (~0.9 for a perfect split).")
     lines.append("not scored yet: " + ", ".join(report["pending_layers"]))
     return "\n".join(lines)
@@ -289,12 +314,14 @@ def main(argv: list[str] | None = None) -> int:
                     help="gita: ramayanam's gita pack (gold = gita/gita word keys). "
                          "plain: --plain JSON with no gold (label-free metrics only)")
     ap.add_argument("--plain", type=Path, help='JSON list with a "devanagari" field')
+    ap.add_argument("--gita-chapters", help="e.g. 1-9 (tune the cascade) or 10-18 (evaluate)")
     ap.add_argument("--out", type=Path)
     args = ap.parse_args(argv)
     if args.corpus == "plain" and not args.plain:
         ap.error("--corpus plain needs --plain <file.json>")
     report = run(args.ramayanam.expanduser(), args.split, args.n, args.engines.split(","),
-                 args.seed, args.corpus, args.plain.expanduser() if args.plain else None)
+                 args.seed, args.corpus, args.plain.expanduser() if args.plain else None,
+                 args.gita_chapters)
     print(format_report(report))
     if args.out:
         args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False))
