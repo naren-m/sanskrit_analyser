@@ -103,13 +103,27 @@ class TestTieredCache:
         """Create a cache instance."""
         return TieredCache(config)
 
-    def test_init_with_defaults(self) -> None:
+    @pytest.mark.parametrize("use_env", [True, False])
+    def test_init_with_defaults(self, tmp_path, monkeypatch, use_env: bool) -> None:
         """Test initialization with default config."""
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        if use_env:
+            expected = tmp_path / "env" / "custom.db"
+            monkeypatch.setenv("SANSKRIT_SQLITE_PATH", str(expected))
+        else:
+            expected = tmp_path / "home" / ".sanskrit_analyzer" / "corpus.db"
+            monkeypatch.delenv("SANSKRIT_SQLITE_PATH", raising=False)
+
         cache = TieredCache()
-        status = cache.get_tier_status()
-        assert status["memory"] is True
-        assert status["redis"] is False
-        assert status["sqlite"] is True
+        try:
+            status = cache.get_tier_status()
+            assert status["memory"] is True
+            assert status["redis"] is False
+            assert status["sqlite"] is True
+            assert cache._sqlite._db_path == str(expected.resolve())
+        finally:
+            cache._sqlite.close()
+        assert expected.exists()
 
     def test_init_memory_only(self) -> None:
         """Test initialization with memory only."""
