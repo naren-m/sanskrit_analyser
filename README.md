@@ -60,46 +60,6 @@ asyncio.run(main())
 
 `sanskrit_analyzer.lexical_categories` exports three curated `frozenset[str]` word lists (`ROLE_NOUN_KEYS`, `PRONOUN_KEYS`, `GENERIC_EPITHET_KEYS`, romanised keys) for keeping generic words from being treated as individuals.
 
-### Running the API
-
-```bash
-# Start the API server
-uvicorn sanskrit_analyzer.api.app:create_app --factory --host 0.0.0.0 --port 8000
-
-# API documentation at http://localhost:8000/docs
-```
-
-### Running the UI
-
-**Streamlit UI (Python-based):**
-```bash
-# Run the Streamlit UI
-streamlit run sanskrit_analyzer/ui/app.py
-
-# UI available at http://localhost:8501
-# Set API URL via environment variable:
-# SANSKRIT_API_URL=http://localhost:8000 streamlit run sanskrit_analyzer/ui/app.py
-```
-
-**Vue.js UI (JavaScript-based):**
-```bash
-cd ui
-npm install
-npm run dev
-
-# UI available at http://localhost:5173
-```
-
-### Docker Compose
-
-```bash
-cd docker
-docker-compose up
-
-# API: http://localhost:8000
-# UI: http://localhost:3000
-```
-
 ## Architecture
 
 ```
@@ -173,26 +133,6 @@ Environment variables override config file settings:
 - `SANSKRIT_LLM_PROVIDER`: "ollama" or "openai"
 - `SANSKRIT_LLM_MODEL`: Model name for LLM disambiguation
 - `SANSKRIT_OLLAMA_URL`, `SANSKRIT_OPENAI_API_KEY`, `SANSKRIT_LOG_LEVEL`, `SANSKRIT_LOG_FILE`
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/analyze` | Analyze Sanskrit text |
-| GET | `/api/v1/analyze/{id}` | Get cached analysis |
-| POST | `/api/v1/disambiguate` | Save disambiguation choice |
-| GET | `/api/v1/dhatu/{dhatu}` | Lookup dhatu information |
-| POST | `/api/v1/dhatu/search` | Search dhatus |
-| GET | `/health` | Health check |
-| GET | `/health/detailed` | Detailed health with component status |
-
-### Example API Call
-
-```bash
-curl -X POST http://localhost:8000/api/v1/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"text": "रामः गच्छति", "mode": "educational"}'
-```
 
 ## Data Models
 
@@ -295,19 +235,11 @@ sanskrit_analyzer/
 │   │   └── pipeline.py       # Full pipeline
 │   ├── data/
 │   │   └── dhatu_db.py       # Dhatu database
-│   ├── api/
-│   │   ├── app.py            # FastAPI application
-│   │   └── routes/
-│   │       ├── analyze.py
-│   │       ├── dhatu.py
-│   │       └── health.py
 │   └── utils/
 │       ├── transliterate.py
 │       └── normalize.py
-├── ui/                        # Vue.js frontend
 ├── tests/                     # Test suite
 ├── examples/                  # Usage examples
-├── docker/                    # Docker configuration
 └── docs/                      # Documentation
 ```
 

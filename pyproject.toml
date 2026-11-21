@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sanskrit-analyzer"
 version = "0.1.0"
-description = "Sanskrit sentence parser: Vidyut parsing, local sandhi segmenter, dhātu identification"
+description = "Sanskrit NLP library: Vidyut analysis, lexicon-anchored sandhi segmentation, chandas, ByT5/BGE-M3 embeddings, deep-read kosha"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -31,7 +31,6 @@ dependencies = [
     "vidyut>=0.4.0",
     "aiohttp>=3.9.0",
     "pyyaml>=6.0",
-    "mcp>=1.26.0,<2",
 ]
 
 [project.optional-dependencies]
@@ -42,23 +41,6 @@ ml = [
 ]
 cache = [
     "redis>=5.0",
-]
-api = [
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-    # Shared observability lib. v0.1.0 lacks fastapi_app= support so we add
-    # the FastAPI auto-instrumentation directly here; v0.2.0 will fold it in.
-    "homelab-observability @ git+https://github.com/naren-m/homelab-observability.git@v0.2.1#subdirectory=python",
-    "opentelemetry-instrumentation-fastapi>=0.47b0",
-]
-mcp = [
-    "mcp>=1.26.0,<2",
-]
-ui = [
-    "streamlit>=1.53.1",
-]
-all = [
-    "sanskrit-analyzer[ml,cache,api,mcp,ui]",
 ]
 dev = [
     "pytest>=7.0",
@@ -71,7 +53,6 @@ dev = [
 ]
 
 [project.scripts]
-sanskrit-mcp = "sanskrit_analyzer.mcp.server:main"
 sanskrit-train = "sanskrit_analyzer.training.cli:main"
 
 [project.urls]
@@ -95,15 +76,6 @@ exclude = [
     "!sanskrit_analyzer/data/ashtadhyayi/sutraani/kashika.txt",
     "!sanskrit_analyzer/data/ashtadhyayi/sutraani/vasu_english_summary.txt",
 ]
-
-# Required because the [project.optional-dependencies].api group includes a
-# direct reference (`homelab-observability @ git+...`). Without this flag
-# hatchling rejects the metadata, breaking every downstream consumer that
-# does `pip install -r requirements.txt` containing
-# `sanskrit-analyzer @ git+https://...`. Recorded today after this exact
-# error blocked ramayanam's CI image build.
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.mypy]
 python_version = "3.10"
@@ -134,8 +106,8 @@ markers = [
 
 # Code-smell gate (naren-m/smell-lint v0.1.0). Baseline: .smell_baseline.json.
 # Scan the library. CLI entry points print by design, so they are skipped:
-# training/cli.py and every __main__.py. tests/, examples/, scripts/ and
-# streamlit_app.py are out of scope.
+# training/cli.py and every __main__.py. tests/, examples/ and scripts/ are
+# out of scope.
 [tool.smell_lint]
-paths = ["sanskrit_analyzer", "api"]
+paths = ["sanskrit_analyzer"]
 exclude = ["sanskrit_analyzer/training/cli.py", "__main__.py"]
