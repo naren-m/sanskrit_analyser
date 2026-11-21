@@ -31,6 +31,7 @@ from typing import Any
 # ``sanskrit_analyzer.vidyut_data`` / ``utils.desandhi``. The redundant
 # ``x as x`` aliases mark the ones this module does not itself call as
 # deliberate re-exports: downstream callers (ramayanam) import them from here.
+from sanskrit_analyzer.dhatu.resolver import DhatuResolver
 from sanskrit_analyzer.utils.desandhi import desandhi_candidates
 from sanskrit_analyzer.utils.desandhi import visarga_candidates as visarga_candidates
 from sanskrit_analyzer.utils.normalize import clean_devanagari
@@ -109,7 +110,39 @@ _ROOT_ENGLISH = {
     "vas": "to dwell",
     "Sru": "to hear",
     "smf": "to remember",
+    "pracC": "to ask",
 }
+
+# Curated gloss for each canonical upasarga (SLP1, as reported in
+# ``Analysis.upasargas``). Surfaced next to the bare-root gloss; never composed
+# into a generated sense.
+_UPASARGA_ENGLISH = {
+    "pra": "forth, forward",
+    "parA": "away, back",
+    "apa": "away, off",
+    "sam": "together, completely",
+    "anu": "after, along",
+    "ava": "down, away",
+    "nis": "out, forth",
+    "dus": "bad, difficult",
+    "vi": "apart, specially",
+    "A": "toward, up to",
+    "ni": "down, into",
+    "aDi": "over, above",
+    "api": "upon, close to",
+    "ati": "beyond, excessively",
+    "su": "well, easily",
+    "ut": "up, out",
+    "aBi": "toward, against",
+    "prati": "back, against, toward",
+    "pari": "around, thoroughly",
+    "upa": "near, toward",
+}
+
+# Shared with DhatuResolver: written prefix (incl. sandhi allomorphs) -> canonical.
+_UPASARGAS = DhatuResolver._UPASARGAS
+_UPASARGA_KEYS_LONGEST_FIRST = sorted(_UPASARGAS, key=len, reverse=True)
+_MIN_STEM_LEN = 3
 
 
 @dataclass
@@ -145,6 +178,8 @@ class Analysis:
     dhatu: DhatuView | None = None
     morphology: dict[str, str] = field(default_factory=dict)
     krt: str | None = None  # kṛt suffix of a derived reading, e.g. "Ryat", "kvi~p"
+    upasargas: list[str] = field(default_factory=list)  # canonical SLP1 prefixes peeled
+    upasarga_gloss: str | None = None  # curated gloss of the prefixes, with the root gloss
 
     def to_dict(self) -> dict[str, Any]:
         d = {
@@ -155,6 +190,9 @@ class Analysis:
         }
         if self.krt:
             d["krt"] = self.krt
+        if self.upasargas:
+            d["upasargas"] = list(self.upasargas)
+            d["upasarga_gloss"] = self.upasarga_gloss
         return d
 
 
@@ -191,6 +229,12 @@ def english_for_root(root: str | None) -> str | None:
     if not root:
         return None
     return _ROOT_ENGLISH.get(root)
+
+
+def upasarga_gloss(upasargas: list[str]) -> str | None:
+    """Curated gloss for a prefix chain, e.g. ["pari"] -> "around, thoroughly"."""
+    parts = [_UPASARGA_ENGLISH[u] for u in upasargas if u in _UPASARGA_ENGLISH]
+    return " + ".join(parts) or None
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +364,39 @@ def _classify(entry: Any) -> Analysis:
     return Analysis(kind=kind, lemma=lemma, dhatu=dhatu, morphology=_morphology(entry))
 
 
+def _peel_upasargas(kosha: Any, slp: str, prefixes: tuple[str, ...] = ()) -> list[Analysis]:
+    """Resolve ``slp`` as upasarga(s) + a verb/derived form that has a dhatu.
+
+    Longest written prefix first; recurses for stacked prefixes. Readings
+    without a dhatu are rejected: a wrong root is worse than UNKNOWN.
+    """
+    for written in _UPASARGA_KEYS_LONGEST_FIRST:
+        if not slp.startswith(written) or len(slp) - len(written) < _MIN_STEM_LEN:
+            continue
+        chain = prefixes + (_UPASARGAS[written],)
+        rest = slp[len(written):]
+        found: list[Analysis] = []
+        seen: set[tuple] = set()
+        for cand in desandhi_candidates(rest):
+            for entry in kosha.get(cand):
+                a = _classify(entry)
+                if a.kind not in ("verb", "derived") or a.dhatu is None:
+                    continue
+                key = (a.kind, a.lemma, a.dhatu.root, tuple(sorted(a.morphology.items())))
+                if key in seen:
+                    continue
+                seen.add(key)
+                a.upasargas = list(chain)
+                a.upasarga_gloss = upasarga_gloss(a.upasargas)
+                found.append(a)
+        if found:
+            return found
+        found = _peel_upasargas(kosha, rest, chain)
+        if found:
+            return found
+    return []
+
+
 def analyze_word(devanagari: str) -> dict[str, Any]:
     """Analyze a single Devanagari pada -> {surface, slp1, resolved, analyses}.
 
@@ -352,6 +429,8 @@ def analyze_word(devanagari: str) -> dict[str, Any]:
                     continue
                 seen.add(key)
                 analyses.append(a)
+        if not analyses:
+            analyses = _peel_upasargas(kosha, slp)
     except VidyutUnavailable:
         raise
     except Exception as exc:  # one bad word should not kill the request

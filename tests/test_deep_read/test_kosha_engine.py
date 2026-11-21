@@ -153,3 +153,32 @@ def test_unknown_word_degrades_gracefully():
     assert res["resolved"] is False
     assert res["analyses"] == [{"kind": "unknown", "lemma": None,
                                 "dhatu": None, "morphology": {}}]
+
+
+@requires_vidyut
+@pytest.mark.parametrize("word", ["परिपृच्छति", "परिपप्रच्छ"])
+def test_upasarga_prefixed_verb_resolves_to_root(word):
+    res = engine.analyze_word(word)
+    assert res["resolved"] is True
+    a = res["analyses"][0]
+    assert a["dhatu"]["root"] == "pracC"
+    assert a["upasargas"] == ["pari"]
+    assert "around" in a["upasarga_gloss"]
+    assert a["dhatu"]["english"] == "to ask"
+
+
+@requires_vidyut
+@pytest.mark.parametrize("word", ["पृच्छति", "पप्रच्छ"])
+def test_bare_prach_has_no_upasargas(word):
+    res = engine.analyze_word(word)
+    assert res["resolved"] is True
+    assert any(a["dhatu"] and a["dhatu"]["root"] == "pracC" for a in res["analyses"])
+    assert all("upasargas" not in a for a in res["analyses"])
+
+
+@requires_vidyut
+@pytest.mark.parametrize("word", ["परिमाण", "प्रभु"])
+def test_prefix_lookalike_nouns_keep_direct_output(word):
+    res = engine.analyze_word(word)
+    assert res["resolved"] is True
+    assert all("upasargas" not in a for a in res["analyses"])
