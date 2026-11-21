@@ -132,3 +132,20 @@ def test_surface_form_stays_unresolved(form):
 def test_epic_present_is_marked_variant():
     lead = engine.analyze_word("प्रच्छति")["analyses"][0]
     assert "pfcCati" in lead["variant"]
+
+
+# (input, expected Devanagari tokens). IAST and SLP1 lines used to tokenize to
+# [] because tokens were only ever trimmed to a Devanagari run.
+TOKENIZE_CASES = {
+    "devanagari": ("रामो गच्छति वनम्॥", ["रामो", "गच्छति", "वनम्"]),
+    "iast": ("rāmo gacchati vanam", ["रामो", "गच्छति", "वनम्"]),
+    "slp1": ("rAmo gacCati vanam", ["रामो", "गच्छति", "वनम्"]),
+    "iast-verse-ref-dropped": ("rāmo nāma ||1.1.8||", ["रामो", "नाम"]),
+    "empty": ("", []),
+}
+
+
+@pytest.mark.parametrize("case", TOKENIZE_CASES, ids=list(TOKENIZE_CASES))
+def test_tokenize(case):
+    text, want = TOKENIZE_CASES[case]
+    assert engine.tokenize(text) == want
