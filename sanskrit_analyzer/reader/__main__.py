@@ -16,7 +16,15 @@ def render(record: dict, show_trace: bool = False) -> str:
         out.append(f"meter: {ch.get('name_iast') or ch['name']}"
                    + (f" ({ch['ganas']})" if ch.get("ganas") else ""))
     s = record["stats"]
-    out.append(f"words: {s['words']}, verified: {s['verified']} {s['by_source']}\n")
+    out.append(f"words: {s['words']}, verified: {s['verified']} {s['by_source']}")
+    sp = record.get("split")
+    if sp:
+        verdict = "licensed" if sp["licensed"] else "NOT licensed"
+        sutras = ", ".join(sp["sutras"]) or "-"
+        out.append(f"split: {verdict} by sandhi rules, "
+                   f"{sp['unruled_junctions']} unruled junctions, sūtras {sutras}\n")
+    else:
+        out.append("")
     interp = record.get("interpretation") or {}
     glosses = {w["index"]: w for w in interp.get("words") or [] if isinstance(w, dict)}
     for w in record["words"]:
