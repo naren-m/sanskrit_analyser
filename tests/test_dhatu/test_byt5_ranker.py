@@ -89,31 +89,30 @@ def test_pos_hint_does_not_leak_across_lines():
 
 # --- model-backed (skips without the cached ByT5) ------------------------------
 
-def _byt5_available() -> bool:
+@pytest.fixture(scope="module")
+def byt5_adapter():
+    """Probe the model lazily: only when a slow test that needs it is selected."""
     try:
-        return ByT5Adapter().is_available()
+        adapter = ByT5Adapter()
+        available = adapter.is_available()
     except Exception:
         logger.debug("ByT5 adapter failed to load", exc_info=True)
-        return False
-
-
-_needs_byt5 = pytest.mark.skipif(
-    not _byt5_available(), reason="ByT5 model not available"
-)
+        available = False
+    if not available:
+        pytest.skip("ByT5 model not available")
+    return adapter
 
 
 @pytest.mark.slow
-@_needs_byt5
-def test_byt5_segments_real_compound():
-    members = ByT5Adapter().segment("इक्ष्वाकुवंशप्रभवो रामो नाम जनैः श्रुतः")
+def test_byt5_segments_real_compound(byt5_adapter):
+    members = byt5_adapter.segment("इक्ष्वाकुवंशप्रभवो रामो नाम जनैः श्रुतः")
     assert members is not None
     assert any("ikṣvāku" in m for m in members)
     assert any("vaṃśa" in m for m in members)
 
 
 @pytest.mark.slow
-@_needs_byt5
-def test_identifier_with_byt5_resolves_roots():
+def test_identifier_with_byt5_resolves_roots(byt5_adapter):
     from sanskrit_analyzer.dhatu import DhatuIdentifier
 
     results = DhatuIdentifier.with_byt5().identify("श्रुतः")
