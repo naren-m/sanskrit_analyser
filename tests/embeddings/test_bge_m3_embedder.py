@@ -58,6 +58,9 @@ class TestEmbedderProtocol:
             "BgeM3Embedder does not satisfy the Embedder protocol"
         )
 
+    # isinstance() on the runtime Protocol reads embedding_dim, which loads
+    # google/byt5-small even with lazy=True.
+    @pytest.mark.slow
     def test_byt5_is_embedder_instance(self):
         """ByT5SanskritEmbedder also conforms structurally (regression guard)."""
         try:

@@ -112,6 +112,7 @@ class TestByT5SanskritEmbedderEncode:
         norms = np.linalg.norm(vectors, axis=1)
         np.testing.assert_allclose(norms, np.ones(2), rtol=1e-4, atol=1e-4)
 
+    @pytest.mark.slow  # the class fixture loads google/byt5-small
     def test_encode_empty_list_returns_empty_array(self, embedder):
         vectors = embedder.encode([])
         assert isinstance(vectors, np.ndarray)
