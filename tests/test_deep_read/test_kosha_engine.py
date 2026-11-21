@@ -6,6 +6,9 @@ if the data bundle is absent, so the suite is green on a machine without it.
 deep-read promotion — see naren-m/sanskrit_analyser#8.)
 """
 
+import json
+from pathlib import Path
+
 import pytest
 
 from sanskrit_analyzer.deep_read import kosha_engine as engine
@@ -153,3 +156,31 @@ def test_unknown_word_degrades_gracefully():
     assert res["resolved"] is False
     assert res["analyses"] == [{"kind": "unknown", "lemma": None,
                                 "dhatu": None, "morphology": {}}]
+
+
+# --------------------- surface-form coverage fixture ----------------------
+
+_FORMS = json.loads((Path(__file__).parent / "surface_forms.json").read_text(encoding="utf-8"))
+
+
+@requires_vidyut
+@pytest.mark.parametrize("case", _FORMS["resolves"], ids=lambda c: c["form"])
+def test_valid_form_resolves_to_expected_root_or_lemma(case):
+    out = engine.analyze_word(case["form"])
+    assert out["resolved"] is True
+    hits = [
+        a for a in out["analyses"]
+        if a["kind"] == case["kind"]
+        and (a["dhatu"] or {}).get("root") == case.get("root")
+        and (a["lemma"] == case["lemma"] if "lemma" in case else True)
+        and (a["morphology"].get("lakara") == case["lakara"] if "lakara" in case else True)
+    ]
+    assert hits, f"{case['form']}: no {case} in {out['analyses']}"
+
+
+@requires_vidyut
+@pytest.mark.parametrize("form", _FORMS["unresolved"])
+def test_non_words_stay_unresolved(form):
+    out = engine.analyze_word(form)
+    assert out["resolved"] is False
+    assert out["analyses"][0]["kind"] == "unknown"
