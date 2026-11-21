@@ -8,9 +8,9 @@ Both lists are keyed by SLP1 (the engine's internal scheme).
 # (e.g. ca -> root ci) are spurious.
 PARTICLES = frozenset({
     "ca", "tu", "na", "iti", "hi", "eva", "api", "vA", "aTa", "iva", "Kalu",
-    "taTA", "yaTA", "uta", "evam", "kila", "nanu", "sma", "ha", "punar",
+    "taTA", "yaTA", "uta", "evam", "kila", "nanu", "sma", "ha", "punaH",
     "yadi", "tarhi", "yatra", "tatra", "atra", "yAvat", "tAvat", "yadA",
-    "tadA", "ced", "svit",
+    "tadA", "cet", "svit",
 })
 
 # Names shared across the Ramayana and Mahabharata. Hand-picked and generic to

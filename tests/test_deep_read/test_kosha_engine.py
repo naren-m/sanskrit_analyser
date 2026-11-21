@@ -28,6 +28,8 @@ GATE_CASES = {
         ["indeclinable"], "ca"),
     "particle without avyaya entry is synthesized": (
         "tu", ["tu"], [_verb("tu")], ["indeclinable"], "tu"),
+    "visarga particle matches surface form": (
+        "punaH", ["punar"], [_verb("pu")], ["indeclinable"], "punaH"),
     "proper noun drops verb, nominal leads": (
         "rAmo", ["rAmaH", "rAma"],
         [_verb("ra"), Analysis(kind="derived", lemma="rAma"),

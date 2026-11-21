@@ -225,13 +225,14 @@ class DeepRead:
             # surface the plausible reading first; use the ByT5 POS when present.
             pos = pos_hint_fn(w_iast) if pos_hint_fn else None
             tok["analyses"] = rank_analyses(tok.get("analyses", []), pos_hint=pos)
-            # rank_analyses re-sorts, so re-mark: ``primary`` must track [0].
-            for i, a in enumerate(tok["analyses"]):
-                a["primary"] = i == 0
             # Resolve each pada's root through the shared DhatuResolver so this
             # facade and DhatuIdentifier().identify() agree on root ownership
             # (yogaḥ → yuj, not the Kośa's raw "yoji"). No-op offline.
             resolve_roots(tok["analyses"], tok.get("slp1"))
+            # rank_analyses and resolve_roots can reorder/insert at [0], so
+            # mark last: ``primary`` must track [0].
+            for i, a in enumerate(tok["analyses"]):
+                a["primary"] = i == 0
             tokens.append(tok)
 
         try:

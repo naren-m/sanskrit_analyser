@@ -92,10 +92,13 @@ def test_analyze_via_segmenter_resolves_clean_root():
 
 
 @requires_vidyut
-def test_segmenter_primary_flag_tracks_lead_reading_after_rerank():
-    # rank_analyses re-sorts what analyze_word marked; primary must follow [0].
-    out = DeepRead().analyze_via_segmenter("भवति").to_dict()
+@pytest.mark.parametrize("text", ["भवति", "अनुशासनम्"])
+def test_segmenter_primary_flag_tracks_lead_reading_after_rerank(text):
+    # rank_analyses and resolve_roots (which can insert a derived reading at
+    # [0]) run before marking; primary must follow [0].
+    out = DeepRead().analyze_via_segmenter(text).to_dict()
     for tok in out["tokens"]:
+        assert all("primary" in a for a in tok["analyses"])
         flags = [a["primary"] for a in tok["analyses"]]
         assert flags[0] is True
         assert not any(flags[1:])
