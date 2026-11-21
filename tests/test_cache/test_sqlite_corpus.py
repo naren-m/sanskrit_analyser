@@ -324,18 +324,22 @@ class TestSQLiteCorpus:
         with pytest.raises(sqlite3.ProgrammingError):
             opened[0].execute("SELECT 1")
 
-    def test_default_path(self) -> None:
-        """Test default database path creation."""
-        # Create corpus with default path
+    @pytest.mark.parametrize("use_env", [True, False])
+    def test_default_path(self, tmp_path, monkeypatch, use_env: bool) -> None:
+        """Default path honours SANSKRIT_SQLITE_PATH, else falls back to $HOME."""
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        if use_env:
+            expected = tmp_path / "env" / "custom.db"
+            monkeypatch.setenv("SANSKRIT_SQLITE_PATH", str(expected))
+        else:
+            expected = tmp_path / "home" / ".sanskrit_analyzer" / "corpus.db"
+            monkeypatch.delenv("SANSKRIT_SQLITE_PATH", raising=False)
+
         corpus = SQLiteCorpus()
-
-        # Clear any existing data first for test isolation
-        corpus.clear()
-
-        # Should be able to perform operations
-        corpus.set("test", "test", "test", "PRODUCTION", {})
-        assert corpus.count() == 1
-
-        # Clean up
-        corpus.clear()
-        corpus.close()
+        try:
+            assert corpus._db_path == str(expected.resolve())
+            corpus.set("test", "test", "test", "PRODUCTION", {})
+            assert corpus.count() == 1
+        finally:
+            corpus.close()
+        assert expected.exists()

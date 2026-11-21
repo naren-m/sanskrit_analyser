@@ -1,6 +1,7 @@
 """SQLite-based corpus storage for persistent analysis caching."""
 
 import json
+import os
 import sqlite3
 import threading
 from dataclasses import dataclass
@@ -64,20 +65,21 @@ class SQLiteCorpus:
         """Initialize the SQLite corpus.
 
         Args:
-            db_path: Path to SQLite database file. Defaults to ~/.sanskrit_analyzer/corpus.db
+            db_path: Path to SQLite database file. When None, uses the
+                SANSKRIT_SQLITE_PATH environment variable if set and non-empty,
+                else ~/.sanskrit_analyzer/corpus.db.
             max_rows: Soft cap on stored rows. When exceeded on ``set``, the
                 least-recently-accessed rows are pruned. ``None`` or <= 0
                 disables pruning.
         """
         if db_path is None:
-            config_dir = Path.home() / ".sanskrit_analyzer"
-            config_dir.mkdir(parents=True, exist_ok=True)
-            db_path = str(config_dir / "corpus.db")
-        else:
-            # Expand ~ and resolve path
-            db_path = str(Path(db_path).expanduser().resolve())
-            # Ensure parent directory exists
-            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+            db_path = os.environ.get("SANSKRIT_SQLITE_PATH") or str(
+                Path.home() / ".sanskrit_analyzer" / "corpus.db"
+            )
+        # Expand ~ and resolve path
+        db_path = str(Path(db_path).expanduser().resolve())
+        # Ensure parent directory exists
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
         self._db_path = db_path
         self._max_rows = max_rows
