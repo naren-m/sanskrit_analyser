@@ -16,7 +16,7 @@ jobs:
           python-version: "3.11"
           enable-cache: true
       - name: Install
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --all-extras
       # vidyut's kosha/sandhi/prakriya data (~77 MB). Without it the
       # requires_vidyut tests skip instead of running.
       - name: Cache vidyut data
