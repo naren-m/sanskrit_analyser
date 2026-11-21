@@ -1,16 +1,13 @@
 """Tests for corpus loading utilities."""
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from sanskrit_analyzer.training.corpus_loader import (
-    CorpusEntry,
     CorpusLoader,
     CorpusLoadError,
-    VerseMetadata,
 )
 
 
@@ -42,7 +39,9 @@ class TestCorpusLoaderText:
     def test_skip_comment_lines(self, tmp_path: Path) -> None:
         """Test that comment lines (starting with #) are skipped."""
         corpus_file = tmp_path / "test.txt"
-        corpus_file.write_text("# This is a comment\nActual text\n# Another comment\n", encoding="utf-8")
+        corpus_file.write_text(
+            "# This is a comment\nActual text\n# Another comment\n", encoding="utf-8"
+        )
 
         loader = CorpusLoader(corpus_file)
         entries = list(loader)

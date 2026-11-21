@@ -2,7 +2,7 @@
 
 import pytest
 
-from sanskrit_analyzer.disambiguation.llm import LLMConfig, LLMDisambiguationResult
+from sanskrit_analyzer.disambiguation.llm import LLMDisambiguationResult
 from sanskrit_analyzer.disambiguation.pipeline import (
     DisambiguationPipeline,
     DisambiguationStage,
@@ -231,7 +231,7 @@ class TestDisambiguationPipeline:
         if pipeline._llm:
             pipeline._llm.disambiguate = mock_disambiguate  # type: ignore
 
-        result = await pipeline.disambiguate(candidates)
+        await pipeline.disambiguate(candidates)
 
         # LLM should have been skipped
         assert llm_called is False

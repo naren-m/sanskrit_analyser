@@ -2,7 +2,6 @@
 
 import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 

@@ -20,14 +20,17 @@ import pytest
 
 vidyut = pytest.importorskip("vidyut")
 
-from sanskrit_analyzer.deep_read.kosha_engine import resolve_data_dir
+from sanskrit_analyzer.deep_read.kosha_engine import resolve_data_dir  # noqa: E402 - skip guard
 
 pytestmark = pytest.mark.skipif(
     resolve_data_dir() is None, reason="vidyut data bundle not installed"
 )
 
-from sanskrit_analyzer.prakriya import analyze_verse
-from sanskrit_analyzer.prakriya.analyzer import PadaAnalysis, analyze_pada
+from sanskrit_analyzer.prakriya import analyze_verse  # noqa: E402 - skip guard
+from sanskrit_analyzer.prakriya.analyzer import (  # noqa: E402 - skip guard
+    PadaAnalysis,
+    analyze_pada,
+)
 
 # The opening śloka in Devanagari, exactly as stored in the corpus (daṇḍas and all).
 OPENING_SLOKA = (

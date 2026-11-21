@@ -304,7 +304,9 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _add_generate_commands(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+def _add_generate_commands(
+    subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]",
+) -> None:
     """Register the generate-grammar and generate-disambig subcommands."""
     # generate-grammar command
     grammar_parser = subparsers.add_parser(
@@ -359,7 +361,9 @@ def _add_generate_commands(subparsers: "argparse._SubParsersAction[argparse.Argu
     disambig_parser.set_defaults(func=cmd_generate_disambig)
 
 
-def _add_inspect_commands(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+def _add_inspect_commands(
+    subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]",
+) -> None:
     """Register the validate and stats subcommands."""
     # validate command
     validate_parser = subparsers.add_parser(

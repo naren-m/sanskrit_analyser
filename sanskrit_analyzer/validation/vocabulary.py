@@ -24,7 +24,6 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 # Default vocabulary file ships with the package
 _DEFAULT_VOCAB_PATH = Path(__file__).parent.parent / "data" / "yoga_sutra_vocabulary.json"
 
@@ -66,7 +65,7 @@ class Vocabulary:
         # Common nominal case-ending suffixes (most specific first).
         # These cover the most frequent inflectional endings seen in
         # Yoga Sutra compounds / padapāṭha forms.
-        _SUFFIXES = (
+        _SUFFIXES = (  # noqa: N806 - local constant table, upper-case by design
             "AByAm", "sByAm",  # instrumental/dative/ablative dual
             "AnAm",  # genitive plural
             "asya",  # genitive singular (a-stem)

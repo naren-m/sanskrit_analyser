@@ -1,7 +1,7 @@
 """Tests for main Analyzer class."""
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -372,7 +372,7 @@ class TestAnalyzerBatch:
         async def mock_analyze(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            from sanskrit_analyzer.models.tree import ConfidenceMetrics, ParseTree
+            from sanskrit_analyzer.models.tree import ConfidenceMetrics
 
             return AnalysisTree(
                 sentence_id=f"test_{call_count}",

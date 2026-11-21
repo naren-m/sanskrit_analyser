@@ -33,8 +33,8 @@ sentence_transformers = pytest.importorskip(
     reason="sentence-transformers not installed; skipping BgeM3Embedder tests",
 )
 
-from sanskrit_analyzer.embeddings.base import Embedder
-from sanskrit_analyzer.embeddings.bge_m3_embedder import BgeM3Embedder
+from sanskrit_analyzer.embeddings.base import Embedder  # noqa: E402 - skip guard
+from sanskrit_analyzer.embeddings.bge_m3_embedder import BgeM3Embedder  # noqa: E402 - skip guard
 
 # Sample English texts that are representative of commentary content.
 _SAMPLE_TEXTS = [

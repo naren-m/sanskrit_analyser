@@ -25,8 +25,8 @@ check it rather than assume; ``scripts/build_layerb.py`` regenerates the data.
 """
 from __future__ import annotations
 
-import csv
 import bisect
+import csv
 import logging
 import os
 import sqlite3

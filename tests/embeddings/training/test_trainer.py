@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import numpy as np
-import pytest
 import torch
 
 from sanskrit_analyzer.embeddings.training.adapted_embedder import (

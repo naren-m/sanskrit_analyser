@@ -86,7 +86,8 @@ def test_mw_entries_never_carry_promoted_columns_in_fields(mw_db):
 
 def test_prefix_sorted_distinct(mw_db):
     # rAma appears twice in the fixture (two homonyms) but once in the result.
-    assert lexicon.prefix("रा", sources=["mw"]) == ["rAjan", "rAmAyaRa", "rAma"]  # code-point order: A < a
+    # code-point order: A < a
+    assert lexicon.prefix("रा", sources=["mw"]) == ["rAjan", "rAmAyaRa", "rAma"]
     assert lexicon.prefix("", sources=["mw"]) == []
 
 
@@ -134,4 +135,6 @@ def test_no_accent_debris_in_any_row(mw_db):
     con = sqlite3.connect(mw_db)
     texts = [r[0] for r in con.execute("SELECT text FROM mw")]
     con.close()
-    assert texts and not [t for t in texts if re.match(r"^[A-Za-z]/\s*\)", t) or re.search(r"[A-Za-z]/ ", t)]
+    assert texts and not [
+        t for t in texts if re.match(r"^[A-Za-z]/\s*\)", t) or re.search(r"[A-Za-z]/ ", t)
+    ]

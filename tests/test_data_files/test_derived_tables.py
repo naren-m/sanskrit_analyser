@@ -77,7 +77,10 @@ CORRECTED_PATTERNS = {"paYcacAmara": "LGLGLGLGLGLGLGLG"}
 
 
 def test_meters_csv_matches_vidyut():
-    """Name/class/pattern are vidyut's meters.tsv (bar CORRECTED_PATTERNS); duplicate names are kept."""
+    """Name/class/pattern are vidyut's meters.tsv (bar CORRECTED_PATTERNS).
+
+    Duplicate names are kept.
+    """
     with (resolve_data_dir() / "chandas" / "meters.tsv").open(encoding="utf-8") as fh:
         upstream = sorted(
             (n, c, CORRECTED_PATTERNS.get(n, p))

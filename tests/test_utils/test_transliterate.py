@@ -3,13 +3,13 @@
 import pytest
 
 from sanskrit_analyzer.models.scripts import Script, ScriptVariants
+from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1
 from sanskrit_analyzer.utils.transliterate import (
     to_devanagari,
     to_iast,
     to_slp1,
     transliterate,
 )
-from sanskrit_analyzer.utils.normalize import detect_script, normalize_slp1
 
 
 class TestTransliterate:

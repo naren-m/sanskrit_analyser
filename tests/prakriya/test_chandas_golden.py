@@ -19,7 +19,8 @@ from sanskrit_analyzer.prakriya import chandas
 from sanskrit_analyzer.utils.transliterate import to_slp1
 from sanskrit_analyzer.vidyut_data import resolve_data_dir
 
-GOLDEN = json.loads((Path(__file__).resolve().parents[1] / "data" / "golden_meters.json").read_text())
+GOLDEN_PATH = Path(__file__).resolve().parents[1] / "data" / "golden_meters.json"
+GOLDEN = json.loads(GOLDEN_PATH.read_text())
 VERSES = GOLDEN["verses"]
 IRREGULAR = GOLDEN["irregular"]
 
@@ -134,9 +135,15 @@ def test_ardhasama_odd_pada_anceps_is_narrow(scan, expected):
 @pytest.mark.parametrize(
     "text",
     [v["text"] for v in IRREGULAR]
-    + ["ka ka ka ka ka", "", "   ", "\n\n", "12345", "...", _lg_text(AKHYANIKI_BROKEN_ODD), _lg_text(ARYA_CUTS_THEN_RUNS_ON)],
+    + [
+        "ka ka ka ka ka", "", "   ", "\n\n", "12345", "...",
+        _lg_text(AKHYANIKI_BROKEN_ODD), _lg_text(ARYA_CUTS_THEN_RUNS_ON),
+    ],
     ids=[v["id"] for v in IRREGULAR]
-    + ["nonsense", "empty", "spaces", "newlines", "digits", "dots", "akhyaniki-broken-odd-pada", "arya-cuts-then-runs-on"],
+    + [
+        "nonsense", "empty", "spaces", "newlines", "digits", "dots",
+        "akhyaniki-broken-odd-pada", "arya-cuts-then-runs-on",
+    ],
 )
 def test_not_verse_is_not_identified(second_opinion, text):
     got = chandas.identify(_slp1(text))
@@ -175,5 +182,8 @@ def test_csv_row_is_self_consistent(row):
 
 def test_newlines_survive_transliteration():
     """A verse typed one pāda per line keeps its line breaks through to_slp1."""
-    for text, script in (("rāmāya\nrāmabhadrāya", Script.IAST), ("रामाय\nरामभद्राय", Script.DEVANAGARI)):
+    for text, script in (
+        ("rāmāya\nrāmabhadrāya", Script.IAST),
+        ("रामाय\nरामभद्राय", Script.DEVANAGARI),
+    ):
         assert to_slp1(text, script).count("\n") == 1

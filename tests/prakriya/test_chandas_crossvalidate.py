@@ -16,9 +16,12 @@ from sanskrit_analyzer.prakriya import chandas  # noqa: E402
 from sanskrit_analyzer.utils.transliterate import to_slp1  # noqa: E402
 from sanskrit_analyzer.vidyut_data import resolve_data_dir  # noqa: E402
 
-pytestmark = pytest.mark.skipif(resolve_data_dir() is None, reason="vidyut data bundle not installed")
+pytestmark = pytest.mark.skipif(
+    resolve_data_dir() is None, reason="vidyut data bundle not installed"
+)
 
-GOLDEN = json.loads((Path(__file__).resolve().parents[1] / "data" / "golden_meters.json").read_text())
+GOLDEN_PATH = Path(__file__).resolve().parents[1] / "data" / "golden_meters.json"
+GOLDEN = json.loads(GOLDEN_PATH.read_text())
 
 #: Verses where vidyut names a different meter than the engine, with the reason.
 #: Kumarasambhava 1.1 mixes indravajrā/upendravajrā per pāda; vidyut reads the
