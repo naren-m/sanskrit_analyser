@@ -11,6 +11,7 @@ This example demonstrates the core functionality of the Sanskrit Analyzer librar
 import asyncio
 import logging
 import sys
+
 from sanskrit_analyzer import Analyzer
 from sanskrit_analyzer.config import Config
 

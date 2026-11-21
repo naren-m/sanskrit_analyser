@@ -3,13 +3,13 @@ import pytest
 
 vidyut = pytest.importorskip("vidyut")
 
-from sanskrit_analyzer.deep_read.kosha_engine import resolve_data_dir
+from sanskrit_analyzer.deep_read.kosha_engine import resolve_data_dir  # noqa: E402 - skip guard
 
 pytestmark = pytest.mark.skipif(
     resolve_data_dir() is None, reason="vidyut data bundle not installed"
 )
 
-from sanskrit_analyzer.prakriya.chandas import (
+from sanskrit_analyzer.prakriya.chandas import (  # noqa: E402 - skip guard
     _meter_table,
     anushtubh_form,
     identify,
@@ -136,5 +136,8 @@ def test_valid_sloka_beats_vidyut_jati_fuzzy_match():
 def test_identify_survives_untransliterated_characters(stray):
     """vidyut's classifier indexes a 256-entry table: any character above
     U+00FF used to panic in Rust (PanicException, not an Exception)."""
-    verse = f"karmaRyevADikAraste mA Pa{stray}lezu kadAcana mA karmaPalaheturBUrmA te saNgo'stvakarmaRi"
+    verse = (
+        f"karmaRyevADikAraste mA Pa{stray}lezu kadAcana "
+        "mA karmaPalaheturBUrmA te saNgo'stvakarmaRi"
+    )
     assert identify(verse).name == "anuzwuB (paTyA)"

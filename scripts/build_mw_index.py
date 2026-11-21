@@ -45,7 +45,9 @@ _DEF_TRAIL_REF = re.compile(r'[\d,\-]{4,}[a-z]?\s*$')
 _DEF_DOUBLED = re.compile(r'(\w{4,})\1+')
 _DEF_ACCENT = re.compile(r'(?<=[A-Za-z])/(?=[A-Za-z])')
 # Local change: also accepts the whole 'mf(A)n.' / 'f(A).' gender marker (see _lex_marker).
-_DEF_BODY_START = re.compile(r'^(?:(?:mfn|mf|m|f|n|ind|cl|p{1,2})\.?$|(?:mf|m|f|n)\([A-Za-z]+\)n?\.?$|[0-9(&A-Z])')
+_DEF_BODY_START = re.compile(
+    r'^(?:(?:mfn|mf|m|f|n|ind|cl|p{1,2})\.?$|(?:mf|m|f|n)\([A-Za-z]+\)n?\.?$|[0-9(&A-Z])'
+)
 # MW states a derived word's origin as 'fr. √ 1. viṣ'; CDSL glues its own entry
 # id onto some roots: 'sañj.228458'.
 _CITED_ROOT = re.compile(r'√\s*(?:(?:\d+\.?|and)\s*)*([^\s,;)\]]+)')
@@ -70,7 +72,8 @@ def clean_definition(value: str) -> str:
     text = _DEF_ACCENT.sub('', text)
     text = _DEF_DOUBLED.sub(r'\1', text)
     text = _DEF_TRAIL_REF.sub('', text)
-    stripped = re.sub(r'^(?:\S*[^\x00-\x7F\ue000]\S*\s+)+', '', text)  # Local change: _SP is not non-ASCII debris
+    # Local change: _SP is not non-ASCII debris
+    stripped = re.sub(r'^(?:\S*[^\x00-\x7F\ue000]\S*\s+)+', '', text)
     if len(stripped) >= 3:
         text = stripped
     tokens = text.split(' ')
@@ -110,7 +113,11 @@ def _lex_marker(m: re.Match) -> str:
 def _iast_marker(m: re.Match) -> str:
     inner = re.sub(
         r"[A-Za-z]+",
-        lambda w: w.group(0) if w.group(0) in ("or", "and") else transliterate(w.group(0), sanscript.SLP1, sanscript.IAST),
+        lambda w: (
+            w.group(0)
+            if w.group(0) in ("or", "and")
+            else transliterate(w.group(0), sanscript.SLP1, sanscript.IAST)
+        ),
         m.group(2),
     )
     return m.group(1) + inner + m.group(3)

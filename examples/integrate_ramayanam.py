@@ -15,7 +15,7 @@ import asyncio
 import logging
 import sys
 from dataclasses import dataclass
-from typing import Optional
+
 from sanskrit_analyzer import Analyzer
 from sanskrit_analyzer.config import Config
 
@@ -43,7 +43,7 @@ class RamayanamIntegration:
     to build a knowledge graph from Ramayanam verses.
     """
 
-    def __init__(self, config: Optional[Config] = None):
+    def __init__(self, config: Config | None = None):
         self.config = config or Config()
         self.analyzer = Analyzer(self.config)
         self.analyzed_verses: list[VerseAnalysis] = []
@@ -152,7 +152,10 @@ class RamayanamIntegration:
                 morph = word.get("morphology", {})
 
                 # Check for nominative case nouns
-                if morph.get("case") == "nominative" and morph.get("pos") in ["noun", "proper_noun"]:
+                if morph.get("case") == "nominative" and morph.get("pos") in [
+                    "noun",
+                    "proper_noun",
+                ]:
                     characters.append({
                         "name": word["lemma"],
                         "devanagari": word.get("devanagari", ""),

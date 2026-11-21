@@ -268,7 +268,7 @@ class LocalByT5Engine(EngineBase):
         clean_output = self._strip_task_prefix(output)
         # Model outputs underscore-separated lemmas: rāma_vana_gam_
         lemmas = clean_output.split("_")
-        return [l.strip() for l in lemmas if l.strip()]
+        return [lemma.strip() for lemma in lemmas if lemma.strip()]
 
     def _parse_combined(self, output: str) -> list[dict[str, str]]:
         """Parse combined SLM output (surface_lemma_tags).

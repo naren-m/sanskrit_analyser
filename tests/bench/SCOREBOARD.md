@@ -81,7 +81,13 @@ s/verse lower.
 
 Runs inside the test sandbox: `reader` engine only, no SLM checkpoint, no
 ramayanam checkout. It reads the first `n` verses of `tests/data/corpus_verses.json`
-(default 3, about 35 s with the ByT5 weights loaded). It is a does-it-run check,
+(default 3). It is a does-it-run check,
 not a scoreboard row: it has no gold padas, so `seg_recall` is `n/a`.
+
+The report prints `proposer[reader] = {...}`, the proposer label `read_words` returned
+for each verse. In the sandbox the non-slow test tier refuses model-weight loads, so
+the smoke test runs the `reader` on its DP fallback (`{'dp': 1}`), about 1.5 s/verse. On
+a machine with the ByT5 weights it prints `{'byt5': n}` (about 7 s/verse). Only the
+`byt5` run is a reader measurement.
 
     python -m tests.bench.run --smoke --n 3

@@ -1,7 +1,8 @@
 """SanskritBench-local: one per-layer scoreboard for verse understanding.
 
-Phase 0 of ``naren-m/sanskrit_model: docs/plan/2026-11-13-sanskrit-understanding-plan.md``. Each row of the
-report is one engine; each column is one layer of understanding. The first run
+Phase 0 of
+``naren-m/sanskrit_model: docs/plan/2026-11-13-sanskrit-understanding-plan.md``.
+Each row of the report is one engine; each column is one layer of understanding. The first run
 on ``main`` is the baseline every later change is gated against.
 
 Layers scored now:
@@ -28,7 +29,7 @@ Run::
 ``--split heldout`` is measure-only. Never tune against it.
 
 Offline smoke (no corpus checkout, no SLM checkpoint, ``reader`` engine only,
-well under a minute)::
+well under a minute; the report prints which proposer ran)::
 
     uv run python -m tests.bench.run --smoke --n 3
 
@@ -42,6 +43,7 @@ import logging
 import subprocess
 import sys
 import time
+from collections import Counter
 from collections.abc import Callable
 from functools import cache
 from pathlib import Path
@@ -50,13 +52,22 @@ from typing import Any
 from sanskrit_analyzer.dhatu.dhatupatha import strip_anubandhas
 from sanskrit_analyzer.models.scripts import Script
 from sanskrit_analyzer.utils import transliterate
-from tests.bench.corpus import (Row, clean_verse, gold_padas, load_gita, load_plain,
-                                load_rows, sample, split_rows)
+from tests.bench.corpus import (
+    Row,
+    clean_verse,
+    gold_padas,
+    load_gita,
+    load_plain,
+    load_rows,
+    sample,
+    split_rows,
+)
 from tests.bench.score import meter_match, norm_slp1, recovered
 
 logger = logging.getLogger(__name__)
 
 DATA = Path(__file__).resolve().parents[1] / "data"
+PROPOSERS_RAN: Counter[str] = Counter()  # proposer label read_words reported, per read
 PENDING_LAYERS = ("anvaya", "gloss", "translation")
 
 # An engine maps a verse to (slp1 token, top lemma or None, verified or None).
@@ -101,7 +112,9 @@ def _engines(names: list[str]) -> dict[str, Engine]:
         from sanskrit_analyzer.reader.read import read_words
 
         out: list[Token] = []
-        for w in read_words(text, proposer)[0]:
+        words, ran = read_words(text, proposer)
+        PROPOSERS_RAN[ran] += 1
+        for w in words:
             for m in w.get("compound_members") or [w]:
                 out.append((m["surface"], m["lemma"], m["verified"]))
         return out
@@ -265,8 +278,13 @@ def run_smoke(n: int, engines: list[str] | None = None) -> dict[str, Any]:
     lemma_gold = [g for g in _lemma_gold(None) if g[0] in texts]
     rows = smoke_rows(n)
     # The lemma pass re-reads each verse once per gold word: cache the reads.
-    scored = {name: score_engine(cache(fn), rows, lemma_gold)
-              for name, fn in _engines(engines or ["reader"]).items()}
+    scored = {}
+    for name, fn in _engines(engines or ["reader"]).items():
+        PROPOSERS_RAN.clear()
+        scored[name] = score_engine(cache(fn), rows, lemma_gold)
+        # Which proposer actually ran: "dp" means the ByT5 load failed (or was
+        # refused by the non-slow weight guard) and the reader fell back.
+        scored[name]["proposers"] = dict(PROPOSERS_RAN)
     for e in scored.values():
         e.pop("_outputs")
         e["agree"] = 1.0
@@ -310,6 +328,9 @@ def format_report(report: dict[str, Any]) -> str:
         lines.append(f"{name:12} {na(e['seg_recall'], gold):>10} {na(e['split_ratio'], gold):>6} "
                      f"{e['verify']:>7.3f} {na(e['lemma_acc'], e['lemma_n'] > 0):>6} "
                      f"{e['coverage']:>6.3f} {e['agree']:>6.3f} {e['sec_per_verse']:>8.2f}")
+    for name, e in report["engines"].items():
+        if "proposers" in e:
+            lines.append(f"proposer[{name}] = {e['proposers']}")
     lines.append(f"agree = token F1 against '{report.get('agree_with')}'. "
                  "cover = letter similarity of input and padas (~0.9 for a perfect split).")
     lines.append("not scored yet: " + ", ".join(report["pending_layers"]))
@@ -325,7 +346,8 @@ def main(argv: list[str] | None = None) -> int:
                           "tests/data/corpus_verses.json"))
     ap.add_argument("--split", choices=("dev", "heldout"), default="dev")
     ap.add_argument("--n", type=int, help="verses (default 100; 3 with --smoke)")
-    ap.add_argument("--engines", default="dp,prakriya", help="dp,byt5,prakriya,reader,reader-slm,reader-best "
+    ap.add_argument("--engines", default="dp,prakriya",
+                    help="dp,byt5,prakriya,reader,reader-slm,reader-best "
                     "(reader-slm/-best need SANSKRIT_SLM_CKPT)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--corpus", choices=("ramayana", "gita", "plain"), default="ramayana",

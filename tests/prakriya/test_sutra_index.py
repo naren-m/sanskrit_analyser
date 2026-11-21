@@ -5,13 +5,13 @@ import pytest
 
 vidyut = pytest.importorskip("vidyut")
 
-from sanskrit_analyzer.deep_read.kosha_engine import resolve_data_dir
+from sanskrit_analyzer.deep_read.kosha_engine import resolve_data_dir  # noqa: E402 - skip guard
 
 pytestmark = pytest.mark.skipif(
     resolve_data_dir() is None, reason="vidyut data bundle not installed"
 )
 
-from sanskrit_analyzer.prakriya.sutra_index import SutraIndex, get_index
+from sanskrit_analyzer.prakriya.sutra_index import SutraIndex, get_index  # noqa: E402 - skip guard
 
 
 def test_lookup_known_sutra():

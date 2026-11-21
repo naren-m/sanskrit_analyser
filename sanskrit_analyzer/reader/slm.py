@@ -88,7 +88,10 @@ def align(padapatha: str, tags: str) -> list:
 
 
 class CharTokenizer:
-    """sanskrit_model's SLP1 char tokenizer: control tokens by longest match, else one id per char."""
+    """sanskrit_model's SLP1 char tokenizer.
+
+    Control tokens match longest-first, else one id per char.
+    """
 
     def __init__(self, stoi: dict[str, int]):
         self.stoi = stoi
@@ -127,7 +130,7 @@ class CharTokenizer:
 
 def _build_gpt(cfg: dict):
     import torch.nn as nn
-    import torch.nn.functional as F
+    import torch.nn.functional as F  # noqa: N812 - torch convention: F is torch.nn.functional
 
     class Attn(nn.Module):
         def __init__(self):
@@ -137,7 +140,7 @@ def _build_gpt(cfg: dict):
             self.c_proj = nn.Linear(cfg["n_embd"], cfg["n_embd"], bias=cfg.get("bias", True))
 
         def forward(self, x):
-            B, T, C = x.shape
+            B, T, C = x.shape  # noqa: N806 - tensor shape names B, T, C
             q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
             h = C // self.n_head
             q, k, v = (t.view(B, T, self.n_head, h).transpose(1, 2) for t in (q, k, v))

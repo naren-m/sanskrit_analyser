@@ -3,13 +3,13 @@ import pytest
 
 vidyut = pytest.importorskip("vidyut")
 
-from sanskrit_analyzer.deep_read.kosha_engine import resolve_data_dir
+from sanskrit_analyzer.deep_read.kosha_engine import resolve_data_dir  # noqa: E402 - skip guard
 
 pytestmark = pytest.mark.skipif(
     resolve_data_dir() is None, reason="vidyut data bundle not installed"
 )
 
-from sanskrit_analyzer.prakriya import analyze_verse
+from sanskrit_analyzer.prakriya import analyze_verse  # noqa: E402 - skip guard
 
 
 def test_devanagari_word_end_to_end():

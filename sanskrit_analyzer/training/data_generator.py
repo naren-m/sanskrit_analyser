@@ -2,9 +2,10 @@
 
 import json
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 from sanskrit_analyzer.analyzer import Analyzer
 from sanskrit_analyzer.config import Config

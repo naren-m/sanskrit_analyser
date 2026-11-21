@@ -7,11 +7,10 @@ in the ramayanam repo for the design rationale.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import numpy as np
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812 - torch convention: F is torch.nn.functional
 from transformers import ByT5Tokenizer, T5ForConditionalGeneration
 
 logger = logging.getLogger(__name__)
@@ -26,6 +25,14 @@ _DEFAULT_REVISION = "main"
 # the empty-input fast path so it can return a correctly-shaped ``(0, d)``
 # array without forcing a full model load.
 _DEFAULT_D_MODEL = 1472
+
+# Known ``d_model`` per model name, so ``embedding_dim`` never has to load
+# weights for these. Unknown models fall back to loading and reading the config.
+_KNOWN_D_MODEL: dict[str, int] = {
+    "chronbmm/sanskrit5-multitask": 1472,
+    "google/byt5-small": 1472,
+    "google/byt5-base": 1536,
+}
 
 
 def _masked_mean_pool(
@@ -64,7 +71,7 @@ class ByT5SanskritEmbedder:
     def __init__(
         self,
         model_name: str = _DEFAULT_MODEL,
-        device: Optional[str] = None,
+        device: str | None = None,
         max_length: int = 1024,
         normalize: bool = True,
         lazy: bool = False,
@@ -75,15 +82,19 @@ class ByT5SanskritEmbedder:
         self.max_length = max_length
         self.normalize = normalize
         self.revision = revision
-        self._model: Optional[T5ForConditionalGeneration] = None
-        self._tokenizer: Optional[ByT5Tokenizer] = None
+        self._model: T5ForConditionalGeneration | None = None
+        self._tokenizer: ByT5Tokenizer | None = None
         if not lazy:
             self._load()
 
     @property
     def embedding_dim(self) -> int:
-        if self._model is None:
-            self._load()
+        if self._model is not None:
+            return int(self._model.config.d_model)
+        known = _KNOWN_D_MODEL.get(self.model_name)
+        if known is not None:
+            return known
+        self._load()
         return int(self._model.config.d_model)
 
     def _load(self) -> None:
@@ -104,14 +115,7 @@ class ByT5SanskritEmbedder:
     def encode(self, texts: list[str], batch_size: int = 8) -> np.ndarray:
         """Devanagari or IAST → (N, d_model) embeddings, optionally L2-normalized."""
         if len(texts) == 0:
-            # Short-circuit before touching ``embedding_dim`` so an empty batch
-            # never forces a full model load. Use the loaded model's dim if
-            # available, else the known default-model constant.
-            dim = (
-                int(self._model.config.d_model)
-                if self._model is not None
-                else _DEFAULT_D_MODEL
-            )
+            dim = self.embedding_dim
             return np.zeros((0, dim), dtype=np.float32)
         if self._model is None:
             self._load()

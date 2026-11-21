@@ -37,7 +37,10 @@ def test_clean_verse(raw: str, want: str) -> None:
 @pytest.mark.parametrize(
     ("line", "want"),
     [
-        ("महाप्राज्ञः highly learned, वरम् choicest", {"महाप्राज्ञः": "highly learned", "वरम्": "choicest"}),
+        (
+            "महाप्राज्ञः highly learned, वरम् choicest",
+            {"महाप्राज्ञः": "highly learned", "वरम्": "choicest"},
+        ),
         # ASCII-colon visarga in the key
         ("जनक: Janaka, उवाच spoke.", {"जनकः": "Janaka", "उवाच": "spoke"}),
         ("", {}),
@@ -107,7 +110,9 @@ def _corpus(root: Path) -> Path:
         d.mkdir(parents=True)
         for v in (1, 2):
             ref = f"{kanda}::1::{v}::"
-            (d / f"{name}_sarga_1_sloka.txt").open("a").write(f"{ref}रामो गच्छति ।।{kanda}.1.{v}।।\n")
+            (d / f"{name}_sarga_1_sloka.txt").open("a").write(
+                f"{ref}रामो गच्छति ।।{kanda}.1.{v}।।\n"
+            )
             (d / f"{name}_sarga_1_meaning.txt").open("a").write(f"{ref}रामः Rama, गच्छति goes\n")
             (d / f"{name}_sarga_1_translation.txt").open("a").write(f"{ref}Rama goes.\n")
     return root
@@ -174,14 +179,21 @@ def test_agreement_is_token_f1() -> None:
     assert agreement([["a"]], [[]]) == 0.0
 
 
-def test_smoke_bench_runs_offline(capsys: pytest.CaptureFixture[str]) -> None:
+def test_smoke_bench_runs_offline(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     import time
 
     from tests.bench.run import main
 
+    out_json = tmp_path / "smoke.json"
     t0 = time.time()
-    assert main(["--smoke", "--n", "1"]) == 0
+    assert main(["--smoke", "--n", "1", "--out", str(out_json)]) == 0
     out = capsys.readouterr().out
     assert time.time() - t0 < 60
-    assert "n=1" in out and "reader" in out
-    assert "reader-slm" not in out
+    assert "n=1" in out and "reader-slm" not in out
+    report = json.loads(out_json.read_text())
+    e = report["engines"]["reader"]
+    assert list(report["engines"]) == ["reader"]
+    assert e["verses"] == 1 and e["coverage"] > 0.5 and e["verify"] > 0.5 and e["lemma_n"] > 0
+    # The non-slow tier refuses weight loads (conftest guard), so the reader runs on
+    # its DP proposer here. The ByT5 reader is measured outside the sandbox.
+    assert e["proposers"] == {"dp": 1}

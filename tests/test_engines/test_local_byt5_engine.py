@@ -253,8 +253,8 @@ class TestLocalByT5EngineIntegration:
     def skip_if_no_transformers(self) -> None:
         """Skip test if transformers not available."""
         try:
-            import transformers
-            import torch
+            import torch  # noqa: F401 - import probes availability
+            import transformers  # noqa: F401 - import probes availability
         except ImportError:
             pytest.skip("transformers/torch not installed")
 

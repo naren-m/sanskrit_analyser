@@ -1,14 +1,13 @@
 """Integration tests for training data generation pipeline."""
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from sanskrit_analyzer.training.config import TrainingConfig
 from sanskrit_analyzer.training.corpus_loader import CorpusLoader
-from sanskrit_analyzer.training.data_generator import BatchAnalyzer, DisambiguationGenerator
+from sanskrit_analyzer.training.data_generator import DisambiguationGenerator
 from sanskrit_analyzer.training.format_converter import GrammarFormatConverter
 
 

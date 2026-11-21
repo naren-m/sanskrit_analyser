@@ -13,8 +13,9 @@ import asyncio
 import json
 import logging
 import sys
-from pathlib import Path
 from collections import Counter
+from pathlib import Path
+
 from sanskrit_analyzer import Analyzer
 from sanskrit_analyzer.config import Config
 
@@ -128,7 +129,9 @@ def calculate_statistics(results: list[dict]) -> dict:
         "failed_analyses": len(results) - len(successful),
         "total_words": len(all_words),
         "unique_words": len(word_freq),
-        "average_confidence": sum(r["confidence"] for r in successful) / len(successful) if successful else 0,
+        "average_confidence": (
+            sum(r["confidence"] for r in successful) / len(successful) if successful else 0
+        ),
         "top_words": word_freq.most_common(10),
         "pos_distribution": dict(pos_freq),
         "unique_dhatus": len(dhatu_freq),

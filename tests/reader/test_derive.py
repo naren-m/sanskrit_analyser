@@ -14,23 +14,34 @@ from sanskrit_analyzer.deep_read.kosha_engine import resolve_data_dir  # noqa: E
 from sanskrit_analyzer.reader.derive import verify_word  # noqa: E402
 from sanskrit_analyzer.reader.tags import decode  # noqa: E402
 
-pytestmark = pytest.mark.skipif(resolve_data_dir() is None, reason="vidyut data bundle not installed")
+pytestmark = pytest.mark.skipif(
+    resolve_data_dir() is None, reason="vidyut data bundle not installed"
+)
 
 
 @pytest.mark.parametrize(
     ("surface", "lemma", "tag", "after_ma", "kind", "want_lemma", "want_feature", "source"),
     [
         # liṭ with an upasarga (Rām. 1.1.1)
-        ("paripapracCa", "paripracC", "SPs3In", False, "tinanta", "pracC", ("upasarga", "pari"), "vidyut"),
+        (
+            "paripapracCa", "paripracC", "SPs3In", False,
+            "tinanta", "pracC", ("upasarga", "pari"), "vidyut",
+        ),
         # enclitic te for tava, 8.1.22 (BG 2.47)
-        ("te", "tvad", "SG", False, "subanta", "yuzmad", ("vibhakti", "zazWI"), "vidyut+reader-rule"),
+        (
+            "te", "tvad", "SG", False, "subanta", "yuzmad",
+            ("vibhakti", "zazWI"), "vidyut+reader-rule",
+        ),
         # aorist without augment after mā, 6.4.74 (BG 2.47)
         ("BUH", "BU", "SPs2", True, "tinanta", "BU", ("lakara", "luN"), "vidyut+reader-rule"),
         # avyaya + indefinite particle
         ("kadAcana", "kadAcana", "", False, "avyaya", "kadAcana", ("particle", "cana"), "kosha"),
         # matup taddhita (Rām. 1.1.2)
         ("guRavAn", "guRavat", "SNM", False, "subanta", "guRavat", ("taddhita", "matup"), "vidyut"),
-        ("hanumAn", "hanumant", "SNM", False, "subanta", "hanumat", ("taddhita", "matup"), "vidyut"),
+        (
+            "hanumAn", "hanumant", "SNM", False,
+            "subanta", "hanumat", ("taddhita", "matup"), "vidyut",
+        ),
         # kta participle with an upasarga
         ("upAgatam", "upAgam", "SNPaNe", False, "subanta", "gam", ("krt", "kta"), "vidyut"),
         # lyap with two upasargas
