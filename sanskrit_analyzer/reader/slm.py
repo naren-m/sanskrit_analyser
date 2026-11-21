@@ -80,7 +80,7 @@ _NUMBER_CODE = {v: k for k, v in _NUMBER.items()}
 _PERSON_CODE = {v: k for k, v in _PERSON.items()}
 # kosha lakāra (anubandha tildes stripped) -> the tense+mood letters code_to_morph reads back
 _LAKARA_CODE = {"law": "rI", "low": "rM", "viDiliN": "rO", "laN": "i", "liw": "a",
-                "lfw": "fI", "luw": "fI", "luN": "J", "ASIrliN": "B"}
+                "lfw": "fI", "luw": "fI", "luN": "a", "ASIrliN": "B"}
 MAX_CANDIDATES = 24
 
 
@@ -108,22 +108,75 @@ def analysis_to_code(kind: str, morph: str) -> str | None:
     return None
 
 
+def verifies(surface: str, lemma: str, code: str, analyses=None) -> bool:
+    """Does (lemma, code) derive ``surface``? Unlike ``verify_word`` this has no catch-all.
+
+    ``verify_word`` ends in a kosha fallback that is verified for any lemma and morph,
+    so it cannot judge a code. Here the direct generators (_tinanta, _subanta,
+    _absolutive) must produce the surface from the lemma and ``code_to_morph(code)``;
+    failing that, a kosha analysis must carry the same lemma and the same code.
+    """
+    from sanskrit_analyzer.prakriya.analyzer import analyze_pada
+    from sanskrit_analyzer.reader import derive
+
+    morph = code_to_morph(code)
+    r = None
+    try:
+        if morph.kind == "verb":
+            r = derive._tinanta(surface, lemma, morph, augmentless=False)
+        elif morph.kind == "nominal":
+            r = derive._subanta(surface, derive._basic_stems(lemma), morph) \
+                or derive._subanta(surface, derive._krdanta_stems(lemma), morph)
+        elif morph.kind == "participle":
+            r = derive._subanta(surface, derive._krdanta_stems(lemma), morph) \
+                or derive._subanta(surface, derive._basic_stems(lemma), morph)
+        elif morph.kind == "absolutive":
+            r = derive._absolutive(surface, lemma)
+    except Exception:  # a derivation crash is a rejection
+        logger.debug("verifies(%s, %s, %s) failed", surface, lemma, code, exc_info=True)
+    if r is not None and r.verified and r.source.startswith("vidyut"):
+        return True
+    if analyses is None:
+        analyses = analyze_pada(surface, limit=50)
+    return any(a.lemma == lemma and analysis_to_code(a.kind, a.morph) == code for a in analyses)
+
+
+def _code_space() -> tuple[str, ...]:
+    """Every DCS code the derivation paths can test: nominal, participle, verb, absolutive."""
+    cgn = [f"{c}{g}{n}" for c in _CASE for g in _GENDER for n in _NUMBER]
+    tm = sorted(set(_LAKARA_CODE.values()))
+    verbs = [f"v{p}{n}{t}{P}" for p in _PERSON for n in _NUMBER for t in tm for P in ("", "P")]
+    return tuple(["a"] + [f"n{x}" for x in cgn] + [f"k{x}{P}" for x in cgn for P in ("", "P")]
+                 + verbs)
+
+
+@lru_cache(maxsize=4096)
+def derived_candidates(surface: str, lemma: str) -> tuple[str, ...]:
+    """Generate-and-match: codes for which ``lemma`` derives ``surface`` through derive.py.
+
+    This reaches words the kosha lacks, participles (k) and absolutives (a). It
+    tries the whole code space, so it is meant for the words analyze_pada left empty.
+    """
+    out = [f"{lemma}.{code}" for code in _code_space()
+           if lemma and verifies(surface, lemma, code, ())]
+    return tuple(out[:MAX_CANDIDATES])
+
+
 @lru_cache(maxsize=4096)
 def candidates(surface: str) -> tuple[str, ...]:
     """Every "lemma.CODE" whose analysis vidyut verifies for this padapāṭha word.
 
-    Analyses come from analyze_pada, are mapped to DCS codes, and each code is
-    run through ``verify_word``: a code is kept only when ``code_to_morph(code)``
-    verifies again, so the model can never pick a tag Pāṇini would reject.
+    Analyses come from analyze_pada and are mapped to DCS codes; a code is kept only
+    when ``verifies`` confirms it, so the model never picks a tag Pāṇini would reject.
     """
     from sanskrit_analyzer.prakriya.analyzer import analyze_pada
-    from sanskrit_analyzer.reader.derive import verify_word
 
+    analyses = analyze_pada(surface, limit=50)
     out: dict[str, None] = {}
-    for a in analyze_pada(surface, limit=50):
+    for a in analyses:
         code = analysis_to_code(a.kind, a.morph)
         cand = f"{a.lemma}.{code}" if code and a.lemma else None
-        if cand and cand not in out and verify_word(surface, a.lemma, code_to_morph(code)).verified:
+        if cand and cand not in out and verifies(surface, a.lemma, code, analyses):
             out[cand] = None
     return tuple(list(out)[:MAX_CANDIDATES])
 
@@ -307,11 +360,18 @@ class SLMProposer:
         chosen: list[str] = []
         for n, (surface, is_member) in enumerate(pieces):
             cands = () if is_member else candidates(surface)
+            free = None
+            if not cands and not is_member:
+                # kosha has nothing: try the free decode's lemma through the derive paths
+                free = self._greedy(prompt, chosen, one_word=True)
+                cands = derived_candidates(surface, free.rpartition(".")[0]) if free else ()
             if cands:
                 final = n == len(pieces) - 1
                 chosen.append(max(cands, key=lambda c: self.score(prompt, chosen, c, final)))
             else:
-                chosen.append(self._greedy(prompt, chosen, one_word=True) or f"{surface}.")
+                if free is None:
+                    free = self._greedy(prompt, chosen, one_word=True)
+                chosen.append(free or f"{surface}.")
         return " ".join(chosen)
 
     def propose(self, text_slp1: str, constrained: bool = False) -> list:

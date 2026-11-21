@@ -156,7 +156,8 @@ def _propose(text: str, proposer: str, constrained: bool = False) -> tuple[list[
     n = normalize(text)
     hyps = None
     try:
-        hyps = _slm_hypotheses(n.slp1, constrained) if proposer == "slm" else _byt5_hypotheses(n.slp1)
+        hyps = (_slm_hypotheses(n.slp1, constrained) if proposer == "slm"
+                else _byt5_hypotheses(n.slp1))
     except Exception as exc:
         logger.warning("%s proposer failed: %s", proposer, exc)
     if not hyps:
