@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -173,4 +174,4 @@ def format_report(reports: list[VerseReport]) -> str:
 
 
 if __name__ == "__main__":
-    print(format_report(run_cases(load_cases())))
+    sys.stdout.write(format_report(run_cases(load_cases())) + "\n")

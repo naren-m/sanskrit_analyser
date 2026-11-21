@@ -16,6 +16,7 @@ imported. Only the XML-to-flat-text step before it is local to this script.
 from __future__ import annotations
 
 import html
+import logging
 import os
 import re
 import sqlite3
@@ -25,6 +26,8 @@ from pathlib import Path
 
 from indic_transliteration import sanscript
 from indic_transliteration.sanscript import transliterate
+
+logger = logging.getLogger(__name__)
 
 _ENTRY = re.compile(r"<(H\d+[A-Za-z]*)>(.*?)</\1>", re.S)
 _TAG = re.compile(r"<[^>]+>")
@@ -59,6 +62,7 @@ def clean_definition(value: str) -> str:
             try:
                 return transliterate(core, sanscript.SLP1, sanscript.IAST)
             except Exception:
+                logger.debug("cannot transliterate %r; kept as is", core, exc_info=True)
                 return token
         return token
 
@@ -191,10 +195,11 @@ def build(src: Path, out: Path) -> int:
 
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
-        print(__doc__)
+        sys.stdout.write(f"{__doc__}\n")
         return 2
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     n = build(Path(argv[1]), Path(argv[2]))
-    print(f"wrote {n} rows to {argv[2]}")
+    logger.info(f"wrote {n} rows to {argv[2]}")
     return 0
 
 

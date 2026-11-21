@@ -1,11 +1,14 @@
 """Tests for memory LRU cache."""
 
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 from sanskrit_analyzer.cache.memory import CacheEntry, CacheStats, LRUCache
+
+logger = logging.getLogger(__name__)
 
 
 class TestCacheStats:
@@ -230,6 +233,7 @@ class TestLRUCache:
                     if value is not None and value != i:
                         errors.append(ValueError(f"Unexpected value: {value}"))
             except Exception as e:
+                logger.debug("worker %d failed", thread_id, exc_info=True)
                 errors.append(e)
 
         threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]

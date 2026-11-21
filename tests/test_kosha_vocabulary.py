@@ -1,6 +1,10 @@
+import logging
+
 import pytest
 
 from sanskrit_analyzer.validation.kosha_vocabulary import KoshaVocabulary
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
@@ -8,6 +12,7 @@ def vocab():
     try:
         return KoshaVocabulary()
     except Exception:
+        logger.debug("KoshaVocabulary failed to load", exc_info=True)
         pytest.skip("vidyut kosha data not available")
 
 

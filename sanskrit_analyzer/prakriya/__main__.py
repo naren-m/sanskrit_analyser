@@ -38,8 +38,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_usage(sys.stderr)
         return 2
     record = analyze_verse(args.verse)
-    print(json.dumps(record, ensure_ascii=False, indent=2) if args.json
-          else _render(record))
+    if args.json:
+        output = json.dumps(record, ensure_ascii=False, indent=2)
+    else:
+        output = _render(record)
+    sys.stdout.write(output + "\n")
     return 0
 
 

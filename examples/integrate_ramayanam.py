@@ -12,10 +12,14 @@ This is a template for integrating with the Ramayanam knowledge graph project.
 """
 
 import asyncio
+import logging
+import sys
 from dataclasses import dataclass
 from typing import Optional
 from sanskrit_analyzer import Analyzer
 from sanskrit_analyzer.config import Config
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -126,7 +130,7 @@ class RamayanamIntegration:
         results = []
 
         for i, verse in enumerate(verses, 1):
-            print(f"  Analyzing verse {i}/{len(verses)}...")
+            logger.info(f"  Analyzing verse {i}/{len(verses)}...")
             analysis = await self.analyze_verse(verse, kanda, sarga, i)
             results.append(analysis)
 
@@ -234,9 +238,10 @@ class RamayanamIntegration:
 
 async def main():
     """Demo of Ramayanam integration."""
-    print("=" * 60)
-    print("Sanskrit Analyzer - Ramayanam Integration Example")
-    print("=" * 60)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    sys.stdout.write("=" * 60 + "\n")
+    sys.stdout.write("Sanskrit Analyzer - Ramayanam Integration Example\n")
+    sys.stdout.write("=" * 60 + "\n")
 
     # Sample verses from Balakanda
     sample_verses = [
@@ -250,7 +255,7 @@ async def main():
     integration = RamayanamIntegration()
 
     # Analyze verses
-    print("\nAnalyzing Balakanda sample verses...")
+    logger.info("Analyzing Balakanda sample verses...")
     results = await integration.analyze_sarga(
         verses=sample_verses,
         kanda="Balakanda",
@@ -258,53 +263,53 @@ async def main():
     )
 
     # Show results
-    print("\n" + "=" * 60)
-    print("ANALYSIS RESULTS")
-    print("=" * 60)
+    sys.stdout.write("\n" + "=" * 60 + "\n")
+    sys.stdout.write("ANALYSIS RESULTS\n")
+    sys.stdout.write("=" * 60 + "\n")
 
     for verse in results:
-        print(f"\nVerse {verse.kanda}.{verse.sarga}.{verse.verse_number}:")
-        print(f"  Text: {verse.verse_text}")
-        print(f"  Confidence: {verse.confidence:.2%}")
-        print(f"  Words: {len(verse.words)}")
-        print(f"  Dhatus: {len(verse.dhatus)}")
+        sys.stdout.write(f"\nVerse {verse.kanda}.{verse.sarga}.{verse.verse_number}:\n")
+        sys.stdout.write(f"  Text: {verse.verse_text}\n")
+        sys.stdout.write(f"  Confidence: {verse.confidence:.2%}\n")
+        sys.stdout.write(f"  Words: {len(verse.words)}\n")
+        sys.stdout.write(f"  Dhatus: {len(verse.dhatus)}\n")
 
         if verse.dhatus:
-            print("  Verbal roots:")
+            sys.stdout.write("  Verbal roots:\n")
             for d in verse.dhatus:
-                print(f"    √{d['root']}: {d['meaning']}")
+                sys.stdout.write(f"    √{d['root']}: {d['meaning']}\n")
 
     # Extract character names
-    print("\n" + "=" * 60)
-    print("POTENTIAL CHARACTER NAMES")
-    print("=" * 60)
+    sys.stdout.write("\n" + "=" * 60 + "\n")
+    sys.stdout.write("POTENTIAL CHARACTER NAMES\n")
+    sys.stdout.write("=" * 60 + "\n")
     characters = integration.extract_character_names()
     for char in characters[:10]:  # First 10
-        print(f"  {char['name']} ({char['devanagari']}) - {char['location']}")
+        sys.stdout.write(f"  {char['name']} ({char['devanagari']}) - {char['location']}\n")
 
     # Show dhatu usage
-    print("\n" + "=" * 60)
-    print("DHATU USAGE")
-    print("=" * 60)
+    sys.stdout.write("\n" + "=" * 60 + "\n")
+    sys.stdout.write("DHATU USAGE\n")
+    sys.stdout.write("=" * 60 + "\n")
     dhatu_usage = integration.get_dhatu_usage()
     for root, usages in list(dhatu_usage.items())[:5]:
-        print(f"\n  √{root}:")
+        sys.stdout.write(f"\n  √{root}:\n")
         for usage in usages:
-            print(f"    {usage['surface_form']} at {usage['location']}")
+            sys.stdout.write(f"    {usage['surface_form']} at {usage['location']}\n")
 
     # Generate knowledge graph nodes
-    print("\n" + "=" * 60)
-    print("KNOWLEDGE GRAPH NODES")
-    print("=" * 60)
+    sys.stdout.write("\n" + "=" * 60 + "\n")
+    sys.stdout.write("KNOWLEDGE GRAPH NODES\n")
+    sys.stdout.write("=" * 60 + "\n")
     nodes = integration.to_knowledge_graph_nodes()
     node_types = {}
     for node in nodes:
         node_type = node["type"]
         node_types[node_type] = node_types.get(node_type, 0) + 1
 
-    print("\nNode counts by type:")
+    sys.stdout.write("\nNode counts by type:\n")
     for node_type, count in node_types.items():
-        print(f"  {node_type}: {count}")
+        sys.stdout.write(f"  {node_type}: {count}\n")
 
 
 if __name__ == "__main__":

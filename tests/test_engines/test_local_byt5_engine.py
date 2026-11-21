@@ -1,9 +1,13 @@
 """Tests for the Local ByT5-Sanskrit engine."""
 
-import pytest
+import logging
 from unittest.mock import patch
 
+import pytest
+
 from sanskrit_analyzer.engines.local_byt5_engine import LocalByT5Engine
+
+logger = logging.getLogger(__name__)
 
 
 class TestLocalByT5Engine:
@@ -276,6 +280,7 @@ class TestLocalByT5EngineIntegration:
         try:
             engine = LocalByT5Engine()
         except Exception as exc:  # model not cached / load failure
+            logger.debug("LocalByT5Engine failed to load", exc_info=True)
             pytest.skip(f"ByT5 model unavailable: {exc}")
 
         if not engine.is_available:

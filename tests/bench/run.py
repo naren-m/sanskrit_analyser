@@ -33,6 +33,7 @@ import argparse
 import json
 import logging
 import subprocess
+import sys
 import time
 from collections.abc import Callable
 from functools import cache
@@ -45,6 +46,8 @@ from sanskrit_analyzer.utils import transliterate
 from tests.bench.corpus import (gold_padas, load_gita, load_plain, load_rows, sample,
                                 split_rows)
 from tests.bench.score import meter_match, norm_slp1, recovered
+
+logger = logging.getLogger(__name__)
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 PENDING_LAYERS = ("anvaya", "gloss", "translation")
@@ -110,6 +113,7 @@ def _verifies(slp1: str) -> bool:
     try:
         return bool(word) and bool(analyze_pada(word, limit=1))
     except Exception:  # an engine crash is a failed verification, visibly counted
+        logger.debug("analyze_pada crashed on %r", word, exc_info=True)
         return False
 
 
@@ -167,7 +171,7 @@ def score_engine(fn: Engine, rows, lemma_gold) -> dict[str, Any]:
         try:
             toks = fn(row.text)
         except Exception as exc:  # a crash scores zero for the verse, visibly
-            logging.getLogger(__name__).warning("%s crashed: %s", row.ref, exc)
+            logger.warning("%s crashed: %s", row.ref, exc)
             toks = []
         outputs.append([t[0] for t in toks])
         cov.append(_coverage(row.text, outputs[-1]))
@@ -182,6 +186,7 @@ def score_engine(fn: Engine, rows, lemma_gold) -> dict[str, Any]:
         try:
             toks = fn(text)
         except Exception:
+            logger.debug("engine crashed on %r", text, exc_info=True)
             toks = []
         by_surface = {norm_slp1(slp): lemma for slp, lemma, _ in toks}
         lemma_n += 1
@@ -207,6 +212,7 @@ def score_meter(rows) -> dict[str, Any]:
         try:
             ch = analyze_verse(text).get("chandas") or {}
         except Exception:
+            logger.debug("analyze_verse crashed on %r", text, exc_info=True)
             return None
         return ch.get("name")
 
@@ -224,7 +230,7 @@ def _git_sha() -> str:
     try:
         return subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
                               text=True, check=True).stdout.strip()
-    except Exception:
+    except (OSError, subprocess.CalledProcessError):
         return "unknown"
 
 
@@ -295,7 +301,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--corpus plain needs --plain <file.json>")
     report = run(args.ramayanam.expanduser(), args.split, args.n, args.engines.split(","),
                  args.seed, args.corpus, args.plain.expanduser() if args.plain else None)
-    print(format_report(report))
+    sys.stdout.write(format_report(report) + "\n")
     if args.out:
         args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False))
     return 0

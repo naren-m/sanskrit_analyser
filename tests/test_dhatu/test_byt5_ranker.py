@@ -7,9 +7,13 @@ tested without the model.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from sanskrit_analyzer.dhatu.byt5_ranker import ByT5Adapter
+
+logger = logging.getLogger(__name__)
 
 
 class _FakeSeg:
@@ -89,6 +93,7 @@ def _byt5_available() -> bool:
     try:
         return ByT5Adapter().is_available()
     except Exception:
+        logger.debug("ByT5 adapter failed to load", exc_info=True)
         return False
 
 

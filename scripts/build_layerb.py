@@ -11,7 +11,9 @@ Sources (SLP1, from sanskrit-lexicon.uni-koeln.de via pycdsl):
 
 Outputs TSV, SLP1 throughout, to match project convention.
 """
-import re, sqlite3, os, sys
+import logging, re, sqlite3, os, sys
+
+logger = logging.getLogger(__name__)
 
 DICTDIR = "/home/claude/cdsl/dict"
 OUT = "/home/claude/out"
@@ -20,10 +22,20 @@ os.makedirs(OUT, exist_ok=True)
 TAG = re.compile(r"<[^>]+>")
 WS = re.compile(r"\s+")
 
+# One fixed query per dictionary. sqlite3 cannot bind a table name, so each
+# table name is a literal here instead of being built into the SQL at runtime.
+ENTRY_QUERIES = {
+    "SKD": "select key, lnum, data from skd",
+    "VCP": "select key, lnum, data from vcp",
+    "KRM": "select key, lnum, data from krm",
+    "ARMH": "select key, lnum, data from armh",
+    "ABCH": "select key, lnum, data from abch",
+}
+
 def rows(d):
     p = f"{DICTDIR}/{d}/web/sqlite/{d.lower()}.sqlite"
     con = sqlite3.connect(p)
-    return con.execute(f"select key, lnum, data from {d.lower()}")
+    return con.execute(ENTRY_QUERIES[d])
 
 def body(data):
     m = re.search(r"<body>(.*?)</body>", data, re.S)
@@ -91,7 +103,7 @@ def skd():
         out.append((key, stem, linga, vy, nirv, base, chain, prat, qual, uref, squote,
                     str(lnum), page(data)))
     write("vyutpatti-skd.tsv", out)
-    print(f"SKD: {len(out)-1} entries, {n_vy} with a parenthetical vyutpatti")
+    logger.info(f"SKD: {len(out)-1} entries, {n_vy} with a parenthetical vyutpatti")
 
 # ---------------------------------------------------------------- VCP
 # `kandala  tri0 kadi—alac . 1 kalApe ...`
@@ -112,7 +124,7 @@ def vcp():
             n_vy += 1
         out.append((key, linga, base, prat, b[:200], str(lnum), page(data)))
     write("vyutpatti-vcp.tsv", out)
-    print(f"VCP: {len(out)-1} entries, {n_vy} with a parsed base\u2014pratyaya")
+    logger.info(f"VCP: {len(out)-1} entries, {n_vy} with a parsed base\u2014pratyaya")
 
 # ---------------------------------------------------------------- plain dumps
 def dump(d, fname):
@@ -120,7 +132,7 @@ def dump(d, fname):
     for key, lnum, data in rows(d):
         out.append((key, str(lnum), page(data), body(data)))
     write(fname, out)
-    print(f"{d}: {len(out)-1} entries -> {fname}")
+    logger.info(f"{d}: {len(out)-1} entries -> {fname}")
 
 def write(name, rows_):
     with open(f"{OUT}/{name}", "w", encoding="utf-8") as f:
@@ -162,10 +174,11 @@ def crosswalk():
             status = "unverified"; unresolved += 1
         out.append(tuple(r + [proj, status]))
     write("vyutpatti-skd.tsv", out)
-    print(f"unadi crosswalk: {agree} agree, {disagree} SHIFTED, {unresolved} unverified")
+    logger.info(f"unadi crosswalk: {agree} agree, {disagree} SHIFTED, {unresolved} unverified")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     skd(); vcp()
     dump("KRM", "krdantarupamala.tsv")
     dump("ARMH", "abhidhanaratnamala.tsv")

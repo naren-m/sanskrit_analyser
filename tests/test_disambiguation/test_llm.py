@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from sanskrit_analyzer.config import DEFAULT_OLLAMA_URL
 from sanskrit_analyzer.disambiguation.llm import (
     LLMConfig,
     LLMDisambiguationResult,
@@ -21,7 +22,7 @@ class TestLLMConfig:
         config = LLMConfig()
         assert config.provider == LLMProvider.OLLAMA
         assert config.model == "llama3.2"
-        assert config.ollama_url == "http://localhost:11434"
+        assert config.ollama_url == DEFAULT_OLLAMA_URL
         assert config.timeout == 30.0
 
     def test_custom_config(self) -> None:

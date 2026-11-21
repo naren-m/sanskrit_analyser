@@ -105,9 +105,6 @@ markers = [
 ]
 
 # Code-smell gate (naren-m/smell-lint v0.1.0). Baseline: .smell_baseline.json.
-# Scan the library. CLI entry points print by design, so they are skipped:
-# training/cli.py and every __main__.py. tests/, examples/ and scripts/ are
-# out of scope.
+# Gates the whole repo: library, CLIs, tests, examples and scripts. No excludes.
 [tool.smell_lint]
-paths = ["sanskrit_analyzer"]
-exclude = ["sanskrit_analyzer/training/cli.py", "__main__.py"]
+paths = ["."]

@@ -72,8 +72,11 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     logging.disable(logging.WARNING)
     record = read_sloka(args.verse, llm=not args.no_llm, model=args.model, proposer=args.proposer)
-    print(json.dumps(record, ensure_ascii=False, indent=2) if args.json
-          else render(record, args.trace))
+    if args.json:
+        output = json.dumps(record, ensure_ascii=False, indent=2)
+    else:
+        output = render(record, args.trace)
+    sys.stdout.write(output + "\n")
     return 0
 
 
