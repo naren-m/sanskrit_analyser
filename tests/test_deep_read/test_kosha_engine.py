@@ -6,6 +6,9 @@ if the data bundle is absent, so the suite is green on a machine without it.
 deep-read promotion — see naren-m/sanskrit_analyser#8.)
 """
 
+import json
+from pathlib import Path
+
 import pytest
 
 from sanskrit_analyzer.deep_read import kosha_engine as engine
@@ -153,3 +156,72 @@ def test_unknown_word_degrades_gracefully():
     assert res["resolved"] is False
     assert res["analyses"] == [{"kind": "unknown", "lemma": None,
                                 "dhatu": None, "morphology": {}}]
+
+
+# --------------------- surface-form coverage fixture ----------------------
+
+_FORMS = json.loads((Path(__file__).parent / "surface_forms.json").read_text(encoding="utf-8"))
+
+
+@requires_vidyut
+@pytest.mark.parametrize("case", _FORMS["resolves"], ids=lambda c: c["form"])
+def test_valid_form_resolves_to_expected_root_or_lemma(case):
+    out = engine.analyze_word(case["form"])
+    assert out["resolved"] is True
+    hits = [
+        a for a in out["analyses"]
+        if a["kind"] == case["kind"]
+        and (a["dhatu"] or {}).get("root") == case.get("root")
+        and (a["lemma"] == case["lemma"] if "lemma" in case else True)
+        and (a["morphology"].get("lakara") == case["lakara"] if "lakara" in case else True)
+    ]
+    assert hits, f"{case['form']}: no {case} in {out['analyses']}"
+
+
+@requires_vidyut
+@pytest.mark.parametrize("form", _FORMS["unresolved"])
+def test_non_words_stay_unresolved(form):
+    out = engine.analyze_word(form)
+    assert out["resolved"] is False
+    assert out["analyses"][0]["kind"] == "unknown"
+
+
+# ------------------- irregular-stem fallback robustness -------------------
+
+def _dup_candidates(monkeypatch):
+    monkeypatch.setattr(engine, "desandhi_candidates", lambda slp: [slp, slp])
+    return 1  # duplicate candidates must collapse to one analysis
+
+
+def _failing_derivation(monkeypatch):
+    calls = []
+
+    def boom():
+        calls.append(1)
+        raise RuntimeError("prakriya down")
+
+    monkeypatch.setattr(engine, "_build_irregular_forms", boom)
+    engine.analyze_word("पथिन्")
+    engine.analyze_word("पथिन्")
+    assert len(calls) == 1  # failure cached, not rebuilt per miss
+    return 0
+
+
+FALLBACK_CASES = [
+    ("dedup-through-seen", _dup_candidates),
+    ("failure-cached", _failing_derivation),
+]
+
+
+@requires_vidyut
+@pytest.mark.parametrize("name,setup", FALLBACK_CASES, ids=[c[0] for c in FALLBACK_CASES])
+def test_irregular_fallback_table(name, setup, monkeypatch):
+    engine._irregular_forms.cache_clear()
+    try:
+        want = setup(monkeypatch)
+        out = engine.analyze_word("पथिन्")
+        got = len([a for a in out["analyses"] if a["kind"] != "unknown"])
+        assert got == want, f"{name}: {out['analyses']}"
+    finally:
+        monkeypatch.undo()
+        engine._irregular_forms.cache_clear()
