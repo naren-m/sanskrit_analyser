@@ -186,6 +186,7 @@ def translate(record: dict[str, Any], model: str | None = None, chat=_chat) -> d
         try:
             answer = chat(messages, model)
         except Exception as exc:
+            logger.warning("translate LLM call failed (model %s)", model, exc_info=True)
             return {"source": "llm", "model": model, "attempts": attempt,
                     "error": f"LLM call failed: {exc}"}
         text = (answer or {}).get("translation", "").strip()
