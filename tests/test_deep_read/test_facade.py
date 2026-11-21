@@ -91,6 +91,16 @@ def test_analyze_via_segmenter_resolves_clean_root():
     assert "yoji" not in roots
 
 
+@requires_vidyut
+def test_segmenter_primary_flag_tracks_lead_reading_after_rerank():
+    # rank_analyses re-sorts what analyze_word marked; primary must follow [0].
+    out = DeepRead().analyze_via_segmenter("भवति").to_dict()
+    for tok in out["tokens"]:
+        flags = [a["primary"] for a in tok["analyses"]]
+        assert flags[0] is True
+        assert not any(flags[1:])
+
+
 def test_via_dharmamitra_returns_none_when_disabled_input_empty():
     # Empty input short-circuits to None without any network call.
     assert DeepRead().analyze_via_dharmamitra("") is None
@@ -117,6 +127,7 @@ def test_analyze_degrades_when_vidyut_unavailable(monkeypatch):
     assert out["tokens"]  # segmentation still produced tokens
     assert all(t["resolved"] is False for t in out["tokens"])
     assert all(t["analyses"][0]["kind"] == "unknown" for t in out["tokens"])
+    assert all(t["analyses"][0]["primary"] is True for t in out["tokens"])
     assert out["notes"]
 
 

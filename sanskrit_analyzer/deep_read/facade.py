@@ -159,7 +159,8 @@ class DeepRead:
                         "slp1": None,
                         "resolved": False,
                         "analyses": [{"kind": "unknown", "lemma": None,
-                                      "dhatu": None, "morphology": {}}],
+                                      "dhatu": None, "morphology": {},
+                                      "primary": True}],
                     }
                     for piece in pieces
                 ],
@@ -217,12 +218,16 @@ class DeepRead:
                     "slp1": None,
                     "resolved": False,
                     "analyses": [{"kind": "unknown", "lemma": None,
-                                  "dhatu": None, "morphology": {}}],
+                                  "dhatu": None, "morphology": {},
+                                      "primary": True}],
                 }
             # Re-rank so homographs (रामः → noun राम, not the short-root verb √rā)
             # surface the plausible reading first; use the ByT5 POS when present.
             pos = pos_hint_fn(w_iast) if pos_hint_fn else None
             tok["analyses"] = rank_analyses(tok.get("analyses", []), pos_hint=pos)
+            # rank_analyses re-sorts, so re-mark: ``primary`` must track [0].
+            for i, a in enumerate(tok["analyses"]):
+                a["primary"] = i == 0
             # Resolve each pada's root through the shared DhatuResolver so this
             # facade and DhatuIdentifier().identify() agree on root ownership
             # (yogaḥ → yuj, not the Kośa's raw "yoji"). No-op offline.
