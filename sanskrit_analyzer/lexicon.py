@@ -1,7 +1,15 @@
 """Layer B lexicon: lookup over the bundled CDSL dictionaries.
 
-A sixth source, Monier-Williams ("mw"), is read from SQLite; see
-:func:`resolve_mw_db`.
+Two further sources are read from SQLite, and their licences differ:
+
+* Monier-Williams ("mw") is CC BY-SA 4.0 and may be bundled; see
+  :func:`resolve_mw_db`.
+* Apte ("ap90", Practical Sanskrit-English Dictionary, 1890) is GPL-3.0, so the
+  package never bundles it and it is opt-in. An app builds the index itself from
+  its own copy with ``scripts/build_apte_index.py`` and points
+  ``SANSKRIT_AP90_DB`` at it (or places it in ``~/.sanskrit_analyzer/lexicon``);
+  see :func:`resolve_ap90_db`. ``lookup`` and ``prefix`` leave it out unless
+  ``sources`` names it.
 
 Five Cologne Digital Sanskrit Dictionaries tables live in
 ``data/vyutpatti/`` (see the README there). They share a SLP1 ``key`` column
@@ -40,6 +48,7 @@ class _Source(NamedTuple):
     text_col: str                # column holding the gloss or etymology body
     fallback_col: str | None     # used when ``text_col`` is empty for a row
     sqlite: bool = False         # read from the SQLite resolver, not the TSV dir
+    optin: bool = False          # left out of the default ``sources``
 
 
 _SOURCES: dict[str, _Source] = {
@@ -53,7 +62,9 @@ _SOURCES: dict[str, _Source] = {
         "abhidhanacintamani.tsv", "Abhidhānacintāmaṇi", "text", None
     ),
     "mw": _Source("mw.sqlite", "Monier-Williams", "text", None, sqlite=True),
+    "ap90": _Source("ap90.sqlite", "Apte", "text", None, sqlite=True, optin=True),
 }
+_DEFAULT_SOURCES = sorted(k for k, v in _SOURCES.items() if not v.optin)
 _LAYERB = {k: v for k, v in _SOURCES.items() if not v.sqlite}
 
 MW_ACKNOWLEDGEMENT = (
@@ -62,6 +73,32 @@ MW_ACKNOWLEDGEMENT = (
     "Südasienforschung, Universität zu Köln (https://www.sanskrit-lexicon.uni-koeln.de)"
 )
 MW_LICENCE = "CC BY-SA 4.0"
+AP90_ACKNOWLEDGEMENT = (
+    "Apte, Practical Sanskrit-English Dictionary (1890), digitised by the "
+    "Cologne Digital Sanskrit Dictionaries, Institut für Indologie und "
+    "Südasienforschung, Universität zu Köln (https://www.sanskrit-lexicon.uni-koeln.de)"
+)
+AP90_LICENCE = "GPL-3.0"
+# Per SQLite source: (table, acknowledgement, licence).
+_SQLITE_META = {
+    "mw": ("mw", MW_ACKNOWLEDGEMENT, MW_LICENCE),
+    "ap90": ("ap90", AP90_ACKNOWLEDGEMENT, AP90_LICENCE),
+}
+
+# Literal SQL per source. Table names cannot be bound as parameters, so each
+# query is spelled out rather than formatted from _SQLITE_META.
+_SQLITE_LOOKUP_SQL = {
+    "mw": "SELECT key, key_stem, lnum, page, text, hom FROM mw "
+    "WHERE key = ? ORDER BY rowid",
+    "ap90": "SELECT key, key_stem, lnum, page, text, hom FROM ap90 "
+    "WHERE key = ? ORDER BY rowid",
+}
+_SQLITE_PREFIX_SQL = {
+    "mw": "SELECT DISTINCT key FROM mw WHERE key >= ? AND key < ? "
+    "ORDER BY key LIMIT ?",
+    "ap90": "SELECT DISTINCT key FROM ap90 WHERE key >= ? AND key < ? "
+    "ORDER BY key LIMIT ?",
+}
 
 
 # Columns that become Entry attributes rather than staying in ``fields``.
@@ -119,6 +156,25 @@ def resolve_mw_db() -> Path | None:
     return next((c for c in candidates if c.is_file()), None)
 
 
+def resolve_ap90_db() -> Path | None:
+    """Find the Apte (AP90) SQLite file, or None.
+
+    Order: ``SANSKRIT_AP90_DB`` env, then
+    ``~/.sanskrit_analyzer/lexicon/ap90.sqlite``. There is no in-package path:
+    the data is GPL-3.0 and never ships with the package.
+    """
+    candidates: list[Path] = []
+    env = os.environ.get("SANSKRIT_AP90_DB")
+    if env:
+        candidates.append(Path(env).expanduser())
+    candidates.append(Path.home() / ".sanskrit_analyzer" / "lexicon" / "ap90.sqlite")
+    return next((c for c in candidates if c.is_file()), None)
+
+
+def _sqlite_path(source: str) -> Path | None:
+    return resolve_mw_db() if source == "mw" else resolve_ap90_db()
+
+
 def _spec(source: str) -> _Source:
     """The table spec for ``source``, or a KeyError naming the valid ids."""
     if source not in _SOURCES:
@@ -129,7 +185,7 @@ def _spec(source: str) -> _Source:
 def is_available(source: str | None = None) -> bool:
     """True if the Layer B data is present (does not load it)."""
     if source is not None and _spec(source).sqlite:
-        return resolve_mw_db() is not None
+        return _sqlite_path(source) is not None
     data_dir = resolve_data_dir()
     if data_dir is None:
         return False
@@ -182,52 +238,48 @@ def _index(source: str) -> dict[str, tuple[Entry, ...]]:
     return {k: tuple(v) for k, v in index.items()}
 
 
-def _mw_connect() -> sqlite3.Connection | None:
-    path = resolve_mw_db()
+def _sqlite_connect(source: str) -> sqlite3.Connection | None:
+    path = _sqlite_path(source)
     if path is None:
         return None
     return sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
 
 
-def _mw_lookup(key: str) -> list[Entry]:
-    con = _mw_connect()
+def _sqlite_lookup(source: str, key: str) -> list[Entry]:
+    con = _sqlite_connect(source)
     if con is None:
         return []
+    _, acknowledgement, licence = _SQLITE_META[source]
     try:
-        rows = con.execute(
-            "SELECT key, key_stem, lnum, page, text, hom FROM mw "
-            "WHERE key = ? ORDER BY rowid",
-            (key,),
-        ).fetchall()
+        rows = con.execute(_SQLITE_LOOKUP_SQL[source], (key,)).fetchall()
     finally:
         con.close()
-    spec = _SOURCES["mw"]
+    spec = _SOURCES[source]
     out = []
     for k, stem, lnum, page, text, hom in rows:
         extra = {"lnum": lnum, "hom": hom, "key_stem": stem}
         out.append(
             Entry(
-                source="mw",
+                source=source,
                 source_name=spec.name,
                 key=k,
                 text=text,
                 page=page or None,
                 fields={n: str(v) for n, v in extra.items() if v},
-                acknowledgement=MW_ACKNOWLEDGEMENT,
-                licence=MW_LICENCE,
+                acknowledgement=acknowledgement,
+                licence=licence,
             )
         )
     return out
 
 
-def _mw_prefix(partial: str, limit: int) -> list[str]:
-    con = _mw_connect()
+def _sqlite_prefix(source: str, partial: str, limit: int) -> list[str]:
+    con = _sqlite_connect(source)
     if con is None:
         return []
     try:
         rows = con.execute(
-            "SELECT DISTINCT key FROM mw WHERE key >= ? AND key < ? "
-            "ORDER BY key LIMIT ?",
+            _SQLITE_PREFIX_SQL[source],
             (partial, partial + "\U0010ffff", limit),
         ).fetchall()
     finally:
@@ -241,20 +293,20 @@ def _sorted_keys(source: str) -> list[str]:
 
 
 def lookup(word: str, sources: list[str] | None = None) -> list[Entry]:
-    """Entries for ``word`` across the requested sources (all by default).
+    """Entries for ``word`` across the requested sources (all but opt-in ones by default).
 
     ``word`` may be Devanāgarī, IAST or SLP1; it is normalised to SLP1, which is
-    how every key is stored. ``"mw"`` yields no entries when its SQLite file is
-    absent.
+    how every key is stored. ``"mw"`` and ``"ap90"`` yield no entries when their
+    SQLite file is absent; ``"ap90"`` is only read when named in ``sources``.
     """
     key = normalize_slp1(word).strip()
     if not key:
         return []
-    wanted = sources if sources is not None else sorted(_SOURCES)
+    wanted = sources if sources is not None else _DEFAULT_SOURCES
     out: list[Entry] = []
     for source in wanted:
         if _spec(source).sqlite:
-            out.extend(_mw_lookup(key))
+            out.extend(_sqlite_lookup(source, key))
         else:
             out.extend(_index(source).get(key, ()))
     return out
@@ -265,14 +317,14 @@ def prefix(
 ) -> list[str]:
     """Sorted, distinct SLP1 keys starting with ``partial``, at most ``limit``."""
     stem = normalize_slp1(partial).strip()
-    wanted = sources if sources is not None else sorted(_SOURCES)
+    wanted = sources if sources is not None else _DEFAULT_SOURCES
     specs = [(s, _spec(s)) for s in wanted]  # raises KeyError on an unknown id
     if not stem or limit <= 0:
         return []
     keys: set[str] = set()
     for source, spec in specs:
         if spec.sqlite:
-            keys.update(_mw_prefix(stem, limit))
+            keys.update(_sqlite_prefix(source, stem, limit))
             continue
         sk = _sorted_keys(source)
         start = bisect.bisect_left(sk, stem)
