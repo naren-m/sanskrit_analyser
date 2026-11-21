@@ -172,3 +172,16 @@ def test_agreement_is_token_f1() -> None:
     assert agreement([["rAmo", "gacCati"]], [["rAmaH", "gacCati"]]) == 1.0   # spelling folded
     assert agreement([["a", "b"]], [["a", "c"]]) == pytest.approx(0.5)
     assert agreement([["a"]], [[]]) == 0.0
+
+
+def test_smoke_bench_runs_offline(capsys: pytest.CaptureFixture[str]) -> None:
+    import time
+
+    from tests.bench.run import main
+
+    t0 = time.time()
+    assert main(["--smoke", "--n", "2"]) == 0
+    out = capsys.readouterr().out
+    assert time.time() - t0 < 60
+    assert "n=2" in out and "reader" in out
+    assert "reader-slm" not in out

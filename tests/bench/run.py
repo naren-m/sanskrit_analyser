@@ -26,6 +26,13 @@ Run::
         --split dev --n 100 --engines dp,prakriya --out bench.json
 
 ``--split heldout`` is measure-only. Never tune against it.
+
+Offline smoke (no corpus checkout, no SLM checkpoint, ``reader`` engine only,
+well under a minute)::
+
+    uv run python -m tests.bench.run --smoke --n 3
+
+The scoreboard and the win rule live in ``tests/bench/SCOREBOARD.md``.
 """
 from __future__ import annotations
 
@@ -43,8 +50,8 @@ from typing import Any
 from sanskrit_analyzer.dhatu.dhatupatha import strip_anubandhas
 from sanskrit_analyzer.models.scripts import Script
 from sanskrit_analyzer.utils import transliterate
-from tests.bench.corpus import (gold_padas, load_gita, load_plain, load_rows, sample,
-                                split_rows)
+from tests.bench.corpus import (Row, clean_verse, gold_padas, load_gita, load_plain,
+                                load_rows, sample, split_rows)
 from tests.bench.score import meter_match, norm_slp1, recovered
 
 logger = logging.getLogger(__name__)
@@ -244,6 +251,33 @@ def _rows(corpus: str, ramayanam: Path, split: str, n: int, seed: int, plain: Pa
     return split_rows(load_rows(ramayanam), split, n, seed), split, True
 
 
+def smoke_rows(n: int) -> list[Row]:
+    """First ``n`` verses of the committed ``corpus_verses.json``: no gold padas."""
+    cases = json.loads((DATA / "corpus_verses.json").read_text())[:n]
+    return [Row(c["ref"], 0, clean_verse(c["text"]), "", "", ()) for c in cases]
+
+
+def run_smoke(n: int, engines: list[str] | None = None) -> dict[str, Any]:
+    """Score the offline ``reader`` engine on the committed verses (label-free
+    metrics plus the hand-checked lemmas of those verses)."""
+    cases = json.loads((DATA / "corpus_verses.json").read_text())[:n]
+    texts = {c["text"] for c in cases}
+    lemma_gold = [g for g in _lemma_gold(None) if g[0] in texts]
+    rows = smoke_rows(n)
+    # The lemma pass re-reads each verse once per gold word: cache the reads.
+    scored = {name: score_engine(cache(fn), rows, lemma_gold)
+              for name, fn in _engines(engines or ["reader"]).items()}
+    for e in scored.values():
+        e.pop("_outputs")
+        e["agree"] = 1.0
+    return {
+        "git": _git_sha(), "corpus": "smoke", "split": "smoke", "n": len(rows), "seed": 0,
+        "has_gold": False, "agree_with": next(iter(scored)),
+        "meter": score_meter(rows), "engines": scored,
+        "pending_layers": list(PENDING_LAYERS),
+    }
+
+
 def run(ramayanam: Path, split: str, n: int, engines: list[str], seed: int,
         corpus: str = "ramayana", plain: Path | None = None) -> dict[str, Any]:
     rows, label, has_gold = _rows(corpus, ramayanam, split, n, seed, plain)
@@ -285,9 +319,11 @@ def format_report(report: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     logging.disable(logging.WARNING)
     ap = argparse.ArgumentParser(prog="python -m tests.bench.run")
-    ap.add_argument("--ramayanam", type=Path, required=True, help="ramayanam checkout")
+    ap.add_argument("--ramayanam", type=Path, help="ramayanam checkout (not needed with --smoke)")
+    ap.add_argument("--smoke", action="store_true",
+                    help="offline: reader engine only, first --n verses of tests/data/corpus_verses.json")
     ap.add_argument("--split", choices=("dev", "heldout"), default="dev")
-    ap.add_argument("--n", type=int, default=100)
+    ap.add_argument("--n", type=int, help="verses (default 100; 3 with --smoke)")
     ap.add_argument("--engines", default="dp,prakriya", help="dp,byt5,prakriya,reader,reader-slm,reader-best "
                     "(reader-slm/-best need SANSKRIT_SLM_CKPT)")
     ap.add_argument("--seed", type=int, default=0)
@@ -297,9 +333,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--plain", type=Path, help='JSON list with a "devanagari" field')
     ap.add_argument("--out", type=Path)
     args = ap.parse_args(argv)
+    if args.smoke:
+        report = run_smoke(args.n or 3)
+        sys.stdout.write(format_report(report) + "\n")
+        if args.out:
+            args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False))
+        return 0
+    if not args.ramayanam:
+        ap.error("--ramayanam is required unless --smoke")
     if args.corpus == "plain" and not args.plain:
         ap.error("--corpus plain needs --plain <file.json>")
-    report = run(args.ramayanam.expanduser(), args.split, args.n, args.engines.split(","),
+    report = run(args.ramayanam.expanduser(), args.split, args.n or 100, args.engines.split(","),
                  args.seed, args.corpus, args.plain.expanduser() if args.plain else None)
     sys.stdout.write(format_report(report) + "\n")
     if args.out:
