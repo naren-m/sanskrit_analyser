@@ -167,6 +167,10 @@ def test_upasarga_prefixed_verb_resolves_to_root(word):
     assert a["dhatu"]["english"] == "to ask"
 
 
+def test_every_canonical_upasarga_has_a_gloss():
+    assert set(engine._UPASARGAS.values()) <= set(engine._UPASARGA_ENGLISH)
+
+
 @requires_vidyut
 @pytest.mark.parametrize("word", ["पृच्छति", "पप्रच्छ"])
 def test_bare_prach_has_no_upasargas(word):

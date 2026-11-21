@@ -132,7 +132,7 @@ _UPASARGA_ENGLISH = {
     "api": "upon, close to",
     "ati": "beyond, excessively",
     "su": "well, easily",
-    "ut": "up, out",
+    "ud": "up, out",
     "aBi": "toward, against",
     "prati": "back, against, toward",
     "pari": "around, thoroughly",
@@ -179,7 +179,7 @@ class Analysis:
     morphology: dict[str, str] = field(default_factory=dict)
     krt: str | None = None  # kṛt suffix of a derived reading, e.g. "Ryat", "kvi~p"
     upasargas: list[str] = field(default_factory=list)  # canonical SLP1 prefixes peeled
-    upasarga_gloss: str | None = None  # curated gloss of the prefixes, with the root gloss
+    upasarga_gloss: str | None = None  # curated gloss of the peeled prefixes (root gloss is in dhatu.english)
 
     def to_dict(self) -> dict[str, Any]:
         d = {
