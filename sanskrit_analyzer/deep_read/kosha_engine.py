@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import logging
 import re
-from collections import Counter
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
@@ -463,14 +462,14 @@ _STEM_LEMMAS = {"maha": "mahat", "mahA": "mahat"}
 
 
 def _rank(analyses: list[Analysis]) -> list[Analysis]:
-    """Order by ``_KIND_ORDER``; ties go to the lemma most readings agree on.
+    """Order by ``_KIND_ORDER``.
 
-    The sort is stable, so a full tie keeps the kosha's lookup order (itself
-    deterministic: desandhi candidates in order, entries in kosha order). A
-    lexical key would flip e.g. mahAvIrya/mahAvIryA, which tie on votes.
+    The sort is stable, so ties keep the kosha's lookup order (itself
+    deterministic: desandhi candidates in order, entries in kosha order).
+    A lemma-agreement vote key was tried and dropped: it lowered lemma
+    accuracy on the in-repo gold, so agreement ranking is still open.
     """
-    votes = Counter(a.lemma for a in analyses)
-    return sorted(analyses, key=lambda a: (_KIND_ORDER.get(a.kind, 99), -votes[a.lemma]))
+    return sorted(analyses, key=lambda a: _KIND_ORDER.get(a.kind, 99))
 
 
 def _gate_and_rank(analyses: list[Analysis], slp: str,
@@ -486,7 +485,10 @@ def _gate_and_rank(analyses: list[Analysis], slp: str,
         return kept or [Analysis(kind="indeclinable", lemma=slp)]
     if slp in _STEM_LEMMAS:
         stem = _STEM_LEMMAS[slp]
-        is_lead = lambda a: a.kind == "nominal" and a.lemma == stem  # noqa: E731
+
+        def is_lead(a: Analysis) -> bool:
+            return a.kind == "nominal" and a.lemma == stem
+
         lead = [a for a in analyses if is_lead(a)] or [Analysis(kind="nominal", lemma=stem)]
         return lead + _rank([a for a in analyses if not is_lead(a)])
     name = next((a.lemma for a in analyses if a.lemma in PROPER_NOUNS), None) \

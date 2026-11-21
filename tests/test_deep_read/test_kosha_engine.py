@@ -49,12 +49,12 @@ GATE_CASES = {
         "maha", ["maha"],
         [Analysis(kind="derived", lemma="mahi"), Analysis(kind="nominal", lemma="mahat")],
         ["nominal", "derived"], "mahat"),
-    "tie within a kind goes to the lemma most readings share": (
+    "tie within a kind keeps lookup order, not lemma votes": (
         "xa", ["xa"],
         [Analysis(kind="nominal", lemma="aa"), Analysis(kind="nominal", lemma="zz"),
          Analysis(kind="nominal", lemma="zz", morphology={"vibhakti": "praTamA"})],
-        ["nominal", "nominal", "nominal"], "zz"),
-    "kind order beats agreement": (
+        ["nominal", "nominal", "nominal"], "aa"),
+    "kind order beats lookup order": (
         "xa", ["xa"],
         [Analysis(kind="nominal", lemma="n"), Analysis(kind="nominal", lemma="n",
                                                        morphology={"vibhakti": "praTamA"}),
