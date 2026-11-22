@@ -21,8 +21,12 @@ _ENCLITICS = ("ca", "tu", "iva", "eva", "api")
 
 
 def _nasal_fold(s: str) -> str:
-    """M or m before a stop becomes that stop's class nasal (assimilated nasal)."""
-    return re.sub(r"[Mm](?=[kKgGcCjJwWqQtTdDpPbB])", lambda m: _CLASS_NASAL[s[m.end()]], s)
+    """M or m before a stop becomes that stop's class nasal (assimilated nasal).
+
+    M before n or m is that nasal doubled (saMniDO == sanniDO).
+    """
+    s = re.sub(r"[Mm](?=[kKgGcCjJwWqQtTdDpPbB])", lambda m: _CLASS_NASAL[s[m.end()]], s)
+    return re.sub(r"M(?=[nm])", lambda m: s[m.end()], s)
 
 
 def _lemma_key(lemma: str) -> str:
@@ -108,9 +112,11 @@ def _candidates(gold: str, toks: list[tuple[str, str | None]]) -> list[str | Non
         plain = joined = ""
         stems: list[str] | None = ["", ""]
         for j in range(i, min(i + _MAX_RUN, len(toks))):
+            lemma = toks[j][1]
+            # Surfaces of members i..j-1 plus the lemma of member j (mahA + bala).
+            mixed = None if lemma is None else _vowel_join(joined, re.sub(r"[^A-Za-z]", "", lemma))
             plain += surf[j]
             joined = _vowel_join(joined, surf[j])
-            lemma = toks[j][1]
             if lemma is None or stems is None:
                 stems = None
             else:
@@ -120,7 +126,7 @@ def _candidates(gold: str, toks: list[tuple[str, str | None]]) -> list[str | Non
             for key, enc in targets:
                 if key in keys and (enc is None or (
                         j + 1 < len(toks) and norm_slp1(surf[j + 1]) == norm_slp1(enc))):
-                    found = (found or []) + [lemma] + (stems or [])
+                    found = (found or []) + [lemma] + (stems or []) + [mixed]
     return found
 
 

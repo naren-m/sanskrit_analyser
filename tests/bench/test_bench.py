@@ -91,6 +91,11 @@ def test_norm_slp1(word: str, want: str) -> None:
         (["puMgavam"], ["puNgavam"], 1),
         (["puMgavam"], ["punGavam"], 0),    # nasal of the wrong class
         (["saMkalpaH"], ["sam", "kalpaH"], 1),  # member ending in m before a stop
+        # anusvāra before n / m is the doubled nasal
+        (["sanniDO"], ["saMniDO"], 1),
+        (["kinnimittaM"], ["kiMnimittam"], 1),
+        (["janasanniDO"], ["jana", "saMniDO"], 1),
+        (["sanniDO"], ["saMDO"], 0),
         # pausal visarga: only the final one may differ
         (["saH"], ["sa"], 1),
         (["SrutaH"], ["Sruta"], 1),
@@ -127,6 +132,12 @@ def test_recovered(gold: list[str], tokens: list[str], want: int) -> None:
          {"ikzvAkuvaMSapraBava", "praBava"}, True),
         ("mAtulakulam", [("mAtula", "mAtula"), ("kulam", "kula")], {"kula", "mAtulakula"}, True),
         ("niyatAtmA", [("niyata", "niyata"), ("AtmA", "Atman")], {"niyatAtman"}, True),
+        # compound stem = member surfaces + last member's lemma
+        ("mahAbalaH", [("mahA", "mahat"), ("balaH", "bala")], {"mahAbala"}, True),
+        ("niyatAtmA", [("niyata", "niyam"), ("AtmA", "Atman")], {"niyatAtman"}, True),
+        ("mahAvIryaH", [("mahA", "mahat"), ("vIryaH", "vIrya")], {"mahAvIrya"}, True),
+        ("mahAbalaH", [("mahA", "mahat"), ("balaH", "bala")], {"mahAbAla"}, False),
+        ("mahAbalaH", [("mahA", "mahat"), ("balaH", "balin")], {"mahAbala"}, False),
         ("SrutaH", [("Sruta", "Sruta")], {"Sru", "Sruta"}, True),
         ("saH", [("sa", "tad")], {"tad"}, True),
         ("putrASca", [("putrAH", "putra"), ("ca", "ca")], {"putra"}, True),
