@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -186,7 +187,12 @@ def test_smoke_bench_runs_offline(tmp_path: Path, capsys: pytest.CaptureFixture[
 
     out_json = tmp_path / "smoke.json"
     t0 = time.time()
-    assert main(["--smoke", "--n", "1", "--out", str(out_json)]) == 0
+    try:
+        assert main(["--smoke", "--n", "1", "--out", str(out_json)]) == 0
+    finally:
+        # main() calls logging.disable(WARNING) for the CLI; undo it so later
+        # tests in this process keep their warning logs.
+        logging.disable(logging.NOTSET)
     out = capsys.readouterr().out
     assert time.time() - t0 < 60
     assert "n=1" in out and "reader-slm" not in out
