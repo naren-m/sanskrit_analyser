@@ -18,6 +18,14 @@ from sanskrit_analyzer.vidyut_data import kosha as _kosha
 logger = logging.getLogger(__name__)
 
 
+def step_term_text(item) -> str:
+    """Text of one ``Step.result`` item: a ``str`` (0.4.0) or a ``Term`` (fork)."""
+    if isinstance(item, str):
+        return item
+    text = getattr(item, "text", None)
+    return text if isinstance(text, str) else str(item)
+
+
 @dataclass(frozen=True)
 class PrakriyaStep:
     step: int
@@ -99,7 +107,7 @@ def _trace(prakriya) -> list[PrakriyaStep]:
         steps.append(
             PrakriyaStep(
                 step=i,
-                form=" + ".join(str(t) for t in s.result),
+                form=" + ".join(step_term_text(t) for t in s.result),
                 code=s.code,
                 source=str(s.source),
                 sutra_text=sutra.text if sutra else None,

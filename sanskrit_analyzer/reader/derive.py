@@ -393,13 +393,16 @@ def _subanta(surface: str, stems, morph: Morph) -> Reading | None:
                 logger.debug("subanta derive failed for %s (stem %s, %s)",
                              surface, stem, linga, exc_info=True)
                 continue
+            feats = {"vibhakti": morph.vibhakti, "vacana": morph.vacana,
+                     "linga": linga, **extra}
             for p in prakriyas:
-                feats = {"vibhakti": morph.vibhakti, "vacana": morph.vacana,
-                         "linga": linga, **extra}
                 if same_surface(p.text, surface):
                     return Reading(surface, stem, "subanta", feats, True, "vidyut",
                                    dhatu=dhatu, trace=_trace(p))
-                if enclitic and stem in enclitic[0] and same_surface(enclitic[0][stem], surface):
+            # Only when vidyut does not derive the enclitic itself (0.4.0): 8.1.22 reader rule.
+            if enclitic and stem in enclitic[0] and same_surface(enclitic[0][stem], surface):
+                p = prakriyas[0] if prakriyas else None
+                if p is not None:
                     feats.pop("linga")
                     note = (f"{enclitic[1]}: enclitic {enclitic[0][stem]} for {p.text} "
                             "(reader rule; not sentence-initial)")

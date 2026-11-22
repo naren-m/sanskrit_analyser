@@ -30,7 +30,7 @@ pytestmark = pytest.mark.skipif(
         # enclitic te for tava, 8.1.22 (BG 2.47)
         (
             "te", "tvad", "SG", False, "subanta", "yuzmad",
-            ("vibhakti", "zazWI"), "vidyut+reader-rule",
+            ("vibhakti", "zazWI"), ("vidyut", "vidyut+reader-rule"),  # fork derives te itself
         ),
         # aorist without augment after mā, 6.4.74 (BG 2.47)
         ("BUH", "BU", "SPs2", True, "tinanta", "BU", ("lakara", "luN"), "vidyut+reader-rule"),
@@ -58,7 +58,9 @@ def test_verified_readings(surface, lemma, tag, after_ma, kind, want_lemma, want
                            source) -> None:
     r = verify_word(surface, lemma, decode(tag), after_ma=after_ma)
     assert r.verified, r.notes
-    assert (r.kind, r.lemma, r.source) == (kind, want_lemma, source)
+    sources = (source,) if isinstance(source, str) else source
+    assert (r.kind, r.lemma) == (kind, want_lemma)
+    assert r.source in sources
     assert r.features.get(want_feature[0]) == want_feature[1]
 
 
