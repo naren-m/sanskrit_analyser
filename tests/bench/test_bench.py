@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -177,3 +178,28 @@ def test_agreement_is_token_f1() -> None:
     assert agreement([["rAmo", "gacCati"]], [["rAmaH", "gacCati"]]) == 1.0   # spelling folded
     assert agreement([["a", "b"]], [["a", "c"]]) == pytest.approx(0.5)
     assert agreement([["a"]], [[]]) == 0.0
+
+
+def test_smoke_bench_runs_offline(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    import time
+
+    from tests.bench.run import main
+
+    out_json = tmp_path / "smoke.json"
+    t0 = time.time()
+    try:
+        assert main(["--smoke", "--n", "1", "--out", str(out_json)]) == 0
+    finally:
+        # main() calls logging.disable(WARNING) for the CLI; undo it so later
+        # tests in this process keep their warning logs.
+        logging.disable(logging.NOTSET)
+    out = capsys.readouterr().out
+    assert time.time() - t0 < 60
+    assert "n=1" in out and "reader-slm" not in out
+    report = json.loads(out_json.read_text())
+    e = report["engines"]["reader"]
+    assert list(report["engines"]) == ["reader"]
+    assert e["verses"] == 1 and e["coverage"] > 0.5 and e["verify"] > 0.5 and e["lemma_n"] > 0
+    # The non-slow tier refuses weight loads (conftest guard), so the reader runs on
+    # its DP proposer here. The ByT5 reader is measured outside the sandbox.
+    assert set(e["proposers"]) == {"dp"}
