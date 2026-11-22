@@ -349,6 +349,11 @@ def format_report(report: dict[str, Any]) -> str:
             if any(k.startswith("cascade") for k in e["proposers"]) and ran:
                 fb = sum(v for k, v in e["proposers"].items() if k.startswith("cascade+byt5"))
                 lines.append(f"byt5 fallback[{name}] = {fb}/{ran} verses ({fb / ran:.0%})")
+                reasons = Counter()
+                for k, v in e["proposers"].items():
+                    if k.startswith("cascade+byt5["):
+                        reasons[k[len("cascade+byt5["):k.index("]")]] += v
+                lines.append(f"byt5 fallback by reason[{name}] = {dict(reasons)}")
         if "seg_recall_legacy" in e:
             lines.append(f"legacy scorer {name}: seg_recall {e['seg_recall_legacy']:.3f} -> "
                          f"{e['seg_recall']:.3f}, lemma {e['lemma_acc_legacy']:.3f} -> "
