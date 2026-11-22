@@ -149,11 +149,29 @@ PROPOSERS = ("byt5", "slm", "best", "cascade")
 CASCADE_MIN_COVERAGE = float(os.environ.get("SANSKRIT_CASCADE_MIN_COVERAGE", "0.85"))
 
 
+def _padas(words: list[dict[str, Any]]) -> list[str]:
+    return [m["surface"] for w in words for m in (w.get("compound_members") or [w])]
+
+
+def fallback_reason(words: list[dict[str, Any]], text_slp1: str, min_coverage: float) -> str | None:
+    """Why the char model's reading is in doubt, or None when it can stand.
+
+    Checked in order: "unverified" (no words, or a word fails verification),
+    "coverage" (below min_coverage), "unlicensed" (Pāṇini's rules cannot
+    re-join the padas into the input).
+    """
+    if not words or not all(w["verified"] for w in words):
+        return "unverified"
+    if coverage(text_slp1, words) < min_coverage:
+        return "coverage"
+    if not split_is_licensed(text_slp1, _padas(words)).ok:
+        return "unlicensed"
+    return None
+
+
 def needs_fallback(words: list[dict[str, Any]], text_slp1: str, min_coverage: float) -> bool:
     """True when the char model's reading is in doubt and ByT5 should be asked too."""
-    if not words or not all(w["verified"] for w in words):
-        return True
-    return coverage(text_slp1, words) < min_coverage
+    return fallback_reason(words, text_slp1, min_coverage) is not None
 
 
 def _slm_hypotheses(text_slp1: str) -> list[Hypothesis] | None:
@@ -241,8 +259,10 @@ def read_words(text: str, proposer: str = "byt5") -> tuple[list[dict[str, Any]],
     "best": run both and keep the one with the higher verified share plus
     coverage (ties go to ByT5), or "cascade": run the char model and call ByT5
     only when a word is unverified or coverage is below CASCADE_MIN_COVERAGE,
-    then keep the better of the two (label "cascade+byt5:..." when ByT5 ran;
-    without a checkpoint the char model yields "dp", so ByT5 is asked).
+    or its split is not licensed by sandhi, then keep the better of the two
+    (label "cascade+byt5[reason]:..." when ByT5 ran, reason being unverified,
+    coverage, unlicensed or dp; without a checkpoint the char model yields
+    "dp", so ByT5 is asked). A licensed split outranks an unlicensed one.
     Coverage catches dropped and doubled words,
     which verification cannot see. Pāṇini disposes either way.
     """
@@ -257,22 +277,24 @@ def read_words(text: str, proposer: str = "byt5") -> tuple[list[dict[str, Any]],
         hyps, label = _propose(text, name)
         words = _assemble(hyps)
         score = _verified_share(words) + coverage(slp1, words)
-        return round(score, 4), name == "byt5", words, label
+        licensed = split_is_licensed(slp1, _padas(words)).ok
+        return licensed, round(score, 4), name == "byt5", words, label
 
     if proposer == "cascade":
         first = scored("slm")
-        if first[3] == "slm" and not needs_fallback(first[2], slp1, CASCADE_MIN_COVERAGE):
-            return first[2], "cascade:slm"
-        _, _, words, label = max([first, scored("byt5")], key=lambda c: (c[0], c[1]))
-        return words, f"cascade+byt5:{label}"
-    _, _, words, label = max([scored("byt5"), scored("slm")], key=lambda c: (c[0], c[1]))
+        reason = (fallback_reason(first[3], slp1, CASCADE_MIN_COVERAGE)
+                  if first[4] == "slm" else "dp")
+        if reason is None:
+            return first[3], "cascade:slm"
+        _, _, _, words, label = max([first, scored("byt5")], key=lambda c: c[:3])
+        return words, f"cascade+byt5[{reason}]:{label}"
+    _, _, _, words, label = max([scored("byt5"), scored("slm")], key=lambda c: c[:3])
     return words, f"best:{label}"
 
 
 def split_record(text_slp1: str, words: list[dict[str, Any]]) -> dict[str, Any]:
     """Do Pāṇini's rules re-join the chosen words into the input? Measures only."""
-    padas = [m["surface"] for w in words for m in (w.get("compound_members") or [w])]
-    lic = split_is_licensed(text_slp1, padas)
+    lic = split_is_licensed(text_slp1, _padas(words))
     js = lic.rejoin.junctions if lic.rejoin else ()
     sutras = sorted({j.sutra.split()[0] for j in js if j.sutra})
     return {"licensed": lic.ok, "unruled_junctions": len(lic.unruled), "sutras": sutras}
