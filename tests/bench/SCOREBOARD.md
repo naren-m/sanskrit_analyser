@@ -2,19 +2,41 @@
 
 One scoreboard for reader model work. Goal (naren, 2026-11-21): the best Sanskrit
 reader for reading Rāmāyaṇa / Gītā verses in ramayanam. Every model PR is judged
-against the numbers below, produced by `python -m tests.bench.run`.
+against the **Baseline (#96 scorer)** table below (the `reader` row on Rāmāyaṇa
+held-out), produced by `python -m tests.bench.run`. The legacy-scorer table further
+down is kept for history only.
 
-## Baseline
+## Baseline (#96 scorer)
+
+Scorer fix from #96 (PR #98), git `eb4c95e` on `main`. Checkpoint: DCS v4,
+`ckpt_s30000`. Run by naren's orchestrator.
+
+| corpus | split (data) | engine | seg_recall | split (metric) | verify | lemma | cover | agree | s/verse |
+|---|---|---|---|---|---|---|---|---|---|
+| Rāmāyaṇa held-out (n=60, seed 3) | heldout | reader | 0.988 | 1.231 | 0.993 | 0.909 | 0.935 | 1.000 | 15.73 |
+| | heldout | reader-slm | 0.949 | 1.231 | 0.983 | 0.855 | 0.928 | 0.915 | 3.81 |
+| Gītā, all chapters (n=80, seed 2) | n/a | reader | 0.911 | 0.976 | 0.993 | n/a | 0.922 | 1.000 | 13.87 |
+| | n/a | reader-slm | 0.882 | 0.985 | 0.988 | n/a | 0.920 | 0.934 | 3.88 |
+
+Commands:
+
+    python -m tests.bench.run --ramayanam ~/Projects/ramayanam --engines reader,reader-slm --split heldout --n 60 --seed 3
+    python -m tests.bench.run --ramayanam ~/Projects/ramayanam --engines reader,reader-slm --corpus gita --n 80 --seed 2
+
+- `s/verse` was measured while a `vllm-mlx` server shared the GPU, which inflates it
+  about 3-4x. Do not compare it with the legacy `s/verse` column.
+- The Gītā command has no `--gita-chapters` filter (main lacks it), so those rows are
+  not comparable to the legacy "Gītā 10–18" rows.
+- Cross-check, `--legacy-score`, Rāmāyaṇa held-out, reader: seg_recall 0.963 -> 0.988,
+  lemma 0.764 -> 0.909. The legacy numbers match the old table exactly, so only the
+  scorer changed, not the engine output.
+
+## Legacy scorer (pre-#96), for history
 
 Checkpoint: DCS v4, `s30000`. Cascade threshold: 0.85. Source of the numbers:
-`naren-m/sanskrit_model` `experiments/cascade/eval_*.txt`.
-
-> **Legacy scorer.** Every number below comes from the scorer before the fix
-> tracked in #96, so all of them are "legacy scorer" numbers. Per naren, `lemma`
-> (0.764) and `seg_recall` (0.963) undercount: every lemma miss is a
-> compound/visarga/nasal matching artifact. #96 is not on main. Its numbers replace
-> these, and **this table must be re-recorded with the #96 scorer before any model
-> PR is judged against it.**
+`naren-m/sanskrit_model` `experiments/cascade/eval_*.txt`. These come from the scorer
+before the #96 fix and undercount `lemma` and `seg_recall`. Model PRs are not judged
+against this table.
 
 Legacy scorer, DCS v4 `s30000`, cascade threshold 0.85:
 
@@ -34,7 +56,7 @@ Legacy scorer, DCS v4 `s30000`, cascade threshold 0.85:
 padas (about 0.9 for a perfect split). `n/a` means the corpus has no gold for that
 column.
 
-Other recorded runs (legacy scorer, Rāmāyaṇa held-out, n=60, seed 3):
+Other recorded runs (legacy scorer, pre-#96, Rāmāyaṇa held-out, n=60, seed 3):
 
 | date | comparison | seg_recall | verify | lemma | note |
 |---|---|---|---|---|---|
@@ -68,7 +90,7 @@ and `--engines` has no `reader-cascade` (it has `dp`, `byt5`, `prakriya`, `reade
 ## Target: when a change wins
 
 Measured on Rāmāyaṇa held-out (`--split heldout`, measure-only, never tune on it)
-against the `reader` row:
+against the `reader` row of the Baseline (#96 scorer) table (not the legacy table):
 
 - `seg_recall` and `lemma` do not drop below `reader`.
 - `verify` stays at or above 0.99.
