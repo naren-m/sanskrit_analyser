@@ -59,9 +59,17 @@ def _letters(tokens: list[str]) -> list[str]:
 def _targets(gold: str) -> list[tuple[str, str | None]]:
     """(key, enclitic that must follow) pairs a gold pada may be recovered as."""
     out: list[tuple[str, str | None]] = [(_key(gold), None)]
+    g = re.sub(r"[^A-Za-z]", "", gold)
     for e in _ENCLITICS:
-        if gold.endswith(e) and len(gold) > len(e):
-            out.append((_key(gold[: -len(e)]), e))
+        if g.endswith(e) and len(g) > len(e):
+            stem = g[: -len(e)]
+            out.append((_key(stem), e))
+            # Final -n before c/t surfaces as -MS / -Ms (kIrtimAMSca = kIrtimAn ca).
+            if stem.endswith(("MS", "Ms")):
+                out.append((_key(stem[:-2] + "n"), e))
+    # -aH + api -> -o'pi (so'pi = saH api); the avagraha is already stripped.
+    if g.endswith("opi") and len(g) > 3:
+        out.append((_key(g[:-3] + "aH"), "api"))
     return out
 
 

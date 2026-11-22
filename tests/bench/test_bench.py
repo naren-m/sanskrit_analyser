@@ -101,6 +101,13 @@ def test_norm_slp1(word: str, want: str) -> None:
         (["putrASca"], ["putrAH", "ca"], 1),
         (["fzestu"], ["fzeH", "tu"], 1),
         (["diDakzoriva"], ["diDakzoH", "iva"], 1),
+        (["krudDastu"], ["krudDaH", "tu"], 1),
+        (["sArasESca"], ["sArasEH", "ca"], 1),
+        (["pravIvivakzoriva"], ["pravIvivakzoH", "iva"], 1),
+        (["kIrtimAMSca"], ["kIrtimAn", "ca"], 1),   # -n ca -> -MSca
+        (["kIrtimAMSca"], ["kIrtimAt", "ca"], 0),   # a different stem
+        (["so'pi"], ["saH", "api"], 1),             # -aH api -> -o'pi
+        (["so'pi"], ["saH", "tu"], 0),              # wrong enclitic
         (["putrASca"], ["putrAH", "tu"], 0),    # wrong enclitic
         (["putrASca"], ["putrAH"], 0),          # enclitic missing
         (["putrASca"], ["putrAH", "x", "ca"], 0),  # not adjacent
