@@ -277,7 +277,7 @@ def smoke_rows(n: int) -> list[Row]:
     return [Row(c["ref"], 0, clean_verse(c["text"]), "", "", ()) for c in cases]
 
 
-def run_smoke(n: int, engines: list[str] | None = None) -> dict[str, Any]:
+def run_smoke(n: int, engines: list[str] | None = None, legacy: bool = False) -> dict[str, Any]:
     """Score the offline ``reader`` engine on the committed verses (label-free
     metrics plus the hand-checked lemmas of those verses)."""
     cases = json.loads((DATA / "corpus_verses.json").read_text())[:n]
@@ -288,7 +288,7 @@ def run_smoke(n: int, engines: list[str] | None = None) -> dict[str, Any]:
     scored = {}
     for name, fn in _engines(engines or ["reader"]).items():
         PROPOSERS_RAN.clear()
-        scored[name] = score_engine(cache(fn), rows, lemma_gold)
+        scored[name] = score_engine(cache(fn), rows, lemma_gold, legacy)
         # Which proposer actually ran: "dp" means the ByT5 load failed (or was
         # refused by the non-slow weight guard) and the reader fell back.
         scored[name]["proposers"] = dict(PROPOSERS_RAN)
@@ -308,7 +308,10 @@ def run(ramayanam: Path, split: str, n: int, engines: list[str], seed: int,
         legacy: bool = False) -> dict[str, Any]:
     rows, label, has_gold = _rows(corpus, ramayanam, split, n, seed, plain)
     lemma_gold = _lemma_gold(ramayanam) if corpus == "ramayana" else []
-    scored = {name: score_engine(fn, rows, lemma_gold, legacy) for name, fn in _engines(engines).items()}
+    scored = {
+        name: score_engine(fn, rows, lemma_gold, legacy)
+        for name, fn in _engines(engines).items()
+    }
     outputs = {name: e.pop("_outputs") for name, e in scored.items()}
     first = next(iter(outputs), None)
     for name, e in scored.items():   # agreement with the first engine listed
@@ -371,7 +374,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path)
     args = ap.parse_args(argv)
     if args.smoke:
-        report = run_smoke(args.n or 3)
+        report = run_smoke(args.n or 3, legacy=args.legacy_score)
         sys.stdout.write(format_report(report) + "\n")
         if args.out:
             args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False))

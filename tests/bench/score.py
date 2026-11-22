@@ -20,6 +20,16 @@ _CLASS_NASAL = {c: n for cls, n in (("kKgG", "N"), ("cCjJ", "Y"), ("wWqQ", "R"),
 _ENCLITICS = ("ca", "tu", "iva", "eva", "api")
 
 
+def _nasal_fold(s: str) -> str:
+    """M or m before a stop becomes that stop's class nasal (assimilated nasal)."""
+    return re.sub(r"[Mm](?=[kKgGcCjJwWqQtTdDpPbB])", lambda m: _CLASS_NASAL[s[m.end()]], s)
+
+
+def _lemma_key(lemma: str) -> str:
+    """Narrow lemma key: letters only plus the nasal fold. No voicing or visarga folds."""
+    return _nasal_fold(re.sub(r"[^A-Za-z]", "", lemma or "")).replace("M", "m")
+
+
 def norm_slp1(word: str, legacy: bool = False) -> str:
     """SLP1 key with sandhi *spelling* folded away.
 
@@ -30,7 +40,7 @@ def norm_slp1(word: str, legacy: bool = False) -> str:
     """
     s = re.sub(r"[^A-Za-z]", "", word or "")
     if not legacy:
-        s = re.sub(r"M(?=[kKgGcCjJwWqQtTdDpPbB])", lambda m: _CLASS_NASAL[s[m.end()]], s)
+        s = _nasal_fold(s)
     s = s.replace("M", "m")
     s = re.sub(r"o$", "aH", s)
     s = re.sub(r"[srSz]$", "H", s)
@@ -110,11 +120,12 @@ def lemma_match(gold: str, toks: list[tuple[str, str | None]], accepted: set[str
     """True when a run of output tokens recovers ``gold`` with an accepted lemma.
 
     Verb lemmas are upadeśas (``gamx~``), so they also match after anubandha
-    stripping. Lemmas compare under ``norm_slp1`` (nasal and spelling folds).
+    stripping. Lemmas compare under ``_lemma_key`` (nasal fold only, so lemmas
+    differing in voicing or a final sibilant stay distinct words).
     """
-    want = {norm_slp1(a) for a in accepted}
+    want = {_lemma_key(a) for a in accepted}
     return any(
-        got is not None and (norm_slp1(got) in want or norm_slp1(strip_anubandhas(got)) in want)
+        got is not None and (_lemma_key(got) in want or _lemma_key(strip_anubandhas(got)) in want)
         for got in _candidates(gold, toks) or []
     )
 

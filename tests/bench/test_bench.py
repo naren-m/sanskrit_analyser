@@ -90,6 +90,7 @@ def test_norm_slp1(word: str, want: str) -> None:
         # nasal: anusvāra before its own class
         (["puMgavam"], ["puNgavam"], 1),
         (["puMgavam"], ["punGavam"], 0),    # nasal of the wrong class
+        (["saMkalpaH"], ["sam", "kalpaH"], 1),  # member ending in m before a stop
         # pausal visarga: only the final one may differ
         (["saH"], ["sa"], 1),
         (["SrutaH"], ["Sruta"], 1),
@@ -112,7 +113,8 @@ def test_recovered(gold: list[str], tokens: list[str], want: int) -> None:
 @pytest.mark.parametrize(
     ("gold", "toks", "accepted", "want"),
     [
-        ("munipuNgavam", [("muni", "muni"), ("puNgavam", "puNgava")], {"munipuMgava", "puMgava"}, True),
+        ("munipuNgavam", [("muni", "muni"), ("puNgavam", "puNgava")],
+         {"munipuMgava", "puMgava"}, True),
         ("ikzvAkuvaMSapraBavaH",
          [("ikzvAku", "ikzvAku"), ("vaMSa", "vaMSa"), ("praBavaH", "praBava")],
          {"ikzvAkuvaMSapraBava", "praBava"}, True),
@@ -123,7 +125,11 @@ def test_recovered(gold: list[str], tokens: list[str], want: int) -> None:
         ("putrASca", [("putrAH", "putra"), ("ca", "ca")], {"putra"}, True),
         ("fzestu", [("fzeH", "fzi"), ("tu", "tu")], {"fzi"}, True),
         ("gacCati", [("gacCati", "gamx~")], {"gam"}, True),   # anubandha strip kept
-        ("munipuNgavam", [("muni", "muni"), ("puNgavam", "puNgava")], {"kula"}, False),  # wrong lemma
+        ("munipuNgavam", [("muni", "muni"), ("puNgavam", "puNgava")],
+         {"kula"}, False),  # wrong lemma
+        ("balam", [("balam", "pala")], {"bala"}, False),   # voicing is not folded in lemmas
+        ("devaH", [("devaH", "teva")], {"deva"}, False),
+        ("rAmaH", [("rAmaH", "rAmaz")], {"rAmaH"}, False),  # no final-sibilant fold
         ("mAtulakulam", [("mAtula", "mAtula"), ("kulam", "kula")], {"mAtulA"}, False),
         ("guRavAnkaH", [("guRavAn", "guRavat"), ("kaH", "kim")], {"guRavat"}, False),  # merge
         ("rAma", [("rAmA", "rAmA")], {"rAma"}, False),
