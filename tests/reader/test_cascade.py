@@ -80,7 +80,7 @@ def test_cascade(monkeypatch, slm_hyps, slm_verified, want_calls, want_label) ->
         ("cascade", {"slm": False, "byt5": True}, ["slm", "byt5"],
          "cascade+byt5[unlicensed]:byt5", "gacCati"),                     # fallback, licensed wins
         ("cascade", {"slm": False, "byt5": False}, ["slm", "byt5"],
-         "cascade+byt5[unlicensed]:slm", "gacCati"),                      # neither: score, then ByT5
+         "cascade+byt5[unlicensed]:slm", "gacCati"),                  # neither: score, then ByT5
         ("best", {"slm": True, "byt5": False}, ["byt5", "slm"], "best:slm", "gacCati"),
         ("best", {"slm": False, "byt5": True}, ["byt5", "slm"], "best:byt5", "gacCati"),
     ],
@@ -99,7 +99,10 @@ def test_licensed_outranks_score(monkeypatch, proposer, licensed, want_calls, wa
 
     def assemble(h):
         # slm gets a perfect score; byt5 is marked unverified (lower score)
-        return [{"surface": x.surface, "verified": cur["name"] == "slm", "who": cur["name"]} for x in h]
+        return [
+            {"surface": x.surface, "verified": cur["name"] == "slm", "who": cur["name"]}
+            for x in h
+        ]
 
     def lic(t, padas):
         return type("L", (), {"ok": licensed[words_who[0]]})()
