@@ -121,7 +121,8 @@ def _engines(names: list[str]) -> dict[str, Engine]:
 
     table = {"dp": deep(False), "byt5": deep(True), "prakriya": prakriya,
              "reader": reader_with("byt5"), "reader-slm": reader_with("slm"),
-             "reader-best": reader_with("best")}
+             "reader-best": reader_with("best"),
+             "reader-cascade": reader_with("cascade")}
     return {n: table[n] for n in names}
 
 
@@ -308,10 +309,12 @@ def run(ramayanam: Path, split: str, n: int, engines: list[str], seed: int,
         legacy: bool = False) -> dict[str, Any]:
     rows, label, has_gold = _rows(corpus, ramayanam, split, n, seed, plain)
     lemma_gold = _lemma_gold(ramayanam) if corpus == "ramayana" else []
-    scored = {
-        name: score_engine(fn, rows, lemma_gold, legacy)
-        for name, fn in _engines(engines).items()
-    }
+    scored = {}
+    for name, fn in _engines(engines).items():
+        PROPOSERS_RAN.clear()
+        scored[name] = score_engine(fn, rows, lemma_gold, legacy)
+        if PROPOSERS_RAN:
+            scored[name]["proposers"] = dict(PROPOSERS_RAN)
     outputs = {name: e.pop("_outputs") for name, e in scored.items()}
     first = next(iter(outputs), None)
     for name, e in scored.items():   # agreement with the first engine listed
@@ -342,6 +345,10 @@ def format_report(report: dict[str, Any]) -> str:
     for name, e in report["engines"].items():
         if "proposers" in e:
             lines.append(f"proposer[{name}] = {e['proposers']}")
+            ran = sum(e["proposers"].values())
+            if any(k.startswith("cascade") for k in e["proposers"]) and ran:
+                fb = sum(v for k, v in e["proposers"].items() if k.startswith("cascade+byt5"))
+                lines.append(f"byt5 fallback[{name}] = {fb}/{ran} verses ({fb / ran:.0%})")
         if "seg_recall_legacy" in e:
             lines.append(f"legacy scorer {name}: seg_recall {e['seg_recall_legacy']:.3f} -> "
                          f"{e['seg_recall']:.3f}, lemma {e['lemma_acc_legacy']:.3f} -> "
@@ -361,9 +368,10 @@ def main(argv: list[str] | None = None) -> int:
                           "tests/data/corpus_verses.json"))
     ap.add_argument("--split", choices=("dev", "heldout"), default="dev")
     ap.add_argument("--n", type=int, help="verses (default 100; 3 with --smoke)")
-    ap.add_argument("--engines", default="dp,prakriya",
-                    help="dp,byt5,prakriya,reader,reader-slm,reader-best "
-                    "(reader-slm/-best need SANSKRIT_SLM_CKPT)")
+    ap.add_argument("--engines",
+                    help="dp,byt5,prakriya,reader,reader-slm,reader-best,reader-cascade "
+                    "(default dp,prakriya; reader with --smoke; "
+                    "reader-slm/-best/-cascade need SANSKRIT_SLM_CKPT)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--corpus", choices=("ramayana", "gita", "plain"), default="ramayana",
                     help="gita: ramayanam's gita pack (gold = gita/gita word keys). "
@@ -374,7 +382,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path)
     args = ap.parse_args(argv)
     if args.smoke:
-        report = run_smoke(args.n or 3, legacy=args.legacy_score)
+        report = run_smoke(args.n or 3, args.engines.split(",") if args.engines else None,
+                           legacy=args.legacy_score)
         sys.stdout.write(format_report(report) + "\n")
         if args.out:
             args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False))
@@ -383,7 +392,8 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--ramayanam is required unless --smoke")
     if args.corpus == "plain" and not args.plain:
         ap.error("--corpus plain needs --plain <file.json>")
-    report = run(args.ramayanam.expanduser(), args.split, args.n or 100, args.engines.split(","),
+    report = run(args.ramayanam.expanduser(), args.split, args.n or 100,
+                 (args.engines or "dp,prakriya").split(","),
                  args.seed, args.corpus, args.plain.expanduser() if args.plain else None,
                  args.legacy_score)
     sys.stdout.write(format_report(report) + "\n")
