@@ -51,6 +51,13 @@ _GAPS: dict[str, tuple[str, list[str]]] = {
         ["ys_1.1", "ys_2.1"],
     ),
 }
+# These analyzer-engine gaps close on vidyut main (the fork), so they pass there
+# and fail on 0.4.0: non-strict, so both versions stay green.
+_PASSES_ON_VIDYUT_MAIN = {
+    ("bala_1.1.1", "analyzer"), ("bala_1.1.2", "analyzer"), ("bala_1.1.8", "analyzer"),
+    ("ayodhya_2.1.1", "analyzer"), ("sundara_5.1.1", "analyzer"),
+    ("ys_1.1", "analyzer"), ("ys_1.3", "analyzer"),
+}
 KNOWN_GAPS = {(cid, iface): why for iface, (why, ids) in _GAPS.items() for cid in ids}
 
 # Analyzer emits daNDa, ASCII-colon visarga and sandhi residue ('.', '..', ':..',
@@ -65,9 +72,9 @@ def reports() -> dict[str, VerseReport]:
     return {r.case.id: r for r in run_cases(CASES)}
 
 
-def _xfail(request, reason: str | None) -> None:
+def _xfail(request, reason: str | None, strict: bool = True) -> None:
     if reason:
-        request.node.add_marker(pytest.mark.xfail(reason=reason, strict=True))
+        request.node.add_marker(pytest.mark.xfail(reason=reason, strict=strict))
 
 
 def test_gold_covers_both_corpora():
@@ -107,7 +114,8 @@ def test_no_junk_tokens(request, reports, case_id, iface):
 @pytest.mark.parametrize("iface", INTERFACES)
 @pytest.mark.parametrize("case_id", IDS)
 def test_gloss_recall(request, reports, case_id, iface):
-    _xfail(request, KNOWN_GAPS.get((case_id, iface)))
+    _xfail(request, KNOWN_GAPS.get((case_id, iface)),
+           strict=(case_id, iface) not in _PASSES_ON_VIDYUT_MAIN)
     ir = reports[case_id].interfaces[iface]
     missed = sorted(w for w, hit in ir.hits.items() if not hit)
     assert ir.recall >= MIN_RECALL, (
