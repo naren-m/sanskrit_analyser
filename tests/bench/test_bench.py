@@ -15,7 +15,7 @@ from tests.bench.corpus import (
     parse_meaning,
     split_rows,
 )
-from tests.bench.score import meter_match, norm_slp1, recovered
+from tests.bench.score import lemma_match, meter_match, norm_slp1, recovered
 
 
 @pytest.mark.parametrize(
@@ -62,6 +62,13 @@ def test_parse_meaning(line: str, want: dict[str, str]) -> None:
         ("rAma'", "rAma"),      # punctuation dropped
         ("niSitES", "niSitEH"),  # visarga as S before a palatal
         ("rAmaz", "rAmaH"),     # visarga as z before a retroflex
+        ("puMgava", "puNkava"),  # M before a k-class stop (voicing folds g->k)
+        ("saMcara", "saYcara"),  # c-class
+        ("kaMwaka", "kaRwaka"),  # ṭ-class
+        ("saMta", "santa"),      # t-class
+        ("saMpUrRa", "sampUrRa"),  # p-class
+        ("puMsa", "pumsa"),  # M before a non-stop stays m
+        ("puNgava", "puNkava"),
     ],
 )
 def test_norm_slp1(word: str, want: str) -> None:
@@ -80,10 +87,51 @@ def test_norm_slp1(word: str, want: str) -> None:
         # merging across a pada boundary is
         (["guRavAn", "kaH"], ["guRavAnkaH"], 0),
         (["akarmaRi"], [], 0),
+        # nasal: anusvāra before its own class
+        (["puMgavam"], ["puNgavam"], 1),
+        (["puMgavam"], ["punGavam"], 0),    # nasal of the wrong class
+        # pausal visarga: only the final one may differ
+        (["saH"], ["sa"], 1),
+        (["SrutaH"], ["Sruta"], 1),
+        (["sa"], ["sA"], 0),
+        (["rAma"], ["rAmA"], 0),
+        (["saH"], ["sA"], 0),
+        # gold pada glued to an enclitic
+        (["putrASca"], ["putrAH", "ca"], 1),
+        (["fzestu"], ["fzeH", "tu"], 1),
+        (["diDakzoriva"], ["diDakzoH", "iva"], 1),
+        (["putrASca"], ["putrAH", "tu"], 0),    # wrong enclitic
+        (["putrASca"], ["putrAH"], 0),          # enclitic missing
+        (["putrASca"], ["putrAH", "x", "ca"], 0),  # not adjacent
     ],
 )
 def test_recovered(gold: list[str], tokens: list[str], want: int) -> None:
     assert recovered(gold, tokens) == want
+
+
+@pytest.mark.parametrize(
+    ("gold", "toks", "accepted", "want"),
+    [
+        ("munipuNgavam", [("muni", "muni"), ("puNgavam", "puNgava")], {"munipuMgava", "puMgava"}, True),
+        ("ikzvAkuvaMSapraBavaH",
+         [("ikzvAku", "ikzvAku"), ("vaMSa", "vaMSa"), ("praBavaH", "praBava")],
+         {"ikzvAkuvaMSapraBava", "praBava"}, True),
+        ("mAtulakulam", [("mAtula", "mAtula"), ("kulam", "kula")], {"kula", "mAtulakula"}, True),
+        ("niyatAtmA", [("niyata", "niyata"), ("AtmA", "Atman")], {"niyatAtman"}, True),
+        ("SrutaH", [("Sruta", "Sruta")], {"Sru", "Sruta"}, True),
+        ("saH", [("sa", "tad")], {"tad"}, True),
+        ("putrASca", [("putrAH", "putra"), ("ca", "ca")], {"putra"}, True),
+        ("fzestu", [("fzeH", "fzi"), ("tu", "tu")], {"fzi"}, True),
+        ("gacCati", [("gacCati", "gamx~")], {"gam"}, True),   # anubandha strip kept
+        ("munipuNgavam", [("muni", "muni"), ("puNgavam", "puNgava")], {"kula"}, False),  # wrong lemma
+        ("mAtulakulam", [("mAtula", "mAtula"), ("kulam", "kula")], {"mAtulA"}, False),
+        ("guRavAnkaH", [("guRavAn", "guRavat"), ("kaH", "kim")], {"guRavat"}, False),  # merge
+        ("rAma", [("rAmA", "rAmA")], {"rAma"}, False),
+        ("sa", [("sA", "sA")], {"tad"}, False),
+    ],
+)
+def test_lemma_match(gold, toks, accepted, want) -> None:
+    assert lemma_match(gold, toks, accepted) is want
 
 
 @pytest.mark.parametrize(
