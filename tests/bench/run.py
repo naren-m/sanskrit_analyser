@@ -62,7 +62,7 @@ from tests.bench.corpus import (
     sample,
     split_rows,
 )
-from tests.bench.score import meter_match, norm_slp1, recovered
+from tests.bench.score import lemma_match, meter_match, norm_slp1, recovered
 
 logger = logging.getLogger(__name__)
 
@@ -181,8 +181,10 @@ def agreement(a: list[list[str]], b: list[list[str]]) -> float:
     return sum(scores) / len(scores) if scores else 0.0
 
 
-def score_engine(fn: Engine, rows, lemma_gold) -> dict[str, Any]:
-    hit = gold_n = tok_n = ver_n = 0
+def score_engine(fn: Engine, rows, lemma_gold, legacy: bool = False) -> dict[str, Any]:
+    """Score one engine. ``legacy`` also reports the pre-#96 scorer's numbers
+    (``seg_recall_legacy``, ``lemma_acc_legacy``) from the same engine output."""
+    hit = hit_old = gold_n = tok_n = ver_n = 0
     cov: list[float] = []
     outputs: list[list[str]] = []
     t0 = time.time()
@@ -196,22 +198,25 @@ def score_engine(fn: Engine, rows, lemma_gold) -> dict[str, Any]:
         outputs.append([t[0] for t in toks])
         cov.append(_coverage(row.text, outputs[-1]))
         hit += recovered(gold, [t[0] for t in toks])
+        hit_old += recovered(gold, [t[0] for t in toks], legacy=True) if legacy else 0
         gold_n += len(gold)
         tok_n += len(toks)
         ver_n += sum(1 for slp, _, v in toks if (v if v is not None else _verifies(slp)))
     sec = (time.time() - t0) / max(len(rows), 1)
 
-    lemma_ok = lemma_n = 0
+    lemma_ok = lemma_old = lemma_n = 0
     for text, surface, accepted in lemma_gold:
         try:
             toks = fn(text)
         except Exception:
             logger.debug("engine crashed on %r", text, exc_info=True)
             toks = []
-        by_surface = {norm_slp1(slp): lemma for slp, lemma, _ in toks}
         lemma_n += 1
-        got = by_surface.get(norm_slp1(surface))
-        lemma_ok += got in accepted or (got is not None and strip_anubandhas(got) in accepted)
+        lemma_ok += lemma_match(surface, [(slp, lemma) for slp, lemma, _ in toks], accepted)
+        if legacy:
+            by_surface = {norm_slp1(slp, True): lemma for slp, lemma, _ in toks}
+            got = by_surface.get(norm_slp1(surface, True))
+            lemma_old += got in accepted or (got is not None and strip_anubandhas(got) in accepted)
     return {
         "verses": len(rows),
         "seg_recall": hit / gold_n if gold_n else 0.0,
@@ -222,6 +227,8 @@ def score_engine(fn: Engine, rows, lemma_gold) -> dict[str, Any]:
         "coverage": sum(cov) / len(cov) if cov else 0.0,
         "sec_per_verse": sec,
         "_outputs": outputs,
+        **({"seg_recall_legacy": hit_old / gold_n if gold_n else 0.0,
+            "lemma_acc_legacy": lemma_old / lemma_n if lemma_n else 0.0} if legacy else {}),
     }
 
 
@@ -270,7 +277,7 @@ def smoke_rows(n: int) -> list[Row]:
     return [Row(c["ref"], 0, clean_verse(c["text"]), "", "", ()) for c in cases]
 
 
-def run_smoke(n: int, engines: list[str] | None = None) -> dict[str, Any]:
+def run_smoke(n: int, engines: list[str] | None = None, legacy: bool = False) -> dict[str, Any]:
     """Score the offline ``reader`` engine on the committed verses (label-free
     metrics plus the hand-checked lemmas of those verses)."""
     cases = json.loads((DATA / "corpus_verses.json").read_text())[:n]
@@ -281,7 +288,7 @@ def run_smoke(n: int, engines: list[str] | None = None) -> dict[str, Any]:
     scored = {}
     for name, fn in _engines(engines or ["reader"]).items():
         PROPOSERS_RAN.clear()
-        scored[name] = score_engine(cache(fn), rows, lemma_gold)
+        scored[name] = score_engine(cache(fn), rows, lemma_gold, legacy)
         # Which proposer actually ran: "dp" means the ByT5 load failed (or was
         # refused by the non-slow weight guard) and the reader fell back.
         scored[name]["proposers"] = dict(PROPOSERS_RAN)
@@ -297,10 +304,14 @@ def run_smoke(n: int, engines: list[str] | None = None) -> dict[str, Any]:
 
 
 def run(ramayanam: Path, split: str, n: int, engines: list[str], seed: int,
-        corpus: str = "ramayana", plain: Path | None = None) -> dict[str, Any]:
+        corpus: str = "ramayana", plain: Path | None = None,
+        legacy: bool = False) -> dict[str, Any]:
     rows, label, has_gold = _rows(corpus, ramayanam, split, n, seed, plain)
     lemma_gold = _lemma_gold(ramayanam) if corpus == "ramayana" else []
-    scored = {name: score_engine(fn, rows, lemma_gold) for name, fn in _engines(engines).items()}
+    scored = {
+        name: score_engine(fn, rows, lemma_gold, legacy)
+        for name, fn in _engines(engines).items()
+    }
     outputs = {name: e.pop("_outputs") for name, e in scored.items()}
     first = next(iter(outputs), None)
     for name, e in scored.items():   # agreement with the first engine listed
@@ -331,6 +342,10 @@ def format_report(report: dict[str, Any]) -> str:
     for name, e in report["engines"].items():
         if "proposers" in e:
             lines.append(f"proposer[{name}] = {e['proposers']}")
+        if "seg_recall_legacy" in e:
+            lines.append(f"legacy scorer {name}: seg_recall {e['seg_recall_legacy']:.3f} -> "
+                         f"{e['seg_recall']:.3f}, lemma {e['lemma_acc_legacy']:.3f} -> "
+                         f"{e['lemma_acc']:.3f}")
     lines.append(f"agree = token F1 against '{report.get('agree_with')}'. "
                  "cover = letter similarity of input and padas (~0.9 for a perfect split).")
     lines.append("not scored yet: " + ", ".join(report["pending_layers"]))
@@ -354,10 +369,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="gita: ramayanam's gita pack (gold = gita/gita word keys). "
                          "plain: --plain JSON with no gold (label-free metrics only)")
     ap.add_argument("--plain", type=Path, help='JSON list with a "devanagari" field')
+    ap.add_argument("--legacy-score", action="store_true",
+                    help="also print the pre-#96 seg_recall and lemma_acc, old -> new")
     ap.add_argument("--out", type=Path)
     args = ap.parse_args(argv)
     if args.smoke:
-        report = run_smoke(args.n or 3)
+        report = run_smoke(args.n or 3, legacy=args.legacy_score)
         sys.stdout.write(format_report(report) + "\n")
         if args.out:
             args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False))
@@ -367,7 +384,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.corpus == "plain" and not args.plain:
         ap.error("--corpus plain needs --plain <file.json>")
     report = run(args.ramayanam.expanduser(), args.split, args.n or 100, args.engines.split(","),
-                 args.seed, args.corpus, args.plain.expanduser() if args.plain else None)
+                 args.seed, args.corpus, args.plain.expanduser() if args.plain else None,
+                 args.legacy_score)
     sys.stdout.write(format_report(report) + "\n")
     if args.out:
         args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False))
